@@ -114,3 +114,10 @@ export function markPresetDirty() {
 export function markModulesDirty() {
     markBlockDirty('modules')
 }
+
+/**
+ * Mark root block as changed (settings, model config, parameters, etc.)
+ */
+export function markRootDirty() {
+    markBlockDirty('root')
+}

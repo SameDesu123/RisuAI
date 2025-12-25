@@ -35,7 +35,8 @@ import {
     markCharacterDirty,
     markCharacterDeleted,
     markPresetDirty,
-    markModulesDirty
+    markModulesDirty,
+    markRootDirty
 } from "./storage/dirtyTracker";
 import { AutoStorage } from "./storage/autoStorage";
 import { updateAnimationSpeed } from "./gui/animation";
@@ -405,12 +406,25 @@ export async function saveDb(){
             markModulesDirty()  // Delta sync tracking
             saveTimeoutExecute()
         })
+        // Root data changes (settings, model config, etc.)
+        let lastRootSnapshot = ''
         $effect(() => {
+            const rootData: Record<string, any> = {}
             for(const key in DBState.db){
                 if(key !== 'characters' && key !== 'botPresets' && key !== 'modules'){
-                    $state.snapshot(DBState.db[key])
+                    rootData[key] = $state.snapshot(DBState.db[key])
                 }
             }
+            // Compare with previous snapshot to detect actual changes
+            const currentSnapshot = JSON.stringify(rootData)
+            if(lastRootSnapshot && currentSnapshot !== lastRootSnapshot){
+                markRootDirty()
+            }
+            lastRootSnapshot = currentSnapshot
+            saveTimeoutExecute()
+        })
+        // Character data changes
+        $effect(() => {
             if(DBState?.db?.characters?.[selIdState]){
                 for(const key in DBState.db.characters[selIdState]){
                     if(key !== 'chats'){
