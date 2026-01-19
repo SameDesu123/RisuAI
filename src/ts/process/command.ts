@@ -6,7 +6,7 @@ import { sayTTS } from "./tts";
 import { risuChatParser } from "../parser.svelte";
 import { sendChat } from "./index.svelte";
 import { loadLoreBookV3Prompt } from "./lorebook.svelte";
-import { runTrigger } from "./triggers";
+
 
 export async function processMultiCommand(command:string) {
     let pipe = ''
@@ -227,6 +227,7 @@ async function processCommand(command:string, pipe:string):Promise<false | strin
             if(currentChar.type === 'group'){
                 return;
             }
+            const { runTrigger } = await import("./triggers");
             const triggerResult = await runTrigger(currentChar, 'manual', {
                 chat: getCurrentChat(),
                 manualName: arg
