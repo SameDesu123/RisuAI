@@ -9,7 +9,6 @@ import { DBState, hotReloading, pluginAlertModalStore, selectedCharID } from "..
 import type { ScriptMode } from "../process/scripts";
 import { checkCodeSafety } from "./pluginSafety";
 import { SafeDocument, SafeIdbFactory, SafeLocalStorage } from "./pluginSafeClass";
-import { loadV3Plugins } from "./apiV3/v3.svelte";
 import { pluginCodeTranspiler } from "./apiV3/transpiler";
 
 export const customProviderStore = writable([] as string[])
@@ -424,6 +423,7 @@ export async function loadPlugins() {
     const pluginV3 = enabledPlugins.filter((a: RisuPlugin) => a.version === '3.0')
 
     await loadV2Plugin(pluginV2)
+    const { loadV3Plugins } = await import("./apiV3/v3.svelte");
     await loadV3Plugins(pluginV3)
 }
 
