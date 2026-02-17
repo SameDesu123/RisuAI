@@ -13,10 +13,11 @@ Risuai, or Risu for short, is a cross platform AI chatting software / web applic
 |         Screenshot 1         |         Screenshot 2         |
 | :--------------------------: | :--------------------------: |
 | ![Screenshot 1][screenshot1] | ![Screenshot 2][screenshot2] |
+|         Screenshot 3         |         Screenshot 4         |
 | ![Screenshot 3][screenshot3] | ![Screenshot 4][screenshot4] |
 
-[screenshot1]: https://github.com/kwaroran/Risuai/assets/116663078/cccb9b33-5dbd-47d7-9c85-61464790aafe
-[screenshot2]: https://github.com/kwaroran/Risuai/assets/116663078/30d29f85-1380-4c73-9b82-1a40f2c5d2ea
+[screenshot1]: ./.github/docs/new_risuai_ui_screenshot_with_og_rika.png
+[screenshot2]: ./.github/docs/new_risuai_ui_screenshot_in_group_chat_with_rika_and_yuzu.png
 [screenshot3]: https://github.com/kwaroran/Risuai/assets/116663078/faad0de5-56f3-4176-b38e-61c2d3a8698e
 [screenshot4]: https://github.com/kwaroran/Risuai/assets/116663078/ef946882-2311-43e7-81e7-5ca2d484fa90
 
