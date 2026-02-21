@@ -434,7 +434,10 @@ export async function saveDb() {
 
                 await forageStorage.setItem('database/database.bin', dbData)
                 if (!forageStorage.isAccount) {
-                    await forageStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData)
+                    // Fire-and-forget: backup write does not block the main save process
+                    forageStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData).catch((e) => {
+                        console.error('Backup write failed:', e)
+                    })
                 }
                 if (forageStorage.isAccount) {
                     await sleep(3000)
