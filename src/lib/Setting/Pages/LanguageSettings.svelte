@@ -7,6 +7,7 @@
     import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
     import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
     import NumberInput from "src/lib/UI/GUI/NumberInput.svelte";
+    import SliderInput from "src/lib/UI/GUI/SliderInput.svelte";
     import { alertNormal, alertSelect, alertConfirm } from "src/ts/alert";
     import { downloadFile, isTauri } from "src/ts/globalApi.svelte";
     import { languageEnglish } from "src/lang/en";
@@ -120,6 +121,19 @@
         <span class="text-textcolor mt-4">{language.translatorPrompt} <Help key="translatorPrompt" /></span>
 
         <TextAreaInput bind:value={DBState.db.translatorPrompt} placeholder={"You are a translator. translate the following html or text into {{slot}}. do not output anything other than the translation."}/>
+
+        <span class="text-textcolor mt-4">{language.temperature}</span>
+        <SliderInput min={0} max={200} marginBottom bind:value={DBState.db.seperateParameters.translate.temperature} multiple={0.01} fixed={2} disableable/>
+        <span class="text-textcolor mt-4">Top P</span>
+        <SliderInput min={0} max={1} marginBottom step={0.01} fixed={2} bind:value={DBState.db.seperateParameters.translate.top_p} disableable/>
+        <span class="text-textcolor mt-4">{language.frequencyPenalty}</span>
+        <SliderInput min={0} max={200} marginBottom bind:value={DBState.db.seperateParameters.translate.frequency_penalty} multiple={0.01} fixed={2} disableable/>
+        <span class="text-textcolor mt-4">{language.presensePenalty}</span>
+        <SliderInput min={0} max={200} marginBottom bind:value={DBState.db.seperateParameters.translate.presence_penalty} multiple={0.01} fixed={2} disableable/>
+        
+        <div class="flex items-center mt-4">
+            <Check bind:check={DBState.db.translatorIncludeCustomParams} name="Include Custom Parameters"/>
+        </div>
     {/if}
 
     {#if DBState.db.translatorType === 'google'}

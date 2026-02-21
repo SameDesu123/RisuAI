@@ -560,7 +560,7 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
     }
     let throughProxi = (!isTauri) && (!isNodeServer) && (!db.usePlainFetch) && (!Capacitor.isNativePlatform())
 
-    if(aiModel === 'reverse_proxy' || aiModel.startsWith('xcustom:::')){
+    if((aiModel === 'reverse_proxy' || aiModel.startsWith('xcustom:::')) && !(arg.mode === 'translate' && !db.translatorIncludeCustomParams)){
         let additionalParams = aiModel === 'reverse_proxy' ? db.additionalParams : []
 
         if(aiModel.startsWith('xcustom:::')){

@@ -156,7 +156,7 @@ export function applyParameters(data: { [key: string]: any }, parameters: Parame
         }
     }
 
-    if(db.seperateParametersEnabled && ModelMode !== 'model'){
+    if((db.seperateParametersEnabled && ModelMode !== 'model') || ModelMode === 'translate'){
         if(ModelMode === 'submodel'){
             ModelMode = 'otherAx'
         }
@@ -190,7 +190,7 @@ export function applyParameters(data: { [key: string]: any }, parameters: Parame
                     break
                 }
                 case 'top_p':{
-                    value = db.seperateParameters[ModelMode].top_p
+                    value = db.seperateParameters[ModelMode].top_p === -1000 ? -1000 : db.seperateParameters[ModelMode].top_p
                     break
                 }
                 case 'thinking_tokens':{
