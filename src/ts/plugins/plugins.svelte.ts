@@ -346,9 +346,7 @@ export async function importPlugin(code:string|null = null, argu:{
             apiInternalVersion = '2.1'
         }
         else if(apiVersion === '2.0'){
-            //Only block installing
-            showError('Your code does not include //@api or specifies API version 2.0, which is outdated. Please update your plugin to use at least API version 2.1.')
-            return
+            apiInternalVersion = 2
         }
         else if(apiVersion === '3.0'){
             apiInternalVersion = '3.0'
@@ -878,7 +876,12 @@ export async function loadV2Plugin(plugins: RisuPlugin[]) {
             data = plugin.script
             console.log('Loading V2.0 Plugin', plugin.name)
 
-            console.warn(`Plugin 2.0 is removed and no longer supported. Please update plugin "${plugin.name}" to API version 3.0`)
+            try {
+                eval(createRealScript(data))
+            } catch (error) {
+                console.error(error)
+            }
+            console.log('Loaded V2.0 Plugin', plugin.name)
         }
     }
 }
