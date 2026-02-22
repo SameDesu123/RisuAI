@@ -556,6 +556,7 @@ export function setDatabase(data:Database){
     data.useExperimentalGoogleTranslator ??= false
     data.thinkingType ??= 'budget'
     data.adaptiveThinkingEffort ??= 'high'
+    data.geminiThinkingLevel ??= 'default'
     if(data.antiClaudeOverload){ //migration
         data.antiClaudeOverload = false
         data.antiServerOverloads = true
@@ -1050,6 +1051,7 @@ export interface Database{
     thinkingTokens: number
     thinkingType: 'off' | 'budget' | 'adaptive'
     adaptiveThinkingEffort: 'low' | 'medium' | 'high' | 'max'
+    geminiThinkingLevel: 'default' | 'low' | 'medium' | 'high'
     antiServerOverloads: boolean
     hypaCustomSettings: {
         url: string,
@@ -1168,6 +1170,7 @@ interface SeparateParameters{
     thinking_tokens?:number
     thinking_type?: 'off' | 'budget' | 'adaptive'
     adaptive_thinking_effort?: 'low' | 'medium' | 'high' | 'max'
+    gemini_thinking_level?: 'default' | 'low' | 'medium' | 'high'
     outputImageModal?:boolean
     verbosity?:number
 }
@@ -1505,6 +1508,7 @@ export interface botPreset{
     thinkingTokens?:number
     thinkingType?: 'off' | 'budget' | 'adaptive'
     adaptiveThinkingEffort?: 'low' | 'medium' | 'high' | 'max'
+    geminiThinkingLevel?: 'default' | 'low' | 'medium' | 'high'
     outputImageModal?:boolean
     seperateModelsForAxModels?:boolean
     seperateModels?:{
@@ -1942,6 +1946,7 @@ export function saveCurrentPreset(){
         thinkingTokens: db.thinkingTokens ?? null,
         thinkingType: db.thinkingType ?? 'budget',
         adaptiveThinkingEffort: db.adaptiveThinkingEffort ?? 'high',
+        geminiThinkingLevel: db.geminiThinkingLevel ?? 'default',
         outputImageModal: db.outputImageModal ?? false,
         seperateModelsForAxModels: db.doNotChangeSeperateModels ? false : db.seperateModelsForAxModels ?? false,
         seperateModels: db.doNotChangeSeperateModels ? null : safeStructuredClone(db.seperateModels),
@@ -2071,6 +2076,7 @@ export function setPreset(db:Database, newPres: botPreset){
     db.thinkingTokens = newPres.thinkingTokens ?? null
     db.thinkingType = newPres.thinkingType ?? 'budget'
     db.adaptiveThinkingEffort = newPres.adaptiveThinkingEffort ?? 'high'
+    db.geminiThinkingLevel = newPres.geminiThinkingLevel ?? 'default'
     db.outputImageModal = newPres.outputImageModal ?? false
     if(!db.doNotChangeSeperateModels){
         db.seperateModelsForAxModels = newPres.seperateModelsForAxModels ?? false

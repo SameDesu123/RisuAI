@@ -303,7 +303,7 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
     let para:LLMParameter[] = ['temperature', 'top_p', 'top_k', 'presence_penalty', 'frequency_penalty']
 
     if(arg.modelInfo.flags.includes(LLMFlags.geminiThinking)){
-        para.push('thinking_tokens')
+        para.push('thinking_tokens', 'gemini_thinking_level')
     }
 
     para = para.filter((v) => {
@@ -319,7 +319,8 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
             'top_k': "topK",
             'presence_penalty': "presencePenalty",
             'frequency_penalty': "frequencyPenalty",
-            'thinking_tokens': "thinkingBudget"
+            'thinking_tokens': "thinkingBudget",
+            'gemini_thinking_level': "geminiThinkingLevel"
         }, arg.mode, {
             ignoreTopKIfZero: true
         }),
@@ -345,31 +346,22 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
 
     if(arg.modelInfo.flags.includes(LLMFlags.geminiThinking)){
         const internalId = arg.modelInfo.internalID
-        const thinkingBudget = body.generation_config.thinkingBudget
-
-        // Gemini 3 models use `thinking_level` (via thinkingConfig.thinkingLevel) instead of `thinking_budget`.
-        // Keep UI/param name 'thinking_tokens' but translate it here for compatibility.
-        if (internalId && /^gemini-3-/.test(internalId)) {
-            const budgetNum = typeof thinkingBudget === 'number' ? thinkingBudget : Number(thinkingBudget)
-
-            // Conservative mapping: keep levels coarse to avoid model-specific strict validation.
-            // - gemini-3-flash-preview: LOW/MEDIUM/HIGH
-            // - gemini-3-pro* (incl. image): LOW/HIGH
-            let thinkingLevel: 'LOW' | 'MEDIUM' | 'HIGH' = 'HIGH'
-            if (internalId === 'gemini-3-flash-preview') {
-                if (!Number.isFinite(budgetNum) || budgetNum >= 16384) thinkingLevel = 'HIGH'
-                else if (budgetNum >= 4096) thinkingLevel = 'MEDIUM'
-                else thinkingLevel = 'LOW'
-            } else {
-                if (!Number.isFinite(budgetNum) || budgetNum >= 8192) thinkingLevel = 'HIGH'
-                else thinkingLevel = 'LOW'
-            }
-
-            body.generation_config.thinkingConfig = {
-                "thinkingLevel": thinkingLevel,
+        
+        // Gemini 3 and 3.1 models use `thinkingLevel` via segment control UI
+        if (internalId && /^gemini-3(\.\d+)?-/.test(internalId)) {
+            const rawThinkingLevel = body.generation_config.geminiThinkingLevel
+            
+            let thinkingConfig: any = {
                 "includeThoughts": true,
             }
+            
+            if (rawThinkingLevel && rawThinkingLevel !== 'default') {
+                thinkingConfig.thinkingLevel = rawThinkingLevel.toUpperCase()
+            }
+            
+            body.generation_config.thinkingConfig = thinkingConfig
         } else {
+            const thinkingBudget = body.generation_config.thinkingBudget
             body.generation_config.thinkingConfig = {
                 "thinkingBudget": thinkingBudget,
                 "includeThoughts": true,
@@ -377,6 +369,7 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
         }
 
         delete body.generation_config.thinkingBudget
+        delete body.generation_config.geminiThinkingLevel
     }
 
     if(systemPrompt === ''){

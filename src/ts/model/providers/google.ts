@@ -9,7 +9,7 @@ export const GoogleModels: LLMModel[] = [
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
         flags: [LLMFlags.hasImageInput, LLMFlags.poolSupported, LLMFlags.hasAudioInput, LLMFlags.hasVideoInput, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole, LLMFlags.geminiThinking],
-        parameters: ['thinking_tokens', 'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'],
+        parameters: ['gemini_thinking_level', 'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'],
         tokenizer: LLMTokenizer.GoogleCloud,
         recommended: true
     },
@@ -20,7 +20,7 @@ export const GoogleModels: LLMModel[] = [
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
         flags: [LLMFlags.hasImageInput, LLMFlags.poolSupported, LLMFlags.hasAudioInput, LLMFlags.hasVideoInput, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole, LLMFlags.geminiThinking],
-        parameters: ['thinking_tokens', 'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'],
+        parameters: ['gemini_thinking_level', 'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'],
         tokenizer: LLMTokenizer.GoogleCloud,
         recommended: true
     },
@@ -30,7 +30,7 @@ export const GoogleModels: LLMModel[] = [
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
         flags: [LLMFlags.hasImageInput, LLMFlags.poolSupported, LLMFlags.hasAudioInput, LLMFlags.hasVideoInput, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole, LLMFlags.geminiThinking],
-        parameters: ['thinking_tokens', 'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'],
+        parameters: ['gemini_thinking_level', 'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'],
         tokenizer: LLMTokenizer.GoogleCloud,
         recommended: true
     },

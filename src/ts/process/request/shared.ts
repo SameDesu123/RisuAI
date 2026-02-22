@@ -11,6 +11,7 @@ export type LLMParameter =
     | 'presence_penalty'
     | 'reasoning_effort'
     | 'thinking_tokens'
+    | 'gemini_thinking_level'
     | 'verbosity'
 
 export type ModelModeExtended = 'model' | 'submodel' | 'memory' | 'emotion' | 'otherAx' | 'translate'
@@ -121,6 +122,10 @@ export function applyParameters(
                     value = db.seperateParameters[ModelMode].thinking_tokens
                     break
                 }
+                case 'gemini_thinking_level': {
+                    value = db.seperateParameters[ModelMode].gemini_thinking_level ?? 'default'
+                    break
+                }
                 case 'frequency_penalty': {
                     value =
                         db.seperateParameters[ModelMode].frequency_penalty === -1000
@@ -207,6 +212,10 @@ export function applyParameters(
             }
             case 'thinking_tokens': {
                 value = db.thinkingTokens
+                break
+            }
+            case 'gemini_thinking_level': {
+                value = db.geminiThinkingLevel
                 break
             }
         }

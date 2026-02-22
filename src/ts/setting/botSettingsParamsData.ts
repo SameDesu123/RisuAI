@@ -174,6 +174,22 @@ export const modelSpecificParameterItems: SettingItem[] = [
         keywords: ['adaptive', 'thinking', 'effort'],
     },
     {
+        id: 'params.geminiThinkingLevel',
+        type: 'segmented',
+        labelKey: 'geminiThinkingLevel',
+        bindKey: 'geminiThinkingLevel',
+        condition: (ctx) => ctx.modelInfo.parameters.includes('gemini_thinking_level'),
+        options: {
+            segmentOptions: [
+                { value: 'default', label: 'Off(Dynamic)' },
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'high', label: 'High' },
+            ]
+        },
+        keywords: ['gemini', 'thinking', 'level', 'reasoning'],
+    },
+    {
         id: 'params.topK',
         type: 'slider',
         fallbackLabel: 'Top K',
@@ -277,6 +293,7 @@ export const allBasicParameterItems: SettingItem[] = [
     modelSpecificParameterItems.find(i => i.id === 'params.thinkingType')!,
     modelSpecificParameterItems.find(i => i.id === 'params.thinkingTokens')!,
     modelSpecificParameterItems.find(i => i.id === 'params.adaptiveThinkingEffort')!,
+    modelSpecificParameterItems.find(i => i.id === 'params.geminiThinkingLevel')!,
     ...samplingParameterItems, // temperature
     modelSpecificParameterItems.find(i => i.id === 'params.topK')!,
     modelSpecificParameterItems.find(i => i.id === 'params.minP')!,
