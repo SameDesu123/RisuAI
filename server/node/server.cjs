@@ -84,6 +84,28 @@ const reverseProxyFunc = async (req, res, next) => {
             header['authorization'] = `Bearer ${authCode}`
         }
     }
+
+    // Pre-commit 200 response and start keepalive to prevent
+    // iPad WebKit's 60-second network timeout.
+    // Keepalive newlines are harmless: JSON.parse ignores leading whitespace,
+    // and SSE parsers skip empty lines.
+    res.writeHead(200, {
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+    });
+
+    const keepAliveInterval = setInterval(() => {
+        if (!res.writableEnded) {
+            res.write('\n');
+        }
+    }, 15000);
+
+    const cleanupInterval = () => {
+        clearInterval(keepAliveInterval);
+    };
+
+    res.on('close', cleanupInterval);
+
     let originalResponse;
     try {
         // make request to original server
@@ -92,31 +114,20 @@ const reverseProxyFunc = async (req, res, next) => {
             headers: header,
             body: JSON.stringify(req.body)
         });
-        // get response body as stream
-        const originalBody = originalResponse.body;
-        // get response headers
-        const head = new Headers(originalResponse.headers);
-        head.delete('content-security-policy');
-        head.delete('content-security-policy-report-only');
-        head.delete('clear-site-data');
-        head.delete('Cache-Control');
-        head.delete('Content-Encoding');
-        const headObj = {};
-        for (let [k, v] of head) {
-            headObj[k] = v;
-        }
-        // send response headers to client
-        res.header(headObj);
-        // send response status to client
-        res.status(originalResponse.status);
-        // send response body to client
+
+        cleanupInterval();
+
+        // Stream the upstream response body to client (preserves SSE format)
         await pipeline(originalResponse.body, res);
-
-
     }
     catch (err) {
-        next(err);
-        return;
+        cleanupInterval();
+        try {
+            res.write(JSON.stringify({ error: err.message || 'Proxy request failed' }));
+            res.end();
+        } catch (writeErr) {
+            // Client already disconnected, nothing to do
+        }
     }
 }
 
