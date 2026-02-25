@@ -704,10 +704,24 @@ async function fetchWithPlainFetch(url: string, arg: GlobalFetchArgs): Promise<G
     try {
         const headers = { 'Content-Type': 'application/json', ...arg.headers };
         const response = await fetch(new URL(url), { body: JSON.stringify(arg.body), headers, method: arg.method ?? "POST", signal: arg.abortSignal });
-        const data = arg.rawResponse ? new Uint8Array(await response.arrayBuffer()) : await response.json();
         const ok = response.ok && response.status >= 200 && response.status < 300;
-        addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
-        return { ok, data, headers: Object.fromEntries(response.headers), status: response.status };
+
+        if (arg.rawResponse) {
+            const data = new Uint8Array(await response.arrayBuffer());
+            addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
+            return { ok, data, headers: Object.fromEntries(response.headers), status: response.status };
+        }
+
+        const text = await response.text();
+        try {
+            const data = JSON.parse(text);
+            addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
+            return { ok, data, headers: Object.fromEntries(response.headers), status: response.status };
+        } catch {
+            const errorMsg = text.startsWith('<!DOCTYPE') ? "Responded HTML. Is your URL, API key, and password correct?" : text;
+            addFetchLogInGlobalFetch(text, false, url, arg, response.status);
+            return { ok: false, data: errorMsg, headers: Object.fromEntries(response.headers), status: response.status };
+        }
     } catch (error) {
         return { ok: false, data: `${error}`, headers: {}, status: 400 };
     }
@@ -724,10 +738,24 @@ async function fetchWithUSFetch(url: string, arg: GlobalFetchArgs): Promise<Glob
     try {
         const headers = { 'Content-Type': 'application/json', ...arg.headers };
         const response = await userScriptFetch(url, { body: JSON.stringify(arg.body), headers, method: arg.method ?? "POST", signal: arg.abortSignal });
-        const data = arg.rawResponse ? new Uint8Array(await response.arrayBuffer()) : await response.json();
         const ok = response.ok && response.status >= 200 && response.status < 300;
-        addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
-        return { ok, data, headers: Object.fromEntries(response.headers), status: response.status };
+
+        if (arg.rawResponse) {
+            const data = new Uint8Array(await response.arrayBuffer());
+            addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
+            return { ok, data, headers: Object.fromEntries(response.headers), status: response.status };
+        }
+
+        const text = await response.text();
+        try {
+            const data = JSON.parse(text);
+            addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
+            return { ok, data, headers: Object.fromEntries(response.headers), status: response.status };
+        } catch {
+            const errorMsg = text.startsWith('<!DOCTYPE') ? "Responded HTML. Is your URL, API key, and password correct?" : text;
+            addFetchLogInGlobalFetch(text, false, url, arg, response.status);
+            return { ok: false, data: errorMsg, headers: Object.fromEntries(response.headers), status: response.status };
+        }
     } catch (error) {
         return { ok: false, data: `${error}`, headers: {}, status: 400 };
     }
@@ -744,12 +772,26 @@ async function fetchWithTauri(url: string, arg: GlobalFetchArgs): Promise<Global
     try {
         const headers = { 'Content-Type': 'application/json', ...arg.headers };
         const response = await TauriHTTPFetch(new URL(url), { body: JSON.stringify(arg.body), headers, method: arg.method ?? "POST", signal: arg.abortSignal });
-        const data = arg.rawResponse ? new Uint8Array(await response.arrayBuffer()) : await response.json();
         const ok = response.status >= 200 && response.status < 300;
-        addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
-        return { ok, data, headers: Object.fromEntries(response.headers), status: response.status };
-    } catch (error) {
 
+        if (arg.rawResponse) {
+            const data = new Uint8Array(await response.arrayBuffer());
+            addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
+            return { ok, data, headers: Object.fromEntries(response.headers), status: response.status };
+        }
+
+        const text = await response.text();
+        try {
+            const data = JSON.parse(text);
+            addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
+            return { ok, data, headers: Object.fromEntries(response.headers), status: response.status };
+        } catch {
+            const errorMsg = text.startsWith('<!DOCTYPE') ? "Responded HTML. Is your URL, API key, and password correct?" : text;
+            addFetchLogInGlobalFetch(text, false, url, arg, response.status);
+            return { ok: false, data: errorMsg, headers: Object.fromEntries(response.headers), status: response.status };
+        }
+    } catch (error) {
+        return { ok: false, data: `${error}`, headers: {}, status: 400 };
     }
 }
 

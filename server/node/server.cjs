@@ -92,8 +92,6 @@ const reverseProxyFunc = async (req, res, next) => {
             headers: header,
             body: JSON.stringify(req.body)
         });
-        // get response body as stream
-        const originalBody = originalResponse.body;
         // get response headers
         const head = new Headers(originalResponse.headers);
         head.delete('content-security-policy');
@@ -101,6 +99,8 @@ const reverseProxyFunc = async (req, res, next) => {
         head.delete('clear-site-data');
         head.delete('Cache-Control');
         head.delete('Content-Encoding');
+        head.delete('content-length');
+        head.delete('transfer-encoding');
         const headObj = {};
         for (let [k, v] of head) {
             headObj[k] = v;
@@ -110,13 +110,19 @@ const reverseProxyFunc = async (req, res, next) => {
         // send response status to client
         res.status(originalResponse.status);
         // send response body to client
-        await pipeline(originalResponse.body, res);
-
-
+        if (originalResponse.body) {
+            await pipeline(originalResponse.body, res);
+        } else {
+            res.end();
+        }
     }
     catch (err) {
-        next(err);
-        return;
+        console.error("[Proxy] Error:", err);
+        if (!res.headersSent) {
+            res.status(502).json({ error: 'Proxy request failed: ' + err.message });
+        } else {
+            res.end();
+        }
     }
 }
 
@@ -149,8 +155,6 @@ const reverseProxyFunc_get = async (req, res, next) => {
             method: 'GET',
             headers: header
         });
-        // get response body as stream
-        const originalBody = originalResponse.body;
         // get response headers
         const head = new Headers(originalResponse.headers);
         head.delete('content-security-policy');
@@ -158,6 +162,8 @@ const reverseProxyFunc_get = async (req, res, next) => {
         head.delete('clear-site-data');
         head.delete('Cache-Control');
         head.delete('Content-Encoding');
+        head.delete('content-length');
+        head.delete('transfer-encoding');
         const headObj = {};
         for (let [k, v] of head) {
             headObj[k] = v;
@@ -167,11 +173,19 @@ const reverseProxyFunc_get = async (req, res, next) => {
         // send response status to client
         res.status(originalResponse.status);
         // send response body to client
-        await pipeline(originalResponse.body, res);
+        if (originalResponse.body) {
+            await pipeline(originalResponse.body, res);
+        } else {
+            res.end();
+        }
     }
     catch (err) {
-        next(err);
-        return;
+        console.error("[Proxy GET] Error:", err);
+        if (!res.headersSent) {
+            res.status(502).json({ error: 'Proxy request failed: ' + err.message });
+        } else {
+            res.end();
+        }
     }
 }
 
