@@ -1605,17 +1605,21 @@ export async function fetchNative(url: string, arg: {
             signal: arg.signal
         })
 
-        return new Response(r.body, {
+        return new Response(r.body ? pipeFetchLog(fetchLogIndex, r.body as ReadableStream<Uint8Array>) : null, {
             headers: r.headers,
             status: r.status
         })
     }
     else {
-        return await fetch(url, {
+        const r = await fetch(url, {
             body: realBody as any,
             headers: headers,
             method: arg.method,
             signal: arg.signal,
+        })
+        return new Response(r.body ? pipeFetchLog(fetchLogIndex, r.body as ReadableStream<Uint8Array>) : null, {
+            headers: r.headers,
+            status: r.status
         })
     }
 }

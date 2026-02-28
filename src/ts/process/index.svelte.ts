@@ -1,7 +1,7 @@
 import { get, writable } from "svelte/store";
 import { type character, type MessageGenerationInfo, type Chat, type MessagePresetInfo, changeToPreset, setCurrentChat, type Message } from "../storage/database.svelte";
-import { DBState } from '../stores.svelte';
-import { CharEmotion, selectedCharID } from "../stores.svelte";
+import { getDatabase, setDatabase } from "../storage/database.svelte";
+import { DBState, CharEmotion, selectedCharID } from "../stores.svelte";
 import { ChatTokenizer, tokenize, tokenizeNum } from "../tokenizer";
 import { language } from "../../lang";
 import { alertError, alertToast } from "../alert";
@@ -1562,8 +1562,17 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
         addRerolls(generationId, Object.values(lastResponseChunk))
 
-        DBState.db.characters[selectedChar].chats[selectedChat] = runCurrentChatFunction(DBState.db.characters[selectedChar].chats[selectedChat])
+        // FIX: Break the Svelte $state proxy chain before post-processing.
+        // Without this, runCurrentChatFunction may read stale data from the
+        // reactive proxy, losing the last streamed chunk(s).
+        // structuredClone creates a plain JS object with the latest values,
+        // bypassing any proxy-level caching or deferred commits.
+        const chatSnapshot = structuredClone(
+            DBState.db.characters[selectedChar].chats[selectedChat]
+        )
+        DBState.db.characters[selectedChar].chats[selectedChat] = runCurrentChatFunction(chatSnapshot)
         currentChat = DBState.db.characters[selectedChar].chats[selectedChat]        
+
         const triggerResult = await runTrigger(currentChar, 'output', {chat:currentChat})
         if(triggerResult && triggerResult.chat){
             currentChat = triggerResult.chat
@@ -1574,6 +1583,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         const inlayr = runInlayScreen(currentChar, currentChat.message[msgIndex].data)
         currentChat.message[msgIndex].data = inlayr.text
         DBState.db.characters[selectedChar].chats[selectedChat] = currentChat
+
         if(inlayr.promise){
             const t = await inlayr.promise
             currentChat.message[msgIndex].data = t

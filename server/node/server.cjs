@@ -115,10 +115,17 @@ const reverseProxyFunc = async (req, res, next) => {
             body: JSON.stringify(req.body)
         });
 
-        cleanupInterval();
+        const contentType = originalResponse.headers.get('content-type') || '';
+        const isEventStream = contentType.includes('text/event-stream');
+
+        if (!isEventStream) {
+            cleanupInterval();
+        }
 
         // Stream the upstream response body to client (preserves SSE format)
         await pipeline(originalResponse.body, res);
+
+        cleanupInterval();
     }
     catch (err) {
         cleanupInterval();
@@ -331,11 +338,36 @@ async function hubProxyFunc(req, res) {
             }
             return;
         }
-        
-        if (response.body) {
-            await pipeline(response.body, res);
-        } else {
-            res.end();
+        const contentType = response.headers.get('content-type') || '';
+        const isEventStream = contentType.includes('text/event-stream');
+
+        let keepAliveInterval = null;
+        if (isEventStream) {
+            // Force headers early
+            res.flushHeaders();
+            keepAliveInterval = setInterval(() => {
+                if (!res.writableEnded) {
+                    res.write('\n');
+                }
+            }, 15000);
+        }
+
+        const cleanupInterval = () => {
+            if (keepAliveInterval) {
+                clearInterval(keepAliveInterval);
+            }
+        };
+
+        res.on('close', cleanupInterval);
+
+        try {
+            if (response.body) {
+                await pipeline(response.body, res);
+            } else {
+                res.end();
+            }
+        } finally {
+            cleanupInterval();
         }
         
     } catch (error) {
