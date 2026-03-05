@@ -661,21 +661,12 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
 
         const transtream = getTranStream() 
 
-        // Manual pump instead of pipeTo — ensures writer.close() (and thus flush)
-        // runs even if the source stream errors (e.g. network drop at end of response).
-        // pipeTo would put the writable in an errored state, skipping flush entirely.
-        ;(async () => {
-            const reader = f.body.getReader()
-            const writer = transtream.writable.getWriter()
-            try {
-                while (true) {
-                    const { done, value } = await reader.read()
-                    if (done) break
-                    await writer.write(value)
-                }
-            } catch (_) {}
-            try { await writer.close() } catch (_) {}
-        })()
+        // Use pipeTo for native performance (critical for WebKit/iPad).
+        // preventAbort: on source error, writable stays writable so we can
+        // close it manually → triggers flush → processes remaining buffer.
+        f.body.pipeTo(transtream.writable, { preventAbort: true }).catch(async () => {
+            try { await transtream.writable.close() } catch (_) {}
+        })
 
         return {
             type: 'streaming',
@@ -1194,18 +1185,9 @@ function wrapToolStream(
                         }
 
                         const transtream = getTranStream()
-                        ;(async () => {
-                            const pReader = resRec.body.getReader()
-                            const pWriter = transtream.writable.getWriter()
-                            try {
-                                while (true) {
-                                    const { done, value } = await pReader.read()
-                                    if (done) break
-                                    await pWriter.write(value)
-                                }
-                            } catch (_) {}
-                            try { await pWriter.close() } catch (_) {}
-                        })()
+                        resRec.body.pipeTo(transtream.writable, { preventAbort: true }).catch(async () => {
+                            try { await transtream.writable.close() } catch (_) {}
+                        })
 
                         reader = transtream.readable.getReader()
 
