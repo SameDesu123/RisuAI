@@ -661,7 +661,7 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
 
         const transtream = getTranStream() 
 
-        f.body.pipeTo(transtream.writable)
+        f.body.pipeTo(transtream.writable).catch(() => {})
 
         return {
             type: 'streaming',
@@ -930,54 +930,66 @@ function initStreamState(state?: {[key:string]:string}): {[key:string]:string} {
 
 function getTranStream():TransformStream<Uint8Array, StreamResponseChunk> {
     let buffer = '';
+    let accumulated = initStreamState();
+
+    const parseLines = (lines: string[]) => {
+        for (const line of lines) {
+            if (line.startsWith('data: ')) {
+                const dataStr = line.slice(6).trim();
+                if (dataStr === '[DONE]' || dataStr === '') continue;
+
+                try {
+                    const jsonData = JSON.parse(dataStr);
+
+                    if (jsonData.candidates?.[0]?.content?.parts) {
+                        const parts = jsonData.candidates[0].content.parts;
+                        for (const part of parts) {
+                            if (part.text) {
+                                accumulated["__thoughts"] += accumulated["__last_thought"];
+                                accumulated["__last_thought"] = "";
+                                if (part.thought){
+                                    accumulated["__last_thought"] = part.text;
+                                }
+                                else {
+                                    accumulated["0"] += part.text;
+                                }
+                                if (part.thoughtSignature) {
+                                    accumulated["__sign_text"] = part.thoughtSignature;
+                                }
+                            }
+                            if (part.functionCall) {
+                                const toolCallsData = JSON.parse(accumulated["__tool_calls"]);
+                                toolCallsData.push(part.functionCall);
+                                accumulated["__tool_calls"] = JSON.stringify(toolCallsData);
+                                if(part.thoughtSignature){
+                                    accumulated["__sign_function"] = part.thoughtSignature;
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    // Incomplete JSON, will be retried when more data arrives
+                }
+            }
+        }
+    };
 
     return new TransformStream<Uint8Array, StreamResponseChunk>({
         transform(chunk, control) {
             buffer += new TextDecoder().decode(chunk);
             const lines = buffer.split('\n');
+            // Keep the last (potentially incomplete) line in the buffer
+            buffer = lines.pop() || '';
 
-            let readed = initStreamState();
-
-            try {
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const dataStr = line.slice(6).trim();
-                        if (dataStr === '[DONE]') return;
-                    
-                        const jsonData = JSON.parse(dataStr);
-                        
-                        if (jsonData.candidates?.[0]?.content?.parts) {
-                            const parts = jsonData.candidates[0].content.parts;
-                            for (const part of parts) {
-                                if (part.text) {
-                                    readed["__thoughts"] += readed["__last_thought"];
-                                    readed["__last_thought"] = "";
-                                    if (part.thought){
-                                        readed["__last_thought"] = part.text;
-                                    }
-                                    else {
-                                        readed["0"] += part.text;
-                                    }
-                                    if (part.thoughtSignature) {
-                                        readed["__sign_text"] = part.thoughtSignature;
-                                    }
-                                }
-                                if (part.functionCall) {
-                                    const toolCallsData = JSON.parse(readed["__tool_calls"]);
-                                    toolCallsData.push(part.functionCall);
-                                    readed["__tool_calls"] = JSON.stringify(toolCallsData);
-                                    if(part.thoughtSignature){
-                                        readed["__sign_function"] = part.thoughtSignature;
-                                    }
-                                }
-                            }
-                        }
-                    } 
-                }
-                control.enqueue(readed)
-            } catch (error) { 
-
+            parseLines(lines);
+            control.enqueue({...accumulated});
+        },
+        flush(control) {
+            // Process any remaining data left in the buffer when the stream ends
+            if (buffer.trim()) {
+                parseLines([buffer]);
             }
+            control.enqueue({...accumulated});
         }
     });
 }
@@ -1184,6 +1196,22 @@ function wrapToolStream(
                         controller.enqueue({"0": prefix})
                         
                         continue
+                    }
+                    // Enqueue the final content before closing
+                    if(db.streamGeminiThoughts) {
+                        controller.enqueue({
+                            "0": (prefix ? prefix + '\n\n' : '')
+                                + (thoughts ? `<Thoughts>\n\n${thoughts}\n\n</Thoughts>\n\n` : '')
+                                + (lastThought ? lastThought + '\n\n' : '') 
+                                + content
+                        })
+                    }
+                    else {
+                        controller.enqueue({
+                            "0": (prefix ? prefix + '\n\n' : '')
+                                + (thoughts + lastThought ? `<Thoughts>\n\n${thoughts + lastThought}\n\n</Thoughts>\n\n` : '')
+                                + content
+                        })
                     }
                     return controller.close()
                 }
