@@ -592,7 +592,18 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
 
         const transtream = getTranStream(arg)
 
-        da.body.pipeTo(transtream.writable).catch(() => {})
+        ;(async () => {
+            const reader = da.body.getReader()
+            const writer = transtream.writable.getWriter()
+            try {
+                while (true) {
+                    const { done, value } = await reader.read()
+                    if (done) break
+                    await writer.write(value)
+                }
+            } catch (_) {}
+            try { await writer.close() } catch (_) {}
+        })()
 
         return {
             type: 'streaming',
