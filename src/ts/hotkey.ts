@@ -1,7 +1,7 @@
 import { get } from "svelte/store"
 import { alertMd, alertSelect, alertToast, alertWait, doingAlert, alertRequestLogs } from "./alert"
 import { changeToPreset as changeToPreset2, getDatabase  } from "./storage/database.svelte"
-import { alertStore, MobileGUIStack, MobileSideBar, openPersonaList, openPresetList, OpenRealmStore, PlaygroundStore, QuickSettings, SafeModeStore, selectedCharID, settingsOpen } from "./stores.svelte"
+import { alertStore, MobileGUIStack, MobileSideBar, openModelSelector, openPersonaList, openPresetList, OpenRealmStore, PlaygroundStore, QuickSettings, SafeModeStore, selectedCharID, settingsOpen } from "./stores.svelte"
 import { importCharacter, exportCharacterCard } from "./characterCards"
 import { language } from "src/lang"
 import { updateTextThemeAndCSS } from "./gui/colorscheme"
@@ -175,6 +175,10 @@ export function initHotkey(){
                     if(database.enableScrollToActiveChar !== false){
                         window.dispatchEvent(new CustomEvent('scrollToActiveCharacter'))
                     }
+                    break
+                }
+                case 'modelSelect':{
+                    openModelSelector.set(!get(openModelSelector))
                     break
                 }
                 case 'toggleVoice':{
