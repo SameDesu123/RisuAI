@@ -152,6 +152,40 @@ NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
   - `globalApi.svelte.ts`: `initialBlockJsonSnapshots` + `setInitialBlockJsonSnapshots()` 변수/함수. `saveDb()` 내 encoder init 후 스냅샷 초기화. 저장 루프에서 `supportsJsonPatch()` 분기 추가.
   - `bootstrap.ts`: `buildBlockJsonSnapshots()` 함수 + 블록 로딩 성공 후 `setInitialBlockJsonSnapshots()` 호출
 
+### 14. fix: type error in hashBlock (risuSave.ts)
+- **File**: `src/ts/storage/risuSave.ts`
+- **Root Cause**: `Uint8Array`를 `crypto.subtle.digest()`에 전달할 때 TypeScript가 `BufferSource` 타입 불일치 에러 발생 (`SharedArrayBuffer` vs `ArrayBuffer`).
+- **Fix**: `data as unknown as BufferSource` 타입 캐스팅 추가. 런타임 동작은 동일.
+- **Conflict Reapply Guide**: `hashBlock()` 함수의 `crypto.subtle.digest('SHA-256', data)` 호출에서 `data`를 `data as unknown as BufferSource`로 교체.
+
+### 15. perf: add chat render limit setting (auto/manual)
+- **Files**: `src/ts/storage/database.svelte.ts`, `src/lib/ChatScreens/DefaultChatScreen.svelte`, `src/lib/Setting/Pages/DisplaySettings.svelte`, `src/lang/en.ts`
+- **Root Cause**: 긴 채팅 내역의 채팅방 진입/스크롤/전환 시 초기 렌더링 30개가 성능 병목.
+- **Fix**: 초기 렌더링 메시지 개수를 제어하는 설정 추가. Auto 모드(메시지 수 기반 휴리스틱)와 Manual 모드(사용자 직접 지정) 지원.
+- **DB 필드**: `chatRenderLimitMode: 'auto' | 'manual'`, `chatRenderLimitCount: number` (기본값 20)
+- **Auto 모드 기준**: 300+ → 5개, 150+ → 8개, 50+ → 12개, ≤50 → 20개
+- **UI 위치**: Settings → Display → Size and Speed 탭 하단
+- **영향 범위**: 순수 UI 레이어만. 토큰 계산, 프롬프트 빌드, 메모리 시스템 등 데이터 레이어는 영향 없음.
+- **핵심 코드** (`DefaultChatScreen.svelte`):
+  ```typescript
+  function getInitialLoadPages(): number {
+      const mode = DBState.db.chatRenderLimitMode ?? 'auto'
+      if (mode === 'manual') {
+          return DBState.db.chatRenderLimitCount ?? 20
+      }
+      const msgCount = currentCharacter?.chats[currentCharacter.chatPage]?.message?.length ?? 0
+      if (msgCount > 300) return 5
+      if (msgCount > 150) return 8
+      if (msgCount > 50) return 12
+      return 20
+  }
+  ```
+- **Conflict Reapply Guide**:
+  - `database.svelte.ts`: `Database` 인터페이스 끝에 `chatRenderLimitMode?: 'auto' | 'manual'`, `chatRenderLimitCount?: number` 추가. `setDatabase()`에 `data.chatRenderLimitMode ??= 'auto'`, `data.chatRenderLimitCount ??= 20` 추가.
+  - `DefaultChatScreen.svelte`: 기존 `let loadPages = $state(30)`을 `getInitialLoadPages()` 함수 기반으로 교체. `$selectedCharID`/`chatPage` 변경 감지 `$effect` 추가. 스크롤 `loadPages += 15`를 모드에 따른 동적 increment로 교체.
+  - `DisplaySettings.svelte`: submenu === 1 (Size and Speed) 섹션 끝에 SelectInput(auto/manual) + 조건부 SliderInput(3~50) 추가.
+  - `en.ts`: `chatRenderLimit`, `chatRenderLimitCount`, `chatRenderLimitAuto`, `chatRenderLimitManual` 문자열 추가.
+
 ## Conflict-Prone Files
 
 향후 `upstream/main`과 병합 시 충돌 가능성이 높은 파일:
@@ -164,7 +198,9 @@ NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
 | `src/ts/plugins/plugins.svelte.ts` | API v2.0 지원 추가 |
 | `src/ts/process/index.svelte.ts` | stream truncation fix + final chunk persistence |
 | `src/ts/process/request/anthropic.ts` | SSE parser deferred event fix |
-| `src/ts/storage/risuSave.ts` | RisuSaveEncoder 변경 추적 확장 |
+| `src/ts/storage/risuSave.ts` | RisuSaveEncoder 변경 추적 확장 + hashBlock 타입 캐스팅 |
+| `src/lib/ChatScreens/DefaultChatScreen.svelte` | loadPages 초기화 로직 변경 + 전환 감지 $effect |
+| `src/lib/Setting/Pages/DisplaySettings.svelte` | Chat Render Limit UI 추가 |
 | `src/ts/storage/nodeStorage.ts` | diff save transport 메서드 추가 |
 | `src/ts/globalApi.svelte.ts` | 저장 루프 diff 분기 |
 | `src/ts/bootstrap.ts` | 블록 기반 로딩 경로 추가 |

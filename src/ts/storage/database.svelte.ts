@@ -641,6 +641,8 @@ export function setDatabase(data:Database){
     data.hamburgerButtonBottom ??= false
     data.dynamicModelRegistry ??= true
     data.saveSignatures ??= false
+    data.chatRenderLimitMode ??= 'auto'
+    data.chatRenderLimitCount ??= 20
     // If the user uses plugins, its probably better to enable RisuAI Pro Tools by default
     // Because its likely they are power users who would benefit from the features
     data.enableRisuaiProTools ??= data.plugins.length > 0
@@ -1165,6 +1167,8 @@ export interface Database{
     seperateParametersByModel?:boolean
     disableSeperateParameterChangeOnPresetChange?:boolean
     saveSignatures?:boolean
+    chatRenderLimitMode?: 'auto' | 'manual'
+    chatRenderLimitCount?: number
 }
 
 export interface SeparateParameters{

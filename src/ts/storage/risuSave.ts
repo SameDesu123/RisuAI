@@ -116,7 +116,7 @@ const risuSaveCacheForage = localforage.createInstance({
     name: 'risuSaveCache'
 });
 export async function hashBlock(data: Uint8Array): Promise<string> {
-    const buf = await crypto.subtle.digest('SHA-256', data);
+    const buf = await crypto.subtle.digest('SHA-256', data as unknown as BufferSource);
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
