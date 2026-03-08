@@ -7,7 +7,7 @@ import { pluginProcess, pluginV2 } from "../../plugins/plugins.svelte";
 import { getCurrentCharacter, getCurrentChat, getDatabase, type character } from "../../storage/database.svelte";
 import { tokenizeNum } from "../../tokenizer";
 import { sleep } from "../../util";
-import type { MultiModal, OpenAIChat } from "../index.svelte";
+import type { OpenAIChat } from "../index.svelte";
 import { getTools } from "../mcp/mcp";
 import type { MCPTool } from "../mcp/mcplib";
 import { NovelAIBadWordIds, stringlizeNAIChat } from "../models/nai";
@@ -18,7 +18,7 @@ import { runTransformers } from "../transformers";
 import { runTrigger } from "../triggers";
 import { requestClaude } from './anthropic';
 import { requestGoogleCloudVertex } from './google';
-import { requestOpenAI, requestOpenAILegacyInstruct, requestOpenAIResponseAPI } from "./openAI";
+import { requestOpenAI, requestOpenAILegacyInstruct, requestOpenAIResponseAPI } from "./openAI/requests";
 import { applyParameters, type ModelModeExtended } from './shared';
 
 export type ToolCall = {
@@ -60,6 +60,7 @@ export interface RequestDataArgumentExtended extends requestDataArgument{
     mode?:ModelModeExtended
     key?:string
     additionalOutput?:string
+    saveSignatures?:boolean
 }
 
 export type requestDataResponse = {
@@ -230,52 +231,6 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
     }
 }
 
-export interface OpenAITextContents {
-    type: 'text'
-    text: string
-}
-
-export interface OpenAIImageContents {
-    type: 'image'|'image_url'
-    image_url: {
-        url: string
-        detail: string
-    }
-}
-
-export type OpenAIContents = OpenAITextContents|OpenAIImageContents
-
-export interface OpenAIToolCall {
-    id:string,
-    type:'function',
-    function:{
-        name:string,
-        arguments:string
-    },
-}
-
-export interface OpenAIChatExtra {
-    role: 'system'|'user'|'assistant'|'function'|'developer'|'tool'
-    content: string|OpenAIContents[]
-    memo?:string
-    name?:string
-    removable?:boolean
-    attr?:string[]
-    multimodals?:MultiModal[]
-    thoughts?:string[]
-    prefix?:boolean
-    reasoning_content?:string
-    cachePoint?:boolean
-    function?: {
-        name: string
-        description?: string
-        parameters: any
-        strict: boolean
-    }
-    tool_call_id?: string
-    tool_calls?: OpenAIToolCall[]
-}
-
 export function reformater(formated:OpenAIChat[],modelInfo:LLMModel|LLMFlags[]){
 
     const flags = Array.isArray(modelInfo) ? modelInfo : modelInfo.flags
@@ -366,6 +321,17 @@ export function reformater(formated:OpenAIChat[],modelInfo:LLMModel|LLMFlags[]){
 export async function requestChatDataMain(arg:requestDataArgument, model:ModelModeExtended, abortSignal:AbortSignal=null):Promise<requestDataResponse> {
     const db = getDatabase()
     const targ:RequestDataArgumentExtended = arg
+
+    
+    targ.aiModel = arg.staticModel ? arg.staticModel : (model === 'model' ? db.aiModel : db.subModel)
+    targ.modelInfo = getModelInfo(targ.aiModel)
+    if(db.seperateModelsForAxModels && !arg.staticModel){
+        if(db.seperateModels[model]){
+            targ.aiModel = db.seperateModels[model]
+            targ.modelInfo = getModelInfo(targ.aiModel)
+        }
+    }
+
     targ.formated = safeStructuredClone(arg.formated)
     targ.maxTokens = arg.maxTokens ??db.maxResponse
     targ.temperature = arg.temperature ?? (db.temperature / 100)
@@ -374,10 +340,8 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
     targ.useStreaming = db.useStreaming && arg.useStreaming
     targ.continue = arg.continue ?? false
     targ.biasString = arg.biasString ?? []
-    targ.aiModel = arg.staticModel ? arg.staticModel : (model === 'model' ? db.aiModel : db.subModel)
     targ.multiGen = ((db.genTime > 1 && targ.aiModel.startsWith('gpt') && (!arg.continue)) && (!arg.noMultiGen))
     targ.abortSignal = abortSignal
-    targ.modelInfo = getModelInfo(targ.aiModel)
     targ.mode = model
     targ.extractJson = arg.extractJson ?? db.extractJson
     if(targ.aiModel === 'reverse_proxy'){
@@ -390,13 +354,6 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
         const found = db.customModels.find(m => m.id === targ.aiModel)
         targ.customURL = found?.url
         targ.key = found?.key
-    }
-
-    if(db.seperateModelsForAxModels && !arg.staticModel){
-        if(db.seperateModels[model]){
-            targ.aiModel = db.seperateModels[model]
-            targ.modelInfo = getModelInfo(targ.aiModel)
-        }
     }
 
     const format = targ.modelInfo.format
@@ -771,7 +728,8 @@ async function requestPlugin(arg:RequestDataArgumentExtended):Promise<requestDat
         const formated = arg.formated
         const maxTokens = arg.maxTokens
         const bias = arg.biasString
-        const v2Function = pluginV2.providers.get(db.currentPluginProvider)
+        const model = arg.aiModel.startsWith('pluginmodel:::') ? arg.aiModel.replace('pluginmodel:::', '') : db.currentPluginProvider
+        const v2Function = pluginV2.providers.get(model)
 
         if(arg.previewBody){
             return {
@@ -789,7 +747,9 @@ async function requestPlugin(arg:RequestDataArgumentExtended):Promise<requestDat
             max_tokens: maxTokens,
         }, [
             'frequency_penalty','min_p','presence_penalty','repetition_penalty','top_k','top_p','temperature'
-        ], {}, arg.mode) as any, arg.abortSignal)) : await pluginProcess({
+        ], {}, arg.mode, {
+            modelId: arg.aiModel
+        }) as any, arg.abortSignal)) : await pluginProcess({
             bias: bias,
             prompt_chat: formated,
             temperature: (db.temperature / 100),
@@ -887,7 +847,9 @@ async function requestKobold(arg:RequestDataArgumentExtended):Promise<requestDat
         'top_a'
     ], {
         'repetition_penalty': 'rep_pen'
-    }, arg.mode) as KoboldGenerationInputSchema
+    }, arg.mode, {
+        modelId: arg.aiModel
+    }) as KoboldGenerationInputSchema
 
     if(arg.previewBody){
         return {
@@ -1116,7 +1078,9 @@ async function requestCohere(arg:RequestDataArgumentExtended):Promise<requestDat
     ], {
         'top_k': 'k',
         'top_p': 'p',
-    }, arg.mode)
+    }, arg.mode, {
+        modelId: arg.aiModel
+    })
 
     if(aiModel !== 'cohere-command-r-03-2024' && aiModel !== 'cohere-command-r-plus-04-2024'){
         body.safety_mode = "NONE"

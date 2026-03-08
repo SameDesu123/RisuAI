@@ -425,7 +425,7 @@ export async function loadPlugins() {
     await loadV3Plugins(pluginV3)
 }
 
-type PluginV2ProviderArgument = {
+export type PluginV2ProviderArgument = {
     prompt_chat: OpenAIChat[]
     frequency_penalty: number
     min_p: number
@@ -438,12 +438,12 @@ type PluginV2ProviderArgument = {
     max_tokens: number
 }
 
-type PluginV2ProviderOptions = {
+export type PluginV2ProviderOptions = {
     tokenizer?: string
     tokenizerFunc?: (content: string) => number[] | Promise<number[]>
 }
 
-type EditFunction = (content: string) => string | null | undefined | Promise<string | null | undefined>
+export type EditFunction = (content: string) => string | null | undefined | Promise<string | null | undefined>
 type ReplacerFunction = (content: OpenAIChat[], type: string) => OpenAIChat[] | Promise<OpenAIChat[]>
 
 export const pluginV2 = {
@@ -739,10 +739,14 @@ export const getV2PluginAPIs = () => {
             }
             DBState.db = db;
         },
-        setDatabase: (newDb: any) => {
+        setDatabase: async (newDb: any) => {
             const db = getDatabase();
             db.pluginCustomStorage ??= {}
             for (const key of Object.keys(newDb)) {
+                if (key === 'plugins') {
+                    newDb[key] = await handlePluginInstallViaPlugin(newDb.plugins)
+                }
+                
                 if (allowedDbKeys.includes(key)) {
                     (db as any)[key] = newDb[key];
                 }
@@ -902,4 +906,27 @@ export async function pluginProcess(arg: {
         success: false,
         content: language.pluginProviderNotFound
     }
+}
+
+async function handlePluginInstallViaPlugin(plugins: RisuPlugin[]){
+
+    const trimmedPlugins: RisuPlugin[] = []
+    for(const plugin of plugins){
+        if(!DBState.db.plugins.find((p: RisuPlugin) => p.name === plugin.name && p.script === plugin.script)){
+
+            if(plugin.version !== '3.0'){
+                console.warn(`Plugin "${plugin.name}" has version "${plugin.version}", which is not supported for installation via plugin. Only API version 3.0 plugins can be installed via plugin. Skipping installation of this plugin.`)
+                continue
+            }
+            const confirmation = await alertConfirm(language.confirmInstallPluginViaPlugin.replace('{plugin}', plugin.name))
+            if(confirmation){
+                trimmedPlugins.push(plugin)
+            }
+        }
+        else{
+            console.warn(`Plugin "${plugin.name}" already exists, skipping installation via plugin.`)
+        }
+    }
+
+    return trimmedPlugins
 }

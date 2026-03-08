@@ -1,15 +1,16 @@
 import { fetchNative, textifyReadableStream } from "src/ts/globalApi.svelte"
-import { LLMFlags, LLMFormat } from "src/ts/model/modellist"
+import { LLMFlags, LLMFormat, type LLMModel } from "src/ts/model/modellist"
 import { getDatabase, setDatabase } from "src/ts/storage/database.svelte"
-import { simplifySchema } from "src/ts/util"
+import { base64url, simplifySchema } from "src/ts/util"
 import { v4 } from "uuid"
-import { setInlayAsset, writeInlayImage } from "../files/inlays"
+import { saveInlayedSignature, setInlayAsset, writeInlayImage, type InlaySignature } from "../files/inlays"
 import { extractJSON, getGeneralJSONSchema } from "../templates/jsonSchema"
 import { callTool, decodeToolCall, encodeToolCall } from "../mcp/mcp"
 import { alertError } from "src/ts/alert";
 import { addFetchLog } from "src/ts/globalApi.svelte"
 import type { RequestDataArgumentExtended, requestDataResponse, StreamResponseChunk } from './request'
 import { applyParameters, type LLMParameter } from './shared'
+import { bodyIntercepterStore } from "src/ts/stores.svelte"
 
 type GeminiFunctionCall = {
     id?: string;
@@ -86,6 +87,16 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
                             data: base64,
                         }
                     });
+                }
+
+                if(modal.type === 'signature' && db.saveSignatures){
+                    const sig:InlaySignature = JSON.parse(Buffer.from(modal.base64, 'base64').toString('utf-8'))
+                    if(sig.source === arg.modelInfo.internalID || sig.source === arg.modelInfo.id){
+                        geminiParts.push({
+                            thought: true,
+                            thoughtSignature: sig.signatures[0].content
+                        })
+                    }
                 }
             }
     
@@ -321,7 +332,8 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
             'frequency_penalty': "frequencyPenalty",
             'thinking_tokens': "thinkingBudget"
         }, arg.mode, {
-            ignoreTopKIfZero: true
+            ignoreTopKIfZero: true,
+            modelId: arg.modelInfo.id
         }),
         safetySettings: uncensoredCatagory,
         systemInstruction: {
@@ -394,7 +406,11 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
             'TEXT', 'IMAGE'
         ]
         arg.useStreaming = false
-    }    let headers:{[key:string]:string} = {}
+    }
+
+    let headers:{[key:string]:string} = {
+        'Content-Type': 'application/json'
+    }
 
     if(db.gptVisionQuality === 'high'){
         body.generation_config.mediaResolution = "MEDIA_RESOLUTION_MEDIUM"
@@ -429,15 +445,6 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
                 bytes[i] = binaryString.charCodeAt(i);
             }
             return bytes.buffer;
-        }
-
-        function base64url(source: Uint8Array | ArrayBuffer): string {
-            const bytes = source instanceof ArrayBuffer ? new Uint8Array(source) : source;
-            let encodedSource = btoa(String.fromCharCode.apply(null, [...bytes]))
-                .replace(/=+$/, "")
-                .replace(/\+/g, "-")
-                .replace(/\//g, "_");
-            return encodedSource;
         }
 
         const time = Math.floor(Date.now() / 1000);
@@ -626,7 +633,6 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
     }
 
     if((arg.modelInfo.format === LLMFormat.GoogleCloud || arg.modelInfo.format === LLMFormat.VertexAIGemini) && arg.useStreaming){
-        headers['Content-Type'] = 'application/json'
 
         if(arg.previewBody){
             return {
@@ -659,7 +665,10 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
             }
         }
 
-        const transtream = getTranStream() 
+        const transtream = getTranStream({
+            modelInfo: arg.modelInfo,
+            saveSignature: arg.saveSignatures ?? false
+        }) 
 
         // Use pipeTo for native performance (critical for WebKit/iPad).
         // preventAbort: on source error, writable stays writable so we can
@@ -712,6 +721,19 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
                     })
                 }
 
+                if(part.thoughtSignature && arg.saveSignatures){
+                    const sigId = v4()
+                    await saveInlayedSignature(sigId, {
+                        source: arg.modelInfo.internalID || arg.modelInfo.id,
+                        sourceFormat: arg.modelInfo.format,
+                        signatures: [{
+                            type: 'text',
+                            content: part.text,
+                        }]
+                    })
+                    rDatas[rDatas.length - 1].text = `{{inlayeddata::${sigId}}}\n\n` + rDatas[rDatas.length - 1].text
+                }
+
                 if(part.inlineData){
                     const imgHTML = new Image()
                     const id = crypto.randomUUID()
@@ -738,7 +760,24 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
                         })
                     }
                 }
+
             }   
+        }
+
+        if(data?.usageMetadata){
+            
+            for (const interceptor of bodyIntercepterStore) {
+                try {
+                    await interceptor.callback({
+                        usageMetadata: data.usageMetadata,
+                        modelStatus: data.modelStatus,
+                        promptFeedback: data.promptFeedback
+                    }, 'meta_gemini')
+                }
+                catch (e) {
+                    console.error(e)
+                }
+            }
         }
         return parts
     }
@@ -933,8 +972,12 @@ function initStreamState(state?: {[key:string]:string}): {[key:string]:string} {
     return state;
 }
 
-function getTranStream():TransformStream<Uint8Array, StreamResponseChunk> {
+function getTranStream(args:{
+    modelInfo:LLMModel,
+    saveSignature:boolean
+}):TransformStream<Uint8Array, StreamResponseChunk> {
     let buffer = '';
+    const { modelInfo, saveSignature } = args
     let accumulated = initStreamState();
 
     const parseLines = (lines: string[]) => {
@@ -960,6 +1003,18 @@ function getTranStream():TransformStream<Uint8Array, StreamResponseChunk> {
                                 }
                                 if (part.thoughtSignature) {
                                     accumulated["__sign_text"] = part.thoughtSignature;
+                                    if(saveSignature){
+                                        const sigId = v4()
+                                        saveInlayedSignature(sigId, {
+                                            source: modelInfo.internalID || modelInfo.id,
+                                            sourceFormat: modelInfo.format,
+                                            signatures: [{
+                                                type: 'text',
+                                                content: part.text,
+                                            }]
+                                        })
+                                        accumulated["0"] += `{{inlayeddata::${sigId}}}`;
+                                    }
                                 }
                             }
                             if (part.functionCall) {
@@ -968,9 +1023,29 @@ function getTranStream():TransformStream<Uint8Array, StreamResponseChunk> {
                                 accumulated["__tool_calls"] = JSON.stringify(toolCallsData);
                                 if(part.thoughtSignature){
                                     accumulated["__sign_function"] = part.thoughtSignature;
+                                    const sigId = v4()
+
+                                    if(saveSignature){
+                                        saveInlayedSignature(sigId, {
+                                            source: modelInfo.internalID || modelInfo.id,
+                                            sourceFormat: modelInfo.format,
+                                            signatures: [{
+                                                type: 'function',
+                                                content: `${part.functionCall.name}(${JSON.stringify(part.functionCall.args)})`,
+                                            }]
+                                        })
+                                        accumulated["0"] += `{{inlayeddata::${sigId}}}`;
+                                    }
                                 }
                             }
                         }
+                    }
+
+                    if(jsonData.usageMetadata){
+                        accumulated['__usageMetadata'] = JSON.stringify(jsonData.usageMetadata)
+                    }
+                    if(jsonData.modelStatus){
+                        accumulated['__modelStatus'] = JSON.stringify(jsonData.modelStatus)
                     }
                 } catch (error) {
                     // Incomplete JSON, will be retried when more data arrives
@@ -1026,6 +1101,8 @@ function wrapToolStream(
                 let content = value["0"]
                 let thoughts = value["__thoughts"]
                 let lastThought = value["__last_thought"]
+                let signText = value["__sign_text"]
+                let signFunction = value["__sign_function"]
 
                 if(done){
                     value = initStreamState(lastValue)
@@ -1035,8 +1112,8 @@ function wrapToolStream(
                     lastThought = value["__last_thought"]
 
                     // thoughtSignatures 
-                    const signText = value["__sign_text"]
-                    const signFunction = value["__sign_function"]
+                    signText = value["__sign_text"]
+                    signFunction = value["__sign_function"]
 
                     const calls = JSON.parse(value["__tool_calls"]) as GeminiFunctionCall[]
                     if(calls && calls.length > 0){
@@ -1184,7 +1261,10 @@ function wrapToolStream(
                             return controller.close()
                         }
 
-                        const transtream = getTranStream()
+                        const transtream = getTranStream({
+                            modelInfo: arg.modelInfo,
+                            saveSignature: arg.saveSignatures ?? false
+                        })
                         resRec.body.pipeTo(transtream.writable, { preventAbort: true }).catch(async () => {
                             try { await transtream.writable.close() } catch (_) {}
                         })
@@ -1204,12 +1284,22 @@ function wrapToolStream(
                         
                         continue
                     }
+
+                    for (const interceptor of bodyIntercepterStore) {
+                        try {
+                            await interceptor.callback(value, 'meta_gemini_stream')
+                        }
+                        catch (e) {
+                            console.error(e)
+                        }
+                    }
+
                     // Enqueue the final content before closing
                     if(db.streamGeminiThoughts) {
                         controller.enqueue({
                             "0": (prefix ? prefix + '\n\n' : '')
                                 + (thoughts ? `<Thoughts>\n\n${thoughts}\n\n</Thoughts>\n\n` : '')
-                                + (lastThought ? lastThought + '\n\n' : '') 
+                                + (lastThought ? lastThought + '\n\n' : '')
                                 + content
                         })
                     }

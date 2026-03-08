@@ -46,25 +46,10 @@ export interface OpenAIChat{
 }
 
 export interface MultiModal{
-    type:'image'|'video'|'audio'
+    type:'image'|'video'|'audio'|'signature'
     base64:string,
     height?:number,
     width?:number
-}
-
-export interface OpenAIChatFull extends OpenAIChat{
-    function_call?: {
-        name: string
-        arguments:string
-    }
-    tool_calls?:{
-        function: {
-            name: string
-            arguments:string
-        }
-        id:string
-        type:'function'
-    }[]
 }
 
 export interface requestTokenPart{
@@ -873,7 +858,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         const modelinfo = getModelInfo(DBState.db.aiModel)
         if(inlays.length > 0){
             for(const inlay of inlays){
-                const inlayName = inlay.replace('{{inlayed::', '').replace('{{inlay::', '').replace('}}', '')
+                const inlayName = inlay.replace('{{inlayed::', '').replace('{{inlay::', '').replace('}}', '').replace('{{inlayeddata::', '')
                 const inlayData = await getInlayAsset(inlayName)
                 if(inlayData?.type === 'image'){
                     if(modelinfo.flags.includes(LLMFlags.hasImageInput)){
@@ -896,6 +881,12 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                             base64: inlayData.data
                         })
                     }
+                }
+                if(inlayData?.type === 'signature'){
+                    multimodal.push({
+                        type: 'signature',
+                        base64: inlayData.data
+                    })
                 }
                 formatedChat = formatedChat.replace(inlay, '')
             }

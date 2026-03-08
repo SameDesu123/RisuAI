@@ -632,7 +632,6 @@ export const languageEnglish = {
         inlaySelectAll: "Select All",
         inlayDeleteConfirm: "Are you sure you want to delete {name}?",
         inlayDeleteMultipleConfirm: "Are you sure you want to delete the selected {count} assets?",
-        inlayLoadMore: "Load More ({remaining} remaining)",
         inlayTotalAssets: "Total {count} assets",
     },
     confirm: "Confirm",
@@ -1505,6 +1504,7 @@ export const languageEnglish = {
     getFullDatabaseConsent: "Plugin {} is requesting to access the full database, which may expose sensitive information. Do you want to allow this?",
     mainDomAccessConsent: "Plugin {} is requesting to access the main Document, which may expose sensitive information. Do you want to allow this?",
     replacerPermissionConsent: "Plugin {} is requesting permission to replace content in the chat, which may be used to manipulate the conversation. Do you want to allow this?",
+    providerPermissionConsent: "Plugin {} is requesting permission to access the provider, which may allow it to make unauthorized API calls. Do you want to allow this?",
     pluginV2Warning: "Plugin V2 and V2.1 is considered unsafe and will stop working in future versions. **Please do not use these versions of plugins.**. If you are the developer of this plugin, please update to V3 as soon as possible.",
     createFolderOnBranch: "Create Folder on Branch",
     hamburgerButtonBottom: "Move Menu Button to Bottom of Sidebar",
@@ -1541,6 +1541,15 @@ export const languageEnglish = {
     enableRemoteSaving: "Enable Remote Saving",
     blockquoteStyling: "Blockquote Styling",
     dynamicModelRegistry: "Dynamic Model Registry",
+    confirmInstallPluginViaPlugin: "You are trying to install a plugin via another plugin. This can be dangerous if the source plugin is not trustworthy. Do you want to continue?",
+    risuaiProTools: "Risuai Pro Tools",
+    enableRisuaiProTools: "Enable Risuai Pro Tools",
+    easyPanel: "Easy Panel",
+    mainModel: "Main Model",
+    epEnabled: "Easy Panel Override",
+    epRequirementsNotMet: "Easy Panel requirements not met. Click the button below to automatically adjust your settings for optimal Easy Panel settings.",
+    seperateParametersByModel: "Separate Parameters by Model",
+    disableSeperateParameterChangeOnPresetChange: "Disable Separate Parameter Change on Preset Change",
 } satisfies I18nTranslation;
 
 type I18nTranslationFunction = (...args: any[]) => string;

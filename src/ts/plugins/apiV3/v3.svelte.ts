@@ -1,4 +1,4 @@
-import { allowedDbKeys, getV2PluginAPIs, type RisuPlugin } from "../plugins.svelte";
+import { allowedDbKeys, customProviderStore, getV2PluginAPIs, pluginV2, type PluginV2ProviderArgument, type PluginV2ProviderOptions, type RisuPlugin } from "../plugins.svelte";
 import { SandboxHost } from "./factory";
 import { getDatabase } from "src/ts/storage/database.svelte";
 import { SafeLocalPluginStorage, tagWhitelist } from "../pluginSafeClass";
@@ -9,12 +9,14 @@ import { sleep } from "src/ts/util";
 import { alertConfirm, alertError, alertNormal } from "src/ts/alert";
 import { language } from "src/lang";
 import { checkCharOrder, forageStorage, getFetchLogs } from "src/ts/globalApi.svelte";
+import { changeColorScheme, updateColorScheme, updateTextThemeAndCSS, type ColorScheme } from "src/ts/gui/colorscheme";
 import { isNodeServer, isTauri } from "src/ts/platform";
 import { get } from "svelte/store";
 import { registerMCPModule, unregisterMCPModule } from "src/ts/process/mcp/pluginmcp";
 import { getLLMCache, searchLLMCache } from "src/ts/translator/translator";
 import { hasher } from "src/ts/parser/parser.svelte";
 import localforage from "localforage";
+import { LLMFlags, LLMFormat, LLMProvider, LLMTokenizer, type LLMModel } from "src/ts/model/types";
 
 /*
     V3 API for RisuAI Plugins
@@ -34,6 +36,8 @@ import localforage from "localforage";
         - Callback functions (only as parameters)
         - Note that Class or Callbacks inside arrays or objects are not supported
 */
+
+const pluginChannel = new Map<string, Function>();
 
 class SafeElement {
     #element: HTMLElement;
@@ -274,6 +278,7 @@ class SafeElement {
                     type: event.type,
                     key: event.key,
                     code: event.code,
+                    repeat: event.repeat,
                     altKey: event.altKey,
                     ctrlKey: event.ctrlKey,
                     shiftKey: event.shiftKey,
@@ -513,42 +518,75 @@ const permissionForage = localforage.createInstance({
     storeName: 'plugin_permissions'
 });
 
-const getPluginPermission = async (pluginName: string, permissionDesc: 'fetchLogs'|'db'|'mainDom'|'replacer') => {
+type PluginV3ProviderOptions = PluginV2ProviderOptions & {
+    model?: LLMModel
+}
+
+export const customV3ProviderMetaStore:LLMModel[] = []
+
+const getPluginPermission = async (pluginName: string, permissionDesc: 'fetchLogs'|'db'|'mainDom'|'replacer'|'provider', reconfirm: boolean|'periodically' = false) => {
     if(permissionGivenPlugins.has(pluginName)){
         return true;
     }
     if(permissionDeniedPlugins.has(pluginName)){
         return false;
     }
-    const pluginHash = await hasher(
+
+    let pluginHash = ''
+
+    let requiresReconfirm = false;
+
+    if(reconfirm === 'periodically'){
+        const lastGrantTime:number = await permissionForage.getItem(pluginName + '_' + permissionDesc + '_lastGrantTime');
+        const now = Date.now();
+        if(!lastGrantTime || now - lastGrantTime > 3 * 24 * 60 * 60 * 1000){ //3 days
+            requiresReconfirm = true;
+        }
+    }
+    else if(reconfirm === true){
+        requiresReconfirm = true;
+    }
+
+    pluginHash = await hasher(
         new TextEncoder().encode(
             DBState.db.plugins.find(p => p.name === pluginName)?.script
         )
     ) + `_${permissionDesc}`;
 
-    if(await permissionForage.getItem(pluginHash)){
+    if(!requiresReconfirm &&await permissionForage.getItem(pluginHash)){
         permissionGivenPlugins.add(pluginName);
         return true;
-    }
+    }   
+    
 
     let alertTitle =
         permissionDesc === 'fetchLogs' ? language.fetchLogConsent.replace("{}", pluginName)
         : permissionDesc === 'db' ? language.getFullDatabaseConsent.replace("{}", pluginName)
         : permissionDesc === 'mainDom' ? language.mainDomAccessConsent.replace("{}", pluginName)
         : permissionDesc === 'replacer' ? language.replacerPermissionConsent.replace("{}", pluginName)
+        : permissionDesc === 'provider' ? language.providerPermissionConsent.replace("{}", pluginName)
         : `Error`
     if(alertTitle === 'Error'){
         return false;
     }
     const conf = await alertConfirm(alertTitle)
-    if(conf){
+    if(conf && pluginHash){
         permissionGivenPlugins.add(pluginName);
         await permissionForage.setItem(pluginHash, true);
+        if(reconfirm === 'periodically'){
+            await permissionForage.setItem(pluginName + '_' + permissionDesc + '_lastGrantTime', Date.now());
+        }
         return true;
     }
     permissionDeniedPlugins.add(pluginName);
     return false;
 }
+
+const urlBlacklist = [
+    'risuai.xyz',
+    'risuai.net',
+    'sionyw.com',
+]
 
 const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
 
@@ -556,16 +594,57 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
     return {
 
         //Old APIs from v2.1
-        risuFetch: oldApis.risuFetch,
-        nativeFetch: oldApis.nativeFetch,
+        risuFetch: (url, options) => {
+            for(const blocked of urlBlacklist){
+                if(url.toLowerCase().includes(blocked)){
+                    throw new Error(`Requests to ${blocked} are blocked for security reasons.`);
+                }
+            }
+            return oldApis.risuFetch(url, options);
+        },
+        nativeFetch: (url, options) => {
+            for(const blocked of urlBlacklist){
+                if(url.toLowerCase().includes(blocked)){
+                    throw new Error(`Requests to ${blocked} are blocked for security reasons.`);
+                }
+            }
+            return oldApis.nativeFetch(url, options);
+        },
         getChar: oldApis.getChar,
         setChar: oldApis.setChar,
-        addProvider: oldApis.addProvider,
+        addProvider: (name: string, func: (arg: PluginV2ProviderArgument, abortSignal?: AbortSignal) => Promise<{ success: boolean, content: string }>, options?: PluginV3ProviderOptions) => {
+            console.warn(`addProvider is a powerful API that can potentially be unsafe if used incorrectly. addProvider's functionality might be limited or changed in future updates to ensure security. please use other APIs if possible.`);
+            let provs = get(customProviderStore)
+            provs.push(name)
+            pluginV2.providers.set(name, async (arg, abortSignal) => {
+               await getPluginPermission(plugin.name, 'provider', 'periodically');
+               //mode is overridden to v3, due to vulnerabilities using mode.
+               //Alternative to mode will be added in future
+               arg.mode = 'v3'
+               return await func(arg, abortSignal);
+            }),
+            pluginV2.providerOptions.set(name, options ?? {})
+            customProviderStore.set(provs)
+
+            const modelData:LLMModel = {
+                id: `pluginmodel:::${name}`,
+                name: options?.model?.name ?? name,
+                shortName: options?.model?.shortName ?? name,
+                fullName: options?.model?.fullName ?? name,
+                internalID: options?.model?.internalID ?? `pluginmodel:::${name}`,
+                provider: LLMProvider.AsIs,
+                format: LLMFormat.Plugin,
+                flags: options?.model?.flags ?? [LLMFlags.hasFullSystemPrompt],
+                parameters: options?.model?.parameters ?? ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'min_p', 'top_a', 'top_k', 'thinking_tokens'],
+                tokenizer:options?.model?.tokenizer ??  LLMTokenizer.Unknown
+            }
+            customV3ProviderMetaStore.push(modelData);
+        },
         addRisuScriptHandler: oldApis.addRisuScriptHandler,
         removeRisuScriptHandler: oldApis.removeRisuScriptHandler,
         addRisuReplacer: async (name:string,func:Function) => {
             //permission check for replacer
-            const conf = await getPluginPermission(plugin.name, 'replacer');
+            const conf = await getPluginPermission(plugin.name, 'replacer', 'periodically');
             if(!conf){
                 return;
             }
@@ -579,7 +658,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
         saveAsset: oldApis.saveAsset,
         //Same functionality, but new implementation
         getDatabase: async (includeOnly:string[]|'all' = 'all') => {
-            const conf = await getPluginPermission(plugin.name, 'db');
+            const conf = await getPluginPermission(plugin.name, 'db', 'periodically');
             if(!conf){
                 return null;
             }
@@ -595,6 +674,69 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
         },
 
         
+        // --- Color Scheme APIs ---
+        changeColorScheme: (name: string) => {
+            changeColorScheme(name)
+        },
+        setColorScheme: (scheme: ColorScheme) => {
+            const requiredKeys = ['bgcolor','darkbg','borderc','selected','draculared','textcolor','textcolor2','darkBorderc','darkbutton','type'] as const
+            for (const key of requiredKeys) {
+                if (typeof (scheme as any)[key] !== 'string') {
+                    throw new Error(`Invalid color scheme: missing or invalid '${key}'`)
+                }
+            }
+            if (scheme.type !== 'light' && scheme.type !== 'dark') {
+                throw new Error('Invalid color scheme type: must be "light" or "dark"')
+            }
+            const db = DBState.db
+            db.colorSchemeName = 'custom'
+            db.colorScheme = scheme
+            updateColorScheme()
+        },
+        getColorScheme: () => {
+            const db = DBState.db
+            return {
+                name: db.colorSchemeName,
+                scheme: $state.snapshot(db.colorScheme)
+            }
+        },
+
+        // --- Text Theme APIs ---
+        changeTextTheme: (name: string) => {
+            if (!['standard','highcontrast'].includes(name)) {
+                throw new Error(`Invalid text theme: ${name}`)
+            }
+            const db = DBState.db
+            db.textTheme = name
+            updateTextThemeAndCSS()
+        },
+        setCustomTextTheme: (theme: {
+            FontColorStandard: string,
+            FontColorBold: string,
+            FontColorItalic: string,
+            FontColorItalicBold: string,
+            FontColorQuote1: string,
+            FontColorQuote2: string
+        }) => {
+            const requiredKeys = ['FontColorStandard','FontColorBold','FontColorItalic','FontColorItalicBold','FontColorQuote1','FontColorQuote2'] as const
+            for (const key of requiredKeys) {
+                if (typeof (theme as any)[key] !== 'string') {
+                    throw new Error(`Invalid text theme: missing or invalid '${key}'`)
+                }
+            }
+            const db = DBState.db
+            db.textTheme = 'custom'
+            db.customTextTheme = theme
+            updateTextThemeAndCSS()
+        },
+        getTextTheme: () => {
+            const db = DBState.db
+            return {
+                name: db.textTheme,
+                customTheme: $state.snapshot(db.customTextTheme)
+            }
+        },
+
         //Deprecated APIs from v2.1
         //Use getArgument / setArgument instead if possible
         getArg: oldApis.getArg,
@@ -944,6 +1086,15 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                     'key': '_keySafeLocalStorage',
                     'keys': '_keysSafeLocalStorage',
                 }
+            }
+        },
+        addPluginChannelListener: (channelName: string, callback: Function) => {
+            pluginChannel.set(plugin.name + channelName, callback);
+        },
+        postPluginChannelMessage: (pluginName: string, channelName: string, message: any) => {
+            const callback = pluginChannel.get(pluginName + channelName);
+            if(callback){
+                callback(message);
             }
         }
     }
