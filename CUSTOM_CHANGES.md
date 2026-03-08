@@ -89,18 +89,52 @@ NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
   ```
 - **Conflict Reapply Guide**: `wrapToolStream` 함수 내에서 도구 호출 후 재요청하는 경로의 `pipeTo` 호출 찾기. 메인 경로(함수 최상위)에는 이미 적용되어 있으므로, `wrapToolStream` 내부의 `pipeTo`만 확인.
 
+### 12. feat: implement diff-based incremental save for NodeStorage
+- **Files**: `server/node/server.cjs`, `src/ts/storage/risuSave.ts`, `src/ts/storage/nodeStorage.ts`, `src/ts/globalApi.svelte.ts`, `src/ts/bootstrap.ts`
+- **Root Cause**: NodeStorage(자체 호스팅 서버)에서 매 저장마다 전체 `database.bin`을 전송. DB가 커지면 수십~수백MB를 매번 보내게 되어 저장/로딩 모두 느려짐.
+- **Fix**: `RisuSaveEncoder`가 이미 블록 단위로 관리하는 것을 활용하여, 변경된 블록만 서버에 전송하는 diff 기반 저장 시스템 구현.
+- **서버 변경** (`server/node/server.cjs`):
+  - 4개 새 엔드포인트: `GET /api/save-capabilities`, `GET /api/save-manifest`, `POST /api/save-diff`, `GET /api/save-blocks`
+  - 블록별 파일 저장: `save/__dbblocks/` 디렉토리에 매니페스트 + 개별 블록 파일
+  - 자동 마이그레이션: 기존 모놀리식 `database.bin`에서 블록 스토리지로 첫 save-diff 시 자동 변환
+  - 원자적 쓰기: `.tmp` → rename 패턴 + 매니페스트 backup
+  - 인메모리 mutex로 동시 저장 직렬화
+- **클라이언트 변경**:
+  - `RisuSaveEncoder` (`risuSave.ts`): `changedBlockNames`, `deletedBlockNames` 추적 + `getChangedBlocks()`, `getDeletedBlockNames()`, `clearChangeTracking()` + `hashBlock()` 유틸
+  - `NodeStorage` (`nodeStorage.ts`): `supportsDiffSave()`, `getManifest()`, `saveDiff()`, `getBlocks()` 메서드
+  - `globalApi.svelte.ts`: 저장 루프에서 NodeStorage + diff 지원 시 변경 블록만 전송, 미지원 시 기존 전체 저장 fallback
+  - `bootstrap.ts`: 로딩 시 매니페스트 확인 → 블록별 로딩 → RISUSAVE 재조립 → decode, 실패 시 모놀리식 fallback
+- **바이너리 프로토콜** (save-diff):
+  ```
+  [headerLen:4B LE][header JSON][blocks...]
+  Header: { changedBlocks: { [name]: { hash, size } }, deletedBlocks: [], clientManifestVersion }
+  Each block: [nameLen:2B LE][name UTF-8][dataLen:4B LE][block data]
+  ```
+  블록 데이터는 RISUSAVE 블록 포맷 그대로 (type+compression+name+data) 전송.
+- **하위 호환**: `GET /api/save-capabilities`가 404 반환 시 구버전 서버로 판단 → 기존 전체 저장 사용.
+- **Conflict Reapply Guide**:
+  - `server.cjs`: 기존 `/api/write` 엔드포인트 뒤에 블록 저장 시스템 코드 블록 삽입 (`// ─── Block-based diff save system ───` 주석으로 구분)
+  - `risuSave.ts`: `RisuSaveEncoder` 클래스에 `changedBlockNames`/`deletedBlockNames` 필드 + getter/clear 메서드 추가. `set()` 내 각 블록 재인코딩 시 `this.changedBlockNames.add(name)` 호출. 클래스 바로 위에 `hashBlock()` export 함수 추가.
+  - `nodeStorage.ts`: `NodeStorage` 클래스에 `_diffSaveSupported`, `supportsDiffSave()`, `getManifest()`, `saveDiff()`, `getBlocks()` 추가
+  - `globalApi.svelte.ts`: `saveDb()` 함수 내 `encoder.set()` 호출 후, `isNodeServer && nodeStorageRef && supportsDiffSave()` 분기 추가
+  - `bootstrap.ts`: `else` (non-Tauri) 분기 내, `forageStorage.Init()` 직후에 블록 로딩 시도 추가
+
 ## Conflict-Prone Files
 
 향후 `upstream/main`과 병합 시 충돌 가능성이 높은 파일:
 
 | File | Reason |
 |------|--------|
-| `server/node/server.cjs` | keepalive, stream 관련 커스텀 로직 |
+| `server/node/server.cjs` | keepalive, stream 관련 커스텀 로직 + diff save 시스템 |
 | `src/ts/process/request/google.ts` | SSE parser 구조 변경 (parseLines/flush) |
 | `src/ts/process/request/openAI/requests.ts` | SSE parser 구조 변경 (parseLines/flush) |
 | `src/ts/plugins/plugins.svelte.ts` | API v2.0 지원 추가 |
 | `src/ts/process/index.svelte.ts` | stream truncation fix + final chunk persistence |
 | `src/ts/process/request/anthropic.ts` | SSE parser deferred event fix |
+| `src/ts/storage/risuSave.ts` | RisuSaveEncoder 변경 추적 확장 |
+| `src/ts/storage/nodeStorage.ts` | diff save transport 메서드 추가 |
+| `src/ts/globalApi.svelte.ts` | 저장 루프 diff 분기 |
+| `src/ts/bootstrap.ts` | 블록 기반 로딩 경로 추가 |
 
 ## How to Sync with Upstream
 

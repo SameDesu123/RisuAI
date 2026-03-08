@@ -41,7 +41,8 @@ import {
     setUsingSw,
     checkCharOrder
 } from "./globalApi.svelte";
-import { isTauri } from "./platform";
+import { isTauri, isNodeServer } from "./platform";
+import { NodeStorage } from "./storage/nodeStorage";
 import { registerModelDynamic } from "./model/modellist";
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
@@ -106,33 +107,77 @@ export async function loadData() {
             else {
                 await forageStorage.Init()
 
-                LoadingStatusState.text = "Loading Local Save File..."
-                let gotStorage: Uint8Array = await forageStorage.getItem('database/database.bin') as unknown as Uint8Array
-                LoadingStatusState.text = "Decoding Local Save File..."
-                if (checkNullish(gotStorage)) {
-                    gotStorage = encodeRisuSaveLegacy({})
-                    await forageStorage.setItem('database/database.bin', gotStorage)
-                }
-                try {
-                    const decoded = await decodeRisuSave(gotStorage)
-                    console.log(decoded)
-                    setDatabase(decoded)
-                } catch (error) {
-                    console.error(error)
-                    const backups = await getDbBackups()
-                    let backupLoaded = false
-                    for (const backup of backups) {
-                        try {
-                            LoadingStatusState.text = `Reading Backup File ${backup}...`
-                            const backupData: Uint8Array = await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
-                            setDatabase(
-                                await decodeRisuSave(backupData)
-                            )
-                            backupLoaded = true
-                        } catch (error) { }
+                let blockLoadSuccess = false
+
+                // Try block-based loading for NodeStorage with diff save support
+                if (isNodeServer && forageStorage.realStorage instanceof NodeStorage) {
+                    const nodeStorage = forageStorage.realStorage as NodeStorage
+                    try {
+                        if (await nodeStorage.supportsDiffSave()) {
+                            LoadingStatusState.text = "Checking Block Storage..."
+                            const manifest = await nodeStorage.getManifest()
+                            if (manifest.exists && Object.keys(manifest.blocks).length > 0) {
+                                LoadingStatusState.text = "Loading Save Blocks..."
+                                const blockNames = Object.keys(manifest.blocks)
+                                const blocks = await nodeStorage.getBlocks(blockNames)
+
+                                // Reassemble into RISUSAVE format
+                                const risuSaveHeader = new TextEncoder().encode("RISUSAVE\0")
+                                let totalLen = risuSaveHeader.length
+                                for (const data of Object.values(blocks)) {
+                                    totalLen += data.length
+                                }
+                                const assembled = new Uint8Array(totalLen)
+                                let offset = 0
+                                assembled.set(risuSaveHeader, offset)
+                                offset += risuSaveHeader.length
+                                for (const data of Object.values(blocks)) {
+                                    assembled.set(data, offset)
+                                    offset += data.length
+                                }
+
+                                LoadingStatusState.text = "Decoding Save Blocks..."
+                                const decoded = await decodeRisuSave(assembled)
+                                console.log('Block-based load:', decoded)
+                                setDatabase(decoded)
+                                blockLoadSuccess = true
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Block-based load failed, falling back to monolithic:', error)
+                        blockLoadSuccess = false
                     }
-                    if (!backupLoaded) {
-                        throw "Forage: Your save file is corrupted"
+                }
+
+                if (!blockLoadSuccess) {
+                    LoadingStatusState.text = "Loading Local Save File..."
+                    let gotStorage: Uint8Array = await forageStorage.getItem('database/database.bin') as unknown as Uint8Array
+                    LoadingStatusState.text = "Decoding Local Save File..."
+                    if (checkNullish(gotStorage)) {
+                        gotStorage = encodeRisuSaveLegacy({})
+                        await forageStorage.setItem('database/database.bin', gotStorage)
+                    }
+                    try {
+                        const decoded = await decodeRisuSave(gotStorage)
+                        console.log(decoded)
+                        setDatabase(decoded)
+                    } catch (error) {
+                        console.error(error)
+                        const backups = await getDbBackups()
+                        let backupLoaded = false
+                        for (const backup of backups) {
+                            try {
+                                LoadingStatusState.text = `Reading Backup File ${backup}...`
+                                const backupData: Uint8Array = await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
+                                setDatabase(
+                                    await decodeRisuSave(backupData)
+                                )
+                                backupLoaded = true
+                            } catch (error) { }
+                        }
+                        if (!backupLoaded) {
+                            throw "Forage: Your save file is corrupted"
+                        }
                     }
                 }
 

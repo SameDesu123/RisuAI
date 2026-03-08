@@ -29,7 +29,10 @@ if(existsSync(passwordPath)){
 }
 
 const authCodePath = path.join(process.cwd(), 'save', '__authcode')
+const dbBlocksPath = path.join(savePath, '__dbblocks')
 const hexRegex = /^[0-9a-fA-F]+$/;
+// Safe block name: alphanumeric, hyphens, underscores only
+const safeBlockNameRegex = /^[a-zA-Z0-9_-]+$/;
 
 function isHex(str) {
     return hexRegex.test(str.toUpperCase().trim()) || str === '__password';
@@ -683,6 +686,317 @@ app.post('/api/write', async (req, res, next) => {
         next(error);
     }
 });
+
+// ─── Block-based diff save system ───
+
+let saveLock = Promise.resolve();
+function withSaveLock(fn) {
+    saveLock = saveLock.then(fn, fn);
+    return saveLock;
+}
+
+function isSafeBlockName(name) {
+    return safeBlockNameRegex.test(name) && name.length <= 128;
+}
+
+async function hashData(data) {
+    const hash = nodeCrypto.createHash('sha256');
+    hash.update(data);
+    return hash.digest('hex');
+}
+
+async function readManifest() {
+    const manifestPath = path.join(dbBlocksPath, '__manifest.json');
+    const bakPath = path.join(dbBlocksPath, '__manifest.bak.json');
+    const newPath = path.join(dbBlocksPath, '__manifest.new.json');
+
+    // Recovery: if __manifest.new.json exists but __manifest.json does not, rename it
+    if (!existsSync(manifestPath) && existsSync(newPath)) {
+        await fs.rename(newPath, manifestPath);
+    }
+
+    if (existsSync(manifestPath)) {
+        try {
+            return JSON.parse(await fs.readFile(manifestPath, 'utf-8'));
+        } catch (e) {
+            // Corrupt manifest, try backup
+            if (existsSync(bakPath)) {
+                try {
+                    const bak = JSON.parse(await fs.readFile(bakPath, 'utf-8'));
+                    await fs.writeFile(manifestPath, JSON.stringify(bak), 'utf-8');
+                    return bak;
+                } catch (e2) { /* fall through */ }
+            }
+        }
+    }
+    return { version: 0, blocks: {} };
+}
+
+async function writeManifestAtomic(manifest) {
+    const manifestPath = path.join(dbBlocksPath, '__manifest.json');
+    const bakPath = path.join(dbBlocksPath, '__manifest.bak.json');
+    const newPath = path.join(dbBlocksPath, '__manifest.new.json');
+
+    await fs.writeFile(newPath, JSON.stringify(manifest), 'utf-8');
+    if (existsSync(manifestPath)) {
+        await fs.rename(manifestPath, bakPath);
+    }
+    await fs.rename(newPath, manifestPath);
+}
+
+// Parse RISUSAVE blocks from a monolithic binary file
+function parseRisuSaveBlocks(data) {
+    const headerStr = "RISUSAVE\0";
+    const headerBytes = Buffer.from(headerStr, 'utf-8');
+
+    // Check if it starts with RISUSAVE header
+    if (data.length < headerBytes.length) return null;
+    for (let i = 0; i < headerBytes.length; i++) {
+        if (data[i] !== headerBytes[i]) return null;
+    }
+
+    const blocks = {};
+    let offset = headerBytes.length;
+
+    while (offset < data.length) {
+        try {
+            const type = data[offset];
+            const compression = data[offset + 1];
+            offset += 2;
+
+            const nameLength = data[offset];
+            offset += 1;
+            const name = data.subarray(offset, offset + nameLength).toString('utf-8');
+            offset += nameLength;
+
+            const dataLength = data.readUInt32LE(offset);
+            offset += 4;
+
+            // The complete block is: type(1) + compression(1) + nameLen(1) + name(var) + dataLen(4) + data(var)
+            // offset is now past dataLen, so blockStart goes back by: 4(dataLen) + nameLength + 1(nameLen) + 2(type+comp)
+            const blockStart = offset - 4 - nameLength - 1 - 2;
+            const blockEnd = offset + dataLength;
+            blocks[name] = Buffer.from(data.subarray(blockStart, blockEnd));
+
+            offset += dataLength;
+        } catch (e) {
+            break;
+        }
+    }
+    return blocks;
+}
+
+async function migrateMonolithicToBlocks() {
+    if (existsSync(dbBlocksPath)) return;
+
+    // Find monolithic database.bin file
+    const dbKey = 'database/database.bin';
+    const hexPath = Buffer.from(dbKey, 'utf-8').toString('hex');
+    const monolithicPath = path.join(savePath, hexPath);
+
+    if (!existsSync(monolithicPath)) {
+        // No existing data, just create the directory
+        await fs.mkdir(dbBlocksPath, { recursive: true });
+        await writeManifestAtomic({ version: 1, blocks: {} });
+        return;
+    }
+
+    console.log('[Server] Migrating monolithic database to block storage...');
+    const data = await fs.readFile(monolithicPath);
+    const blocks = parseRisuSaveBlocks(data);
+
+    if (!blocks || Object.keys(blocks).length === 0) {
+        console.log('[Server] Could not parse monolithic file as RISUSAVE, creating empty block storage');
+        await fs.mkdir(dbBlocksPath, { recursive: true });
+        await writeManifestAtomic({ version: 1, blocks: {} });
+        return;
+    }
+
+    await fs.mkdir(dbBlocksPath, { recursive: true });
+    const manifest = { version: 1, blocks: {} };
+
+    for (const [name, blockData] of Object.entries(blocks)) {
+        if (!isSafeBlockName(name)) {
+            console.warn(`[Server] Skipping block with unsafe name: ${name}`);
+            continue;
+        }
+        const blockPath = path.join(dbBlocksPath, `${name}.bin`);
+        await fs.writeFile(blockPath, blockData);
+        manifest.blocks[name] = {
+            hash: await hashData(blockData),
+            size: blockData.length
+        };
+    }
+
+    await writeManifestAtomic(manifest);
+    console.log(`[Server] Migration complete: ${Object.keys(manifest.blocks).length} blocks`);
+}
+
+app.get('/api/save-capabilities', (req, res) => {
+    res.json({ diffSave: true, version: 1 });
+});
+
+app.get('/api/save-manifest', async (req, res) => {
+    if (!await checkAuth(req, res)) return;
+    try {
+        if (!existsSync(dbBlocksPath)) {
+            res.json({ version: 0, blocks: {}, exists: false });
+            return;
+        }
+        const manifest = await readManifest();
+        res.json({ ...manifest, exists: true });
+    } catch (error) {
+        console.error('[Server] save-manifest error:', error);
+        res.status(500).json({ error: 'Failed to read manifest' });
+    }
+});
+
+app.post('/api/save-diff', async (req, res) => {
+    if (!await checkAuth(req, res)) return;
+
+    try {
+        await withSaveLock(async () => {
+            const body = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
+
+            if (body.length < 4) {
+                res.status(400).json({ error: 'Invalid payload' });
+                return;
+            }
+
+            // Parse header
+            const headerLen = body.readUInt32LE(0);
+            if (4 + headerLen > body.length) {
+                res.status(400).json({ error: 'Invalid header length' });
+                return;
+            }
+            const headerJson = body.subarray(4, 4 + headerLen).toString('utf-8');
+            let header;
+            try {
+                header = JSON.parse(headerJson);
+            } catch (e) {
+                res.status(400).json({ error: 'Invalid header JSON' });
+                return;
+            }
+
+            const { changedBlocks = {}, deletedBlocks = [] } = header;
+
+            // Auto-migrate if needed
+            await migrateMonolithicToBlocks();
+
+            // Parse block data from the payload
+            let offset = 4 + headerLen;
+            const receivedBlocks = {};
+            const changedNames = Object.keys(changedBlocks);
+
+            for (const name of changedNames) {
+                if (offset + 2 > body.length) break;
+                const nameLen = body.readUInt16LE(offset); offset += 2;
+
+                if (offset + nameLen > body.length) break;
+                const blockName = body.subarray(offset, offset + nameLen).toString('utf-8'); offset += nameLen;
+
+                if (offset + 4 > body.length) break;
+                const dataLen = body.readUInt32LE(offset); offset += 4;
+
+                if (offset + dataLen > body.length) break;
+                const blockData = body.subarray(offset, offset + dataLen); offset += dataLen;
+
+                if (!isSafeBlockName(blockName)) {
+                    console.warn(`[Server] Rejecting unsafe block name: ${blockName}`);
+                    continue;
+                }
+
+                // Verify hash
+                const computedHash = await hashData(blockData);
+                if (changedBlocks[blockName] && changedBlocks[blockName].hash !== computedHash) {
+                    console.warn(`[Server] Hash mismatch for block: ${blockName}`);
+                    res.status(400).json({ error: `Hash mismatch for block: ${blockName}` });
+                    return;
+                }
+
+                receivedBlocks[blockName] = { data: blockData, hash: computedHash };
+            }
+
+            // Write changed blocks atomically
+            for (const [name, { data }] of Object.entries(receivedBlocks)) {
+                const tmpPath = path.join(dbBlocksPath, `${name}.bin.tmp`);
+                const finalPath = path.join(dbBlocksPath, `${name}.bin`);
+                await fs.writeFile(tmpPath, data);
+                await fs.rename(tmpPath, finalPath);
+            }
+
+            // Delete removed blocks
+            for (const name of deletedBlocks) {
+                if (!isSafeBlockName(name)) continue;
+                const blockPath = path.join(dbBlocksPath, `${name}.bin`);
+                try {
+                    await fs.rm(blockPath);
+                } catch (e) { /* file may not exist */ }
+            }
+
+            // Update manifest
+            const manifest = await readManifest();
+            for (const [name, { hash, data }] of Object.entries(receivedBlocks)) {
+                manifest.blocks[name] = { hash, size: data.length };
+            }
+            for (const name of deletedBlocks) {
+                delete manifest.blocks[name];
+            }
+            manifest.version = (manifest.version || 0) + 1;
+            await writeManifestAtomic(manifest);
+
+            res.json(manifest);
+        });
+    } catch (error) {
+        console.error('[Server] save-diff error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+});
+
+app.get('/api/save-blocks', async (req, res) => {
+    if (!await checkAuth(req, res)) return;
+
+    try {
+        const namesParam = req.query.names;
+        if (!namesParam) {
+            res.status(400).json({ error: 'names parameter required' });
+            return;
+        }
+
+        const names = namesParam.split(',').filter(n => isSafeBlockName(n));
+        const buffers = [];
+        let totalSize = 0;
+
+        for (const name of names) {
+            const blockPath = path.join(dbBlocksPath, `${name}.bin`);
+            if (!existsSync(blockPath)) continue;
+
+            const data = await fs.readFile(blockPath);
+            const nameBuf = Buffer.from(name, 'utf-8');
+
+            // [nameLen:2B][name][dataLen:4B][data]
+            const entryBuf = Buffer.alloc(2 + nameBuf.length + 4 + data.length);
+            entryBuf.writeUInt16LE(nameBuf.length, 0);
+            nameBuf.copy(entryBuf, 2);
+            entryBuf.writeUInt32LE(data.length, 2 + nameBuf.length);
+            data.copy(entryBuf, 2 + nameBuf.length + 4);
+
+            buffers.push(entryBuf);
+            totalSize += entryBuf.length;
+        }
+
+        const result = Buffer.concat(buffers, totalSize);
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.send(result);
+    } catch (error) {
+        console.error('[Server] save-blocks error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ─── End block-based diff save system ───
 
 const oauthData = {
     client_id: '',

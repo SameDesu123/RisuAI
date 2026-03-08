@@ -3,9 +3,16 @@ import { alertError, alertInput, waitAlert } from "../alert"
 import { base64url, getKeypairStore, saveKeypairStore } from "../util"
 
 
+export type DiffSaveManifest = {
+    version: number
+    blocks: Record<string, { hash: string, size: number }>
+    exists: boolean
+}
+
 export class NodeStorage{
 
     authChecked = false
+    private _diffSaveSupported: boolean | null = null
     JSONStringlifyAndbase64Url(obj:any){
         return base64url(Buffer.from(JSON.stringify(obj), 'utf-8'))
     }
@@ -131,6 +138,111 @@ export class NodeStorage{
         if(data.error){
             throw data.error
         }
+    }
+
+    async supportsDiffSave(): Promise<boolean> {
+        if (this._diffSaveSupported !== null) return this._diffSaveSupported;
+        try {
+            const res = await fetch('/api/save-capabilities');
+            if (res.ok) {
+                const data = await res.json();
+                this._diffSaveSupported = !!data.diffSave;
+            } else {
+                this._diffSaveSupported = false;
+            }
+        } catch {
+            this._diffSaveSupported = false;
+        }
+        return this._diffSaveSupported;
+    }
+
+    async getManifest(): Promise<DiffSaveManifest> {
+        await this.checkAuth();
+        const res = await fetch('/api/save-manifest', {
+            headers: { 'risu-auth': await this.createAuth() }
+        });
+        if (!res.ok) throw new Error('getManifest failed');
+        return await res.json();
+    }
+
+    async saveDiff(
+        changedBlocks: Record<string, { hash: string, data: Uint8Array }>,
+        deletedBlocks: string[],
+        clientManifestVersion: number
+    ): Promise<DiffSaveManifest> {
+        await this.checkAuth();
+
+        const header = JSON.stringify({
+            changedBlocks: Object.fromEntries(
+                Object.entries(changedBlocks).map(([name, { hash, data }]) =>
+                    [name, { hash, size: data.length }]
+                )
+            ),
+            deletedBlocks,
+            clientManifestVersion
+        });
+        const headerBuf = new TextEncoder().encode(header);
+
+        // Calculate total size
+        let totalBlockSize = 0;
+        for (const [name, { data }] of Object.entries(changedBlocks)) {
+            const nameBuf = new TextEncoder().encode(name);
+            totalBlockSize += 2 + nameBuf.length + 4 + data.length;
+        }
+
+        const payload = new Uint8Array(4 + headerBuf.length + totalBlockSize);
+        const view = new DataView(payload.buffer);
+        let offset = 0;
+
+        // Header length + header
+        view.setUint32(offset, headerBuf.length, true); offset += 4;
+        payload.set(headerBuf, offset); offset += headerBuf.length;
+
+        // Block data
+        for (const [name, { data }] of Object.entries(changedBlocks)) {
+            const nameBuf = new TextEncoder().encode(name);
+            view.setUint16(offset, nameBuf.length, true); offset += 2;
+            payload.set(nameBuf, offset); offset += nameBuf.length;
+            view.setUint32(offset, data.length, true); offset += 4;
+            payload.set(data, offset); offset += data.length;
+        }
+
+        const res = await fetch('/api/save-diff', {
+            method: 'POST',
+            body: payload,
+            headers: {
+                'content-type': 'application/octet-stream',
+                'risu-auth': await this.createAuth()
+            }
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(err.error || 'saveDiff failed');
+        }
+        return await res.json();
+    }
+
+    async getBlocks(names: string[]): Promise<Record<string, Uint8Array>> {
+        await this.checkAuth();
+        const res = await fetch(`/api/save-blocks?names=${encodeURIComponent(names.join(','))}`, {
+            headers: { 'risu-auth': await this.createAuth() }
+        });
+        if (!res.ok) throw new Error('getBlocks failed');
+
+        const buf = new Uint8Array(await res.arrayBuffer());
+        const result: Record<string, Uint8Array> = {};
+        let offset = 0;
+        const dv = new DataView(buf.buffer);
+        while (offset + 2 <= buf.length) {
+            const nameLen = dv.getUint16(offset, true); offset += 2;
+            if (offset + nameLen > buf.length) break;
+            const name = new TextDecoder().decode(buf.subarray(offset, offset + nameLen)); offset += nameLen;
+            if (offset + 4 > buf.length) break;
+            const dataLen = dv.getUint32(offset, true); offset += 4;
+            if (offset + dataLen > buf.length) break;
+            result[name] = buf.slice(offset, offset + dataLen); offset += dataLen;
+        }
+        return result;
     }
 
     private async checkAuth(){

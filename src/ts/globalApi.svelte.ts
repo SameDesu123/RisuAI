@@ -24,7 +24,8 @@ import { hasher } from "./parser/parser.svelte";
 import { characterURLImport, hubURL } from "./characterCards";
 import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
 import { loadRisuAccountData } from "./drive/accounter";
-import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder, type toSaveType } from "./storage/risuSave";
+import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder, hashBlock, type toSaveType } from "./storage/risuSave";
+import { NodeStorage } from "./storage/nodeStorage";
 import { AutoStorage } from "./storage/autoStorage";
 import { updateAnimationSpeed } from "./gui/animation";
 import { updateColorScheme, updateTextThemeAndCSS } from "./gui/colorscheme";
@@ -315,6 +316,16 @@ export async function saveDb() {
         modules: false
     }
 
+    // Diff-save state for NodeStorage
+    let nodeStorageRef: NodeStorage | null = null
+    let currentManifestVersion = 0
+    if (isNodeServer) {
+        await forageStorage.Init()
+        if (forageStorage.realStorage instanceof NodeStorage) {
+            nodeStorageRef = forageStorage.realStorage
+        }
+    }
+
     const useCompression = forageStorage.isAccount || isNodeServer
     let encoder = new RisuSaveEncoder()
     await encoder.init(getDatabase(), {
@@ -421,31 +432,48 @@ export async function saveDb() {
             }
 
             await encoder.set(db, toSave)
-            const encoded = encoder.encode()
-            if (!encoded) {
-                await sleep(1000)
-                continue
-            }
-            const dbData = new Uint8Array(encoded)
-            if (isTauri) {
-                await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
-                await writeFile(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData, { baseDir: BaseDirectory.AppData });
-            }
-            else {
 
-                await forageStorage.setItem('database/database.bin', dbData)
+            // Diff-based save for NodeStorage
+            if (isNodeServer && nodeStorageRef && await nodeStorageRef.supportsDiffSave()) {
+                const changedBlocks = encoder.getChangedBlocks()
+                const deletedBlocks = encoder.getDeletedBlockNames()
+
+                if (Object.keys(changedBlocks).length > 0 || deletedBlocks.length > 0) {
+                    const blocksWithHashes: Record<string, { hash: string, data: Uint8Array }> = {}
+                    for (const [name, data] of Object.entries(changedBlocks)) {
+                        blocksWithHashes[name] = { hash: await hashBlock(data), data }
+                    }
+                    const result = await nodeStorageRef.saveDiff(blocksWithHashes, deletedBlocks, currentManifestVersion)
+                    currentManifestVersion = result.version
+                }
+                encoder.clearChangeTracking()
+            } else {
+                const encoded = encoder.encode()
+                if (!encoded) {
+                    await sleep(1000)
+                    continue
+                }
+                const dbData = new Uint8Array(encoded)
+                if (isTauri) {
+                    await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
+                    await writeFile(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData, { baseDir: BaseDirectory.AppData });
+                }
+                else {
+
+                    await forageStorage.setItem('database/database.bin', dbData)
+                    if (!forageStorage.isAccount) {
+                        // Fire-and-forget: backup write does not block the main save process
+                        forageStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData).catch((e) => {
+                            console.error('Backup write failed:', e)
+                        })
+                    }
+                    if (forageStorage.isAccount) {
+                        await sleep(3000)
+                    }
+                }
                 if (!forageStorage.isAccount) {
-                    // Fire-and-forget: backup write does not block the main save process
-                    forageStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData).catch((e) => {
-                        console.error('Backup write failed:', e)
-                    })
+                    await getDbBackups()
                 }
-                if (forageStorage.isAccount) {
-                    await sleep(3000)
-                }
-            }
-            if (!forageStorage.isAccount) {
-                await getDbBackups()
             }
             savetrys = 0
             await saveDbKei()

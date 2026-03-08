@@ -115,10 +115,17 @@ type EncodeBlockOption = {
 const risuSaveCacheForage = localforage.createInstance({
     name: 'risuSaveCache'
 });
+export async function hashBlock(data: Uint8Array): Promise<string> {
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export class RisuSaveEncoder {
 
     private blocks: { [key: string]: Uint8Array } = {};
     private compression: boolean = false;
+    private changedBlockNames: Set<string> = new Set();
+    private deletedBlockNames: Set<string> = new Set();
 
     async init(data:Database,arg:{
         compression?: boolean,
@@ -196,6 +203,7 @@ export class RisuSaveEncoder {
                 }, {
                     remote: 'prefer'
                 });
+                this.changedBlockNames.add(character.chaId);
                 savedId.add(character.chaId);
                 toSave.character.splice(index, 1);
             }
@@ -208,6 +216,7 @@ export class RisuSaveEncoder {
                 }, {
                     remote: 'prefer'
                 });
+                this.changedBlockNames.add(character.chaId);
                 savedId.add(character.chaId);
             }
         }
@@ -217,6 +226,7 @@ export class RisuSaveEncoder {
             for(const chaId of toSave.character){
                 if(!savedId.has(chaId)){
                     delete this.blocks[chaId];
+                    this.deletedBlockNames.add(chaId);
                 }
             }
         }
@@ -228,6 +238,7 @@ export class RisuSaveEncoder {
                 type: RisuSaveType.BOTPRESET,
                 name: 'preset'
             });
+            this.changedBlockNames.add('preset');
         }
         if(toSave.modules){
             this.blocks['modules'] = await this.encodeBlock({
@@ -236,6 +247,7 @@ export class RisuSaveEncoder {
                 type: RisuSaveType.MODULES,
                 name: 'modules'
             });
+            this.changedBlockNames.add('modules');
         }
 
         obj["__directory"] = Object.keys(this.blocks).filter(key => key !== 'root');
@@ -245,6 +257,8 @@ export class RisuSaveEncoder {
             type: RisuSaveType.ROOT,
             name: 'root'
         });
+        // root is always marked as changed because it contains __directory
+        this.changedBlockNames.add('root');
     }
 
     encode(arg:{
@@ -269,6 +283,29 @@ export class RisuSaveEncoder {
         }
         console.log(Object.keys(this.blocks).length, 'blocks encoded');
         return arrayBuf;
+    }
+
+    getChangedBlocks(): { [key: string]: Uint8Array } {
+        const result: { [key: string]: Uint8Array } = {};
+        for (const name of this.changedBlockNames) {
+            if (this.blocks[name]) {
+                result[name] = this.blocks[name];
+            }
+        }
+        return result;
+    }
+
+    getDeletedBlockNames(): string[] {
+        return Array.from(this.deletedBlockNames);
+    }
+
+    getAllBlocks(): { [key: string]: Uint8Array } {
+        return { ...this.blocks };
+    }
+
+    clearChangeTracking(): void {
+        this.changedBlockNames.clear();
+        this.deletedBlockNames.clear();
     }
 
     async encodeBlock(arg:EncodeBlockArg, option:EncodeBlockOption = { remote: 'none' }){
