@@ -18,6 +18,11 @@ function hotkeyToString(h: Hotkey): string {
 
 export const hotkeySettingsItems: SettingItem[] = [
     {
+        id: 'hotkey.editor',
+        type: 'custom',
+        componentId: 'HotkeyEditor',
+    },
+    {
         id: 'hotkey.duplicateWarning',
         type: 'alert',
         labelKey: 'duplicateHotkey',
@@ -45,10 +50,5 @@ export const hotkeySettingsItems: SettingItem[] = [
             }
             return result;
         },
-    },
-    {
-        id: 'hotkey.editor',
-        type: 'custom',
-        componentId: 'HotkeyEditor',
     },
 ];
