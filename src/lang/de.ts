@@ -1294,6 +1294,7 @@ export const languageGerman = {
         "scrollToActiveChar": "Zum aktiven Charakter scrollen"
     },
     "screenTooSmall": "Der Bildschirm ist zu klein, um die Benutzeroberfläche anzuzeigen.",
+    "duplicateHotkey": "Doppelte Tastenkürzel erkannt",
     "advancedModelSettings": "Erweiterte Modelleinstellungen",
     "fallbackModel": "Fallback-Modell",
     "fallbackWhenBlankResponse": "Fallback bei leerer Antwort",

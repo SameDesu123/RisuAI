@@ -1299,6 +1299,7 @@ export const languageKorean = {
         "scrollToActiveChar": "활성 캐릭터로 스크롤"
     },
     "screenTooSmall": "화면이 너무 작아서 인터페이스를 표시할 수 없습니다.",
+    "duplicateHotkey": "중복된 단축키가 감지되었습니다",
     "advancedModelSettings": "고급 모델 설정",
     "fallbackModel": "대체 모델",
     "fallbackWhenBlankResponse": "빈 응답 시 대체",

@@ -1294,6 +1294,7 @@ export const languageVietnamese = {
         "scrollToActiveChar": "Cuộn đến nhân vật đang hoạt động"
     },
     "screenTooSmall": "Màn hình quá nhỏ để hiển thị giao diện.",
+    "duplicateHotkey": "Phát hiện phím tắt trùng lặp",
     "advancedModelSettings": "Cài đặt mô hình nâng cao",
     "fallbackModel": "Mô hình dự phòng",
     "fallbackWhenBlankResponse": "Dự phòng khi phản hồi trống",

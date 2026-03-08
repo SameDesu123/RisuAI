@@ -1398,6 +1398,7 @@ export const languageEnglish = {
         scrollToActiveChar: "Scroll to Active Character",
     },
     screenTooSmall: "Screen is too small to show the interface.",
+    duplicateHotkey: "Duplicate hotkeys detected",
     advancedModelSettings: "Advanced Model Settings",
     fallbackModel: "Fallback Model",
     fallbackWhenBlankResponse: "Fallback When Blank Response",

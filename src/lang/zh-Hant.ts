@@ -1297,6 +1297,7 @@ export const languageChineseTraditional = {
         "scrollToActiveChar": "捲動至當前角色"
     },
     "screenTooSmall": "螢幕太小，無法顯示介面。",
+    "duplicateHotkey": "偵測到重複的快捷鍵",
     "advancedModelSettings": "進階模型設定",
     "fallbackModel": "回退模型",
     "fallbackWhenBlankResponse": "回應為空時回退",

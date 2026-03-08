@@ -1294,6 +1294,7 @@ export const languageChinese = {
         "scrollToActiveChar": "滚动至当前角色"
     },
     "screenTooSmall": "屏幕太小，无法显示界面。",
+    "duplicateHotkey": "检测到重复的快捷键",
     "advancedModelSettings": "高级模型设置",
     "fallbackModel": "回退模型",
     "fallbackWhenBlankResponse": "空白响应时回退",

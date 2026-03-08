@@ -1294,6 +1294,7 @@ export const languageSpanish = {
         "scrollToActiveChar": "Desplazarse al personaje activo"
     },
     "screenTooSmall": "La pantalla es demasiado pequeña para mostrar la interfaz.",
+    "duplicateHotkey": "Se detectaron atajos de teclado duplicados",
     "advancedModelSettings": "Configuraciones Avanzadas del Modelo",
     "fallbackModel": "Modelo de Fallback",
     "fallbackWhenBlankResponse": "Fallback Cuando Respuesta en Blanco",
