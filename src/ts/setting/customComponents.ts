@@ -19,6 +19,7 @@ import SeparateParametersSection from 'src/lib/Setting/Pages/SeparateParametersS
 import BanCharacterSetSettings from 'src/lib/Setting/Pages/Advanced/BanCharacterSetSettings.svelte';
 import CustomModelsSettings from 'src/lib/Setting/Pages/Advanced/CustomModelsSettings.svelte';
 import SettingsExportButtons from 'src/lib/Setting/Pages/Advanced/SettingsExportButtons.svelte';
+import HotkeyEditor from 'src/lib/Setting/Pages/HotkeyEditor.svelte';
 
 /**
  * Registry of custom components.
@@ -29,7 +30,7 @@ export const customComponents: Record<string, Component<any>> = {
     'BanCharacterSetSettings': BanCharacterSetSettings,
     'CustomModelsSettings': CustomModelsSettings,
     'SettingsExportButtons': SettingsExportButtons,
-    // Add more as we migrate complex settings
+    'HotkeyEditor': HotkeyEditor,
 } as const;
 
 /**
