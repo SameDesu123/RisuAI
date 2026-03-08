@@ -33,6 +33,7 @@ export type SettingType =
     | 'header'     // Section header (h2, span, warning)
     | 'button'     // Action button (Button)
     | 'accordion'  // Collapsible section (Accordion)
+    | 'alert'     // Alert/notification box (SettingAlert)
     | 'custom';    // Custom component from registry
 
 /**
@@ -87,6 +88,9 @@ export interface SettingOptions {
     
     // header
     level?: 'h2' | 'span' | 'warning';
+
+    // alert
+    alertLevel?: 'info' | 'warning' | 'error';
     
     // accordion
     styled?: boolean;        // Use styled accordion
