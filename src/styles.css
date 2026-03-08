@@ -514,14 +514,6 @@ body {
   display: block;
 }
 
-.virtualized-placeholder {
-  contain: strict;
-}
-
-.chattext img {
-  contain: content;
-}
-
 .x-risu-tool-call {
   @apply border border-darkborderc bg-darkbg text-textcolor rounded-md shadow-xs focus:outline-hidden transition-colors duration-200 px-4 py-2 min-w-0;
 }

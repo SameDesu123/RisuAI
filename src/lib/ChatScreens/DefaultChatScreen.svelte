@@ -110,27 +110,14 @@
 
             let element: Element | null = null;
             // Poll for element existence (max 5 seconds)
-            // First try inner data-chat-index, then fall back to container attribute
             for(let i = 0; i < 50; i++){
                 element = document.querySelector(`[data-chat-index="${index}"]`)
                 if(element) break;
-
-                // If the message is virtualized, the inner element won't exist.
-                // Find the container and scroll it into view to trigger remount.
-                const container = document.querySelector(`[data-chat-index-container="${index}"]`)
-                if(container){
-                    container.scrollIntoView({behavior: "instant", block: "center"})
-                    await sleep(200) // Give IntersectionObserver time to remount
-                    element = document.querySelector(`[data-chat-index="${index}"]`)
-                    if(element) break;
-                }
-
                 await sleep(100)
             }
 
             const preIndex = Math.max(0, index - 3)
             const preElement = document.querySelector(`[data-chat-index="${preIndex}"]`)
-                ?? document.querySelector(`[data-chat-index-container="${preIndex}"]`)
             if(preElement){
                 preElement.scrollIntoView({behavior: "instant", block: "start"})
             } else {
@@ -158,7 +145,7 @@
                 }
 
                 element.scrollIntoView({behavior: "instant", block: "start"})
-
+                
                 // Small delay and scroll again to ensure position is correct after any final layout adjustments
                 await sleep(50)
                 element.scrollIntoView({behavior: "instant", block: "start"})
