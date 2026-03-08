@@ -8,10 +8,14 @@ import { updateTextThemeAndCSS } from "./gui/colorscheme"
 import { defaultHotkeys } from "./defaulthotkeys"
 import { doingChat, previewBody, sendChat } from "./process/index.svelte"
 
+const isMac = navigator.platform.toUpperCase().includes('MAC') || navigator.userAgent.toUpperCase().includes('MAC')
+
 export function initHotkey(){
     document.addEventListener('keydown', async (ev) => {
+        const evCtrl = isMac ? ev.metaKey : ev.ctrlKey
+
         if(
-            !ev.ctrlKey &&
+            !evCtrl &&
             !ev.altKey &&
             !ev.shiftKey &&
             (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName) ||
@@ -34,7 +38,7 @@ export function initHotkey(){
             hotkey.alt = hotkey.alt ?? false
             hotkey.shift = hotkey.shift ?? false
 
-            if(hotkey.ctrl !== ev.ctrlKey){
+            if(hotkey.ctrl !== evCtrl){
                 continue
             }
             if(hotkey.alt !== ev.altKey){
@@ -216,7 +220,7 @@ export function initHotkey(){
         }
 
 
-        if(ev.ctrlKey){
+        if(evCtrl){
             switch (ev.key){
                 case "1":{
                     changeToPreset(0)
@@ -322,7 +326,7 @@ export function initHotkey(){
     const SCROLL_COOLDOWN = 500
     
     document.addEventListener('dragover', (ev) => {
-        if (ev.ctrlKey && !ev.shiftKey && !ev.altKey) {
+        if ((isMac ? ev.metaKey : ev.ctrlKey) && !ev.shiftKey && !ev.altKey) {
             const types = ev.dataTransfer?.types || []
             const isCharacterDrag = types.includes('application/x-risu-internal')
             

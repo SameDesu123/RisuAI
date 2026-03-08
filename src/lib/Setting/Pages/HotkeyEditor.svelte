@@ -1,6 +1,10 @@
 <script lang="ts">
     import { language } from "src/lang";
     import { DBState } from "src/ts/stores.svelte";
+
+    const isMac = navigator.platform.toUpperCase().includes('MAC') || navigator.userAgent.toUpperCase().includes('MAC');
+    const ctrlLabel = isMac ? 'Command' : 'Ctrl';
+    const altLabel = isMac ? 'Option' : 'Alt';
 </script>
 
 {#if window.innerWidth < 768}
@@ -26,7 +30,7 @@
                                 hotkey.ctrl = !hotkey.ctrl;
                             }}
                         >
-                            Ctrl
+                            {ctrlLabel}
                         </button>
                     </td>
                     <td>
@@ -48,7 +52,7 @@
                                 hotkey.alt = !hotkey.alt;
                             }}
                         >
-                            Alt
+                            {altLabel}
                         </button>
                     </td>
                     <td>
