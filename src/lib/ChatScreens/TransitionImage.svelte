@@ -121,6 +121,8 @@
                     <img
                         src={img}
                         alt="img"
+                        loading="lazy"
+                        decoding="async"
                         style:width={`${100 / currentSrc.length}%`}
                         style:left={`${100 / currentSrc.length * i}%`}
                     />
@@ -129,6 +131,8 @@
                         <img
                             src={img}
                             alt="img"
+                            loading="lazy"
+                            decoding="async"
                             style:width={`${80 - (i*10)}%`}
                             style:left={`${30-(i*30)}%`}
                             style:z-index={9 - i}
@@ -142,6 +146,8 @@
                     <img
                         src={oldSrc[i]}
                         alt="img"
+                        loading="lazy"
+                        decoding="async"
                         class="old-image"
                         onanimationend={handleTransitionEnd}
                         style:width={`${100 / oldSrc.length}%`}
@@ -155,6 +161,8 @@
                         <img
                             src={oldSrc[i]}
                             alt="img"
+                            loading="lazy"
+                            decoding="async"
                             class="old-image"
                             onanimationend={handleTransitionEnd}
                             style:width={`${80 - (i*10)}%`}
@@ -169,6 +177,8 @@
                     <img
                         src={currentSrc[i]}
                         alt="img"
+                        loading="lazy"
+                        decoding="async"
                         class="new-image"
                         style:width={`${100 / currentSrc.length}%`}
                         style:left={`${100 / currentSrc.length * i}%`}
@@ -181,6 +191,8 @@
                         <img
                             src={currentSrc[i]}
                             alt="img"
+                            loading="lazy"
+                            decoding="async"
                             class="new-image"
                             style:width={`${80 - (i*10)}%`}
                             style:left={`${30-(i*30)}%`}
