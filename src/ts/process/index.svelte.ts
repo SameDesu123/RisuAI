@@ -1551,6 +1551,22 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             }   
         }
 
+        // FIX: Re-apply the final chunk data AFTER the streaming loop.
+        // During streaming, each chunk is written to message.data through
+        // the Svelte $state proxy. However, the final write may not be
+        // captured by structuredClone below due to proxy synchronization
+        // issues. Also, trimUntilPunctuation is skipped here because
+        // the response is now complete (no longer "incomplete").
+        if(Object.keys(lastResponseChunk).length > 0) {
+            const firstChunkKey = Object.keys(lastResponseChunk)[0]
+            let finalResult = lastResponseChunk[firstChunkKey] || ''
+            let finalProcessed = await processScriptFull(
+                nowChatroom, reformatContent(prefix + finalResult), 'editoutput', msgIndex
+            )
+            DBState.db.characters[selectedChar].chats[selectedChat].message[msgIndex].data = finalProcessed.data
+            emoChanged = finalProcessed.emoChanged
+        }
+
         addRerolls(generationId, Object.values(lastResponseChunk))
 
         // FIX: Break the Svelte $state proxy chain before post-processing.

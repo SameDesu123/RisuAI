@@ -800,8 +800,21 @@ async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:strin
                         if(arg?.abortSignal?.aborted || breakWhile){
                             break
                         }
-                        const {done, value} = await reader.read() 
+                        const {done, value} = await reader.read()
                         if(done){
+                            // Process the deferred last event(s).
+                            // The i--; text = prevText pattern below defers the
+                            // last processed event to the next iteration for safety.
+                            // On stream end there is no next iteration, so advance
+                            // back and process remaining lines (including the final
+                            // line which is now considered complete).
+                            let finalParts = parserData.split('\n')
+                            for(;i<finalParts.length;i++){
+                                if(finalParts?.[i]?.startsWith('data: ')){
+                                    await parseEvent(finalParts[i].slice(6))
+                                }
+                            }
+                            controller.enqueue({"0": text})
                             break
                         }
                         parserData += (decoder.decode(value))

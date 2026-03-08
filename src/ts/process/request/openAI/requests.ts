@@ -1413,8 +1413,10 @@ function wrapToolStream(
                             return controller.close()
                         }
                         
-                        const transtream = getTranStream(arg)                    
-                        resRec.body.pipeTo(transtream.writable)
+                        const transtream = getTranStream(arg)
+                        resRec.body.pipeTo(transtream.writable, { preventAbort: true }).catch(async () => {
+                            try { await transtream.writable.close() } catch (_) {}
+                        })
                         
                         reader = transtream.readable.getReader()
                         
