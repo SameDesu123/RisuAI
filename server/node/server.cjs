@@ -11,6 +11,7 @@ app.use(express.raw({ type: 'application/octet-stream', limit: '100mb' }));
 app.use(express.text({ limit: '100mb' }));
 const {pipeline} = require('stream/promises')
 const https = require('https');
+const zlib = require('zlib');
 const sslPath = path.join(process.cwd(), 'server/node/ssl/certificate');
 const hubURL = 'https://sv.risuai.xyz'; 
 const openid = require('openid-client');
@@ -832,8 +833,132 @@ async function migrateMonolithicToBlocks() {
     console.log(`[Server] Migration complete: ${Object.keys(manifest.blocks).length} blocks`);
 }
 
+// ─── JSON Patch helpers ───
+
+// Extract raw JSON string from a RISUSAVE binary block
+function extractJsonFromBlock(blockData) {
+    // Block format: type(1) + compression(1) + nameLen(1) + name(nameLen) + dataLen(4LE) + data(dataLen)
+    const compression = blockData[1];
+    const nameLen = blockData[2];
+    const dataOffset = 3 + nameLen + 4;
+    let data = blockData.subarray(dataOffset);
+    if (compression === 1) {
+        data = zlib.gunzipSync(data);
+    }
+    return data.toString('utf-8');
+}
+
+// Extract block type from a RISUSAVE binary block
+function extractBlockType(blockData) {
+    return blockData[0];
+}
+
+// Re-encode a JSON string into a RISUSAVE binary block (uncompressed)
+function encodeJsonToBlock(type, name, jsonString) {
+    const nameBuf = Buffer.from(name, 'utf-8');
+    const dataBuf = Buffer.from(jsonString, 'utf-8');
+    const block = Buffer.alloc(2 + 1 + nameBuf.length + 4 + dataBuf.length);
+    block[0] = type;
+    block[1] = 0; // no compression
+    block[2] = nameBuf.length;
+    nameBuf.copy(block, 3);
+    block.writeUInt32LE(dataBuf.length, 3 + nameBuf.length);
+    dataBuf.copy(block, 7 + nameBuf.length);
+    return block;
+}
+
+// Navigate to a nested value by JSON Pointer path segments
+function getByPath(obj, segments) {
+    let cur = obj;
+    for (const seg of segments) {
+        if (cur == null) return undefined;
+        const key = seg.replace(/~1/g, '/').replace(/~0/g, '~');
+        if (Array.isArray(cur)) {
+            cur = cur[parseInt(key, 10)];
+        } else {
+            cur = cur[key];
+        }
+    }
+    return cur;
+}
+
+// Set a nested value by JSON Pointer path segments
+function setByPath(obj, segments, value) {
+    let cur = obj;
+    for (let i = 0; i < segments.length - 1; i++) {
+        const key = segments[i].replace(/~1/g, '/').replace(/~0/g, '~');
+        if (Array.isArray(cur)) {
+            cur = cur[parseInt(key, 10)];
+        } else {
+            cur = cur[key];
+        }
+    }
+    const lastKey = segments[segments.length - 1].replace(/~1/g, '/').replace(/~0/g, '~');
+    if (Array.isArray(cur)) {
+        cur[parseInt(lastKey, 10)] = value;
+    } else {
+        cur[lastKey] = value;
+    }
+}
+
+// Delete a nested value by JSON Pointer path segments
+function deleteByPath(obj, segments) {
+    let cur = obj;
+    for (let i = 0; i < segments.length - 1; i++) {
+        const key = segments[i].replace(/~1/g, '/').replace(/~0/g, '~');
+        if (Array.isArray(cur)) {
+            cur = cur[parseInt(key, 10)];
+        } else {
+            cur = cur[key];
+        }
+    }
+    const lastKey = segments[segments.length - 1].replace(/~1/g, '/').replace(/~0/g, '~');
+    if (Array.isArray(cur)) {
+        cur.splice(parseInt(lastKey, 10), 1);
+    } else {
+        delete cur[lastKey];
+    }
+}
+
+// Apply an array of JSON patch operations to an object (returns new object)
+function applyJsonPatch(obj, ops) {
+    obj = JSON.parse(JSON.stringify(obj)); // deep clone
+    for (const op of ops) {
+        const segments = op.path.split('/').filter(Boolean);
+        if (op.op === 'replace' || op.op === 'add') {
+            setByPath(obj, segments, op.value);
+        } else if (op.op === 'remove') {
+            deleteByPath(obj, segments);
+        } else if (op.op === 'append') {
+            const arr = getByPath(obj, segments);
+            if (Array.isArray(arr)) {
+                arr.push(...op.items);
+            }
+        }
+    }
+    return obj;
+}
+
+// Load JSON for a block: prefer .json file, fall back to extracting from .bin
+async function loadBlockJson(name) {
+    const jsonPath = path.join(dbBlocksPath, `${name}.json`);
+    if (existsSync(jsonPath)) {
+        return await fs.readFile(jsonPath, 'utf-8');
+    }
+    // Fall back: extract from .bin
+    const binPath = path.join(dbBlocksPath, `${name}.bin`);
+    if (existsSync(binPath)) {
+        const binData = await fs.readFile(binPath);
+        const jsonStr = extractJsonFromBlock(binData);
+        // Cache the extracted JSON for future use
+        await fs.writeFile(jsonPath, jsonStr, 'utf-8');
+        return jsonStr;
+    }
+    return null;
+}
+
 app.get('/api/save-capabilities', (req, res) => {
-    res.json({ diffSave: true, version: 1 });
+    res.json({ diffSave: true, jsonPatch: true, version: 2 });
 });
 
 app.get('/api/save-manifest', async (req, res) => {
@@ -917,21 +1042,27 @@ app.post('/api/save-diff', async (req, res) => {
                 receivedBlocks[blockName] = { data: blockData, hash: computedHash };
             }
 
-            // Write changed blocks atomically
+            // Write changed blocks atomically (.bin + .json)
             for (const [name, { data }] of Object.entries(receivedBlocks)) {
                 const tmpPath = path.join(dbBlocksPath, `${name}.bin.tmp`);
                 const finalPath = path.join(dbBlocksPath, `${name}.bin`);
                 await fs.writeFile(tmpPath, data);
                 await fs.rename(tmpPath, finalPath);
+                // Also extract and cache JSON for json-patch support
+                try {
+                    const jsonStr = extractJsonFromBlock(data);
+                    await fs.writeFile(path.join(dbBlocksPath, `${name}.json`), jsonStr, 'utf-8');
+                } catch (e) {
+                    // Non-critical: .json cache can be rebuilt on demand
+                    console.warn(`[Server] Could not extract JSON for block ${name}:`, e.message);
+                }
             }
 
-            // Delete removed blocks
+            // Delete removed blocks (.bin + .json)
             for (const name of deletedBlocks) {
                 if (!isSafeBlockName(name)) continue;
-                const blockPath = path.join(dbBlocksPath, `${name}.bin`);
-                try {
-                    await fs.rm(blockPath);
-                } catch (e) { /* file may not exist */ }
+                try { await fs.rm(path.join(dbBlocksPath, `${name}.bin`)); } catch (e) { /* file may not exist */ }
+                try { await fs.rm(path.join(dbBlocksPath, `${name}.json`)); } catch (e) { /* file may not exist */ }
             }
 
             // Update manifest
@@ -993,6 +1124,114 @@ app.get('/api/save-blocks', async (req, res) => {
     } catch (error) {
         console.error('[Server] save-blocks error:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/save-json-patch', async (req, res) => {
+    if (!await checkAuth(req, res)) return;
+
+    try {
+        await withSaveLock(async () => {
+            // Accept JSON body (express.json middleware handles parsing)
+            const { patches = {}, expectedHashes = {}, deletedBlocks = [], manifestVersion = 0 } = req.body;
+
+            if (typeof patches !== 'object' || typeof expectedHashes !== 'object') {
+                res.status(400).json({ error: 'Invalid payload' });
+                return;
+            }
+
+            await migrateMonolithicToBlocks();
+
+            const rejected = [];
+            const applied = {}; // name → { jsonStr, blockBuf, hash }
+
+            for (const [name, ops] of Object.entries(patches)) {
+                if (!isSafeBlockName(name) || !Array.isArray(ops)) {
+                    rejected.push(name);
+                    continue;
+                }
+
+                try {
+                    // Load current JSON for this block
+                    const currentJsonStr = await loadBlockJson(name);
+                    if (currentJsonStr === null) {
+                        console.warn(`[Server] json-patch: block ${name} not found, rejecting`);
+                        rejected.push(name);
+                        continue;
+                    }
+
+                    // Apply patch
+                    const currentObj = JSON.parse(currentJsonStr);
+                    const patchedObj = applyJsonPatch(currentObj, ops);
+                    const patchedJsonStr = JSON.stringify(patchedObj);
+
+                    // Verify hash
+                    const patchedHash = await hashData(Buffer.from(patchedJsonStr, 'utf-8'));
+                    if (expectedHashes[name] && patchedHash !== expectedHashes[name]) {
+                        console.warn(`[Server] json-patch: hash mismatch for ${name} (expected ${expectedHashes[name]}, got ${patchedHash})`);
+                        rejected.push(name);
+                        continue;
+                    }
+
+                    // Read block type from existing .bin
+                    const binPath = path.join(dbBlocksPath, `${name}.bin`);
+                    let blockType = 1; // default to ROOT
+                    if (existsSync(binPath)) {
+                        const existingBin = await fs.readFile(binPath);
+                        blockType = extractBlockType(existingBin);
+                    }
+
+                    // Re-encode to binary block
+                    const blockBuf = encodeJsonToBlock(blockType, name, patchedJsonStr);
+                    const blockHash = await hashData(blockBuf);
+
+                    applied[name] = { jsonStr: patchedJsonStr, blockBuf, hash: blockHash };
+                } catch (e) {
+                    console.warn(`[Server] json-patch: error applying patch to ${name}:`, e.message);
+                    rejected.push(name);
+                }
+            }
+
+            // Write applied blocks atomically
+            for (const [name, { jsonStr, blockBuf }] of Object.entries(applied)) {
+                // Write .bin
+                const tmpBin = path.join(dbBlocksPath, `${name}.bin.tmp`);
+                const finalBin = path.join(dbBlocksPath, `${name}.bin`);
+                await fs.writeFile(tmpBin, blockBuf);
+                await fs.rename(tmpBin, finalBin);
+                // Write .json
+                await fs.writeFile(path.join(dbBlocksPath, `${name}.json`), jsonStr, 'utf-8');
+            }
+
+            // Delete removed blocks
+            for (const name of deletedBlocks) {
+                if (!isSafeBlockName(name)) continue;
+                try { await fs.rm(path.join(dbBlocksPath, `${name}.bin`)); } catch (e) {}
+                try { await fs.rm(path.join(dbBlocksPath, `${name}.json`)); } catch (e) {}
+            }
+
+            // Update manifest
+            const manifest = await readManifest();
+            for (const [name, { hash, blockBuf }] of Object.entries(applied)) {
+                manifest.blocks[name] = { hash, size: blockBuf.length };
+            }
+            for (const name of deletedBlocks) {
+                delete manifest.blocks[name];
+            }
+            manifest.version = (manifest.version || 0) + 1;
+            await writeManifestAtomic(manifest);
+
+            const patchedNames = Object.keys(applied);
+            const totalPatchOps = Object.values(patches).reduce((sum, ops) => sum + ops.length, 0);
+            console.log(`[Server] json-patch: applied ${patchedNames.length} blocks (${totalPatchOps} ops), rejected ${rejected.length}`);
+
+            res.json({ ...manifest, exists: true, rejected });
+        });
+    } catch (error) {
+        console.error('[Server] save-json-patch error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
 });
 

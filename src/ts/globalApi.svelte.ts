@@ -286,6 +286,17 @@ export let saving = $state({
 export let requiresFullEncoderReload = $state({
     state: false
 })
+
+/**
+ * Initial block JSON snapshots from bootstrap load.
+ * Set by bootstrap after block-based loading to enable JSON patch from first save.
+ */
+export let initialBlockJsonSnapshots: Map<string, string> | null = null
+
+export function setInitialBlockJsonSnapshots(snapshots: Map<string, string>) {
+    initialBlockJsonSnapshots = snapshots
+}
+
 export async function saveDb() {
     let changed = false
     syncDrive()
@@ -331,6 +342,12 @@ export async function saveDb() {
     await encoder.init(getDatabase(), {
         compression: useCompression
     })
+
+    // Initialize JSON snapshots from bootstrap for json-patch support
+    if (initialBlockJsonSnapshots) {
+        encoder.initSnapshots(initialBlockJsonSnapshots)
+        initialBlockJsonSnapshots = null // free memory
+    }
 
     $effect.root(() => {
 
@@ -435,16 +452,56 @@ export async function saveDb() {
 
             // Diff-based save for NodeStorage
             if (isNodeServer && nodeStorageRef && await nodeStorageRef.supportsDiffSave()) {
-                const changedBlocks = encoder.getChangedBlocks()
                 const deletedBlocks = encoder.getDeletedBlockNames()
 
-                if (Object.keys(changedBlocks).length > 0 || deletedBlocks.length > 0) {
-                    const blocksWithHashes: Record<string, { hash: string, data: Uint8Array }> = {}
-                    for (const [name, data] of Object.entries(changedBlocks)) {
-                        blocksWithHashes[name] = { hash: await hashBlock(data), data }
+                if (await nodeStorageRef.supportsJsonPatch()) {
+                    // JSON patch path: send only field-level diffs
+                    const { patches, fullBlocks, expectedHashes } = await encoder.getChangedBlocksWithPatches()
+
+                    // Step 1: send patches (if any)
+                    if (Object.keys(patches).length > 0 || deletedBlocks.length > 0) {
+                        const result = await nodeStorageRef.saveJsonPatch(
+                            patches, deletedBlocks, expectedHashes, currentManifestVersion
+                        )
+                        currentManifestVersion = result.version
+
+                        // Step 2: resend rejected blocks + fullBlocks as full binary via save-diff
+                        const rejectedSet = new Set(result.rejected || [])
+                        const blocksToResend: Record<string, { hash: string, data: Uint8Array }> = {}
+                        for (const name of rejectedSet) {
+                            const block = encoder.getChangedBlocks()[name]
+                            if (block) {
+                                blocksToResend[name] = { hash: await hashBlock(block), data: block }
+                            }
+                        }
+                        for (const [name, data] of Object.entries(fullBlocks)) {
+                            blocksToResend[name] = { hash: await hashBlock(data), data }
+                        }
+                        if (Object.keys(blocksToResend).length > 0) {
+                            const result2 = await nodeStorageRef.saveDiff(blocksToResend, [], currentManifestVersion)
+                            currentManifestVersion = result2.version
+                        }
+                    } else if (Object.keys(fullBlocks).length > 0) {
+                        // Only full blocks, no patches
+                        const blocksWithHashes: Record<string, { hash: string, data: Uint8Array }> = {}
+                        for (const [name, data] of Object.entries(fullBlocks)) {
+                            blocksWithHashes[name] = { hash: await hashBlock(data), data }
+                        }
+                        const result = await nodeStorageRef.saveDiff(blocksWithHashes, deletedBlocks, currentManifestVersion)
+                        currentManifestVersion = result.version
                     }
-                    const result = await nodeStorageRef.saveDiff(blocksWithHashes, deletedBlocks, currentManifestVersion)
-                    currentManifestVersion = result.version
+                    encoder.promoteSnapshots()
+                } else {
+                    // Block-level diff path (no json patch support)
+                    const changedBlocks = encoder.getChangedBlocks()
+                    if (Object.keys(changedBlocks).length > 0 || deletedBlocks.length > 0) {
+                        const blocksWithHashes: Record<string, { hash: string, data: Uint8Array }> = {}
+                        for (const [name, data] of Object.entries(changedBlocks)) {
+                            blocksWithHashes[name] = { hash: await hashBlock(data), data }
+                        }
+                        const result = await nodeStorageRef.saveDiff(blocksWithHashes, deletedBlocks, currentManifestVersion)
+                        currentManifestVersion = result.version
+                    }
                 }
                 encoder.clearChangeTracking()
             } else {

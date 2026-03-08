@@ -39,13 +39,53 @@ import {
     getUncleanables,
     getBasename,
     setUsingSw,
-    checkCharOrder
+    checkCharOrder,
+    setInitialBlockJsonSnapshots
 } from "./globalApi.svelte";
 import { isTauri, isNodeServer } from "./platform";
 import { NodeStorage } from "./storage/nodeStorage";
 import { registerModelDynamic } from "./model/modellist";
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
+
+/**
+ * Build block JSON snapshots from a decoded database object.
+ * This captures the initial JSON state of each block so the first save
+ * can use JSON patches instead of full blocks.
+ */
+function buildBlockJsonSnapshots(db: any): Map<string, string> {
+    const snapshots = new Map<string, string>()
+
+    // Root block: everything except characters and botPresets
+    const rootObj: Record<string, any> = {}
+    for (const key of Object.keys(db)) {
+        if (key !== 'characters' && key !== 'botPresets') {
+            rootObj[key] = db[key]
+        }
+    }
+    snapshots.set('root', JSON.stringify(rootObj))
+
+    // Preset block
+    if (db.botPresets) {
+        snapshots.set('preset', JSON.stringify(db.botPresets))
+    }
+
+    // Modules block
+    if (db.modules) {
+        snapshots.set('modules', JSON.stringify(db.modules))
+    }
+
+    // Character blocks
+    if (db.characters) {
+        for (const character of db.characters) {
+            if (character.chaId) {
+                snapshots.set(character.chaId, JSON.stringify(character))
+            }
+        }
+    }
+
+    return snapshots
+}
 
 /**
  * Loads the application data.
@@ -140,6 +180,8 @@ export async function loadData() {
                                 const decoded = await decodeRisuSave(assembled)
                                 console.log('Block-based load:', decoded)
                                 setDatabase(decoded)
+                                // Build JSON snapshots for json-patch support
+                                setInitialBlockJsonSnapshots(buildBlockJsonSnapshots(decoded))
                                 blockLoadSuccess = true
                             }
                         }

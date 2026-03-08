@@ -13,6 +13,7 @@ export class NodeStorage{
 
     authChecked = false
     private _diffSaveSupported: boolean | null = null
+    private _jsonPatchSupported: boolean | null = null
     JSONStringlifyAndbase64Url(obj:any){
         return base64url(Buffer.from(JSON.stringify(obj), 'utf-8'))
     }
@@ -147,13 +148,52 @@ export class NodeStorage{
             if (res.ok) {
                 const data = await res.json();
                 this._diffSaveSupported = !!data.diffSave;
+                this._jsonPatchSupported = !!data.jsonPatch;
             } else {
                 this._diffSaveSupported = false;
+                this._jsonPatchSupported = false;
             }
         } catch {
             this._diffSaveSupported = false;
+            this._jsonPatchSupported = false;
         }
         return this._diffSaveSupported;
+    }
+
+    async supportsJsonPatch(): Promise<boolean> {
+        if (this._jsonPatchSupported !== null) return this._jsonPatchSupported;
+        await this.supportsDiffSave(); // populates both flags
+        return this._jsonPatchSupported ?? false;
+    }
+
+    async saveJsonPatch(
+        patches: Record<string, any[]>,
+        deletedBlocks: string[],
+        expectedHashes: Record<string, string>,
+        manifestVersion: number
+    ): Promise<DiffSaveManifest & { rejected?: string[] }> {
+        await this.checkAuth();
+
+        const body = JSON.stringify({
+            patches,
+            expectedHashes,
+            deletedBlocks,
+            manifestVersion
+        });
+
+        const res = await fetch('/api/save-json-patch', {
+            method: 'POST',
+            body,
+            headers: {
+                'content-type': 'application/json',
+                'risu-auth': await this.createAuth()
+            }
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(err.error || 'saveJsonPatch failed');
+        }
+        return await res.json();
     }
 
     async getManifest(): Promise<DiffSaveManifest> {

@@ -119,6 +119,39 @@ NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
   - `globalApi.svelte.ts`: `saveDb()` 함수 내 `encoder.set()` 호출 후, `isNodeServer && nodeStorageRef && supportsDiffSave()` 분기 추가
   - `bootstrap.ts`: `else` (non-Tauri) 분기 내, `forageStorage.Init()` 직후에 블록 로딩 시도 추가
 
+### 13. feat: implement JSON-patch level incremental save
+- **Files**: `src/ts/storage/jsonPatch.ts` (new), `server/node/server.cjs`, `src/ts/storage/risuSave.ts`, `src/ts/storage/nodeStorage.ts`, `src/ts/globalApi.svelte.ts`, `src/ts/bootstrap.ts`
+- **Root Cause**: 블록 단위 diff save(커밋 12)는 변경된 블록 전체를 전송. 캐릭터 블록 하나가 수 MB이므로 메시지 1개 추가해도 전체 블록 전송됨.
+- **Fix**: 블록의 이전/현재 JSON 스냅샷을 비교하여 필드 레벨 JSON 패치를 생성, 패치만 서버에 전송. 서버가 패치를 적용하고 `.bin` + `.json` 듀얼 저장.
+- **클라이언트 변경**:
+  - `jsonPatch.ts`: `generatePatch()` diff 엔진 (배열 append 최적화, 최대 깊이 10, 최대 200 ops)
+  - `RisuSaveEncoder`: `previousJsonSnapshots`, `currentJsonStrings` Map 추가. `getChangedBlocksWithPatches()` → 패치 가능하면 패치, 아니면 전체 블록 반환. `promoteSnapshots()`, `initSnapshots()` 스냅샷 생명주기 관리.
+  - `NodeStorage`: `supportsJsonPatch()`, `saveJsonPatch()` 메서드 추가
+  - `globalApi.svelte.ts`: 저장 루프에서 패치 우선 → rejected/fullBlocks는 save-diff로 fallback
+  - `bootstrap.ts`: 블록 로딩 후 `buildBlockJsonSnapshots()` → `setInitialBlockJsonSnapshots()`로 첫 저장부터 패치 사용
+- **서버 변경** (`server.cjs`):
+  - `save-capabilities` v2: `{ diffSave: true, jsonPatch: true, version: 2 }`
+  - `POST /api/save-json-patch`: JSON 패치 수신 → `.json` 로드 → `applyJsonPatch()` → SHA-256 해시 검증 → `.json` + `.bin` 원자적 저장
+  - `extractJsonFromBlock()`, `encodeJsonToBlock()`, `applyJsonPatch()` 헬퍼 함수
+  - `save-diff` 수정: 블록 저장 시 `.json` 파일도 함께 생성 (듀얼 저장)
+  - 블록 삭제 시 `.bin` + `.json` 모두 삭제
+- **패치 프로토콜** (JSON):
+  ```json
+  POST /api/save-json-patch
+  { "patches": { "blockName": [{ "op": "append", "path": "/chats/0/message", "items": [...] }] },
+    "expectedHashes": { "blockName": "sha256hex" },
+    "deletedBlocks": [], "manifestVersion": 5 }
+  // 응답: { "version": 6, "blocks": {...}, "rejected": [] }
+  ```
+- **Fallback**: 이전 스냅샷 없음/패치 비효율(>70%)/해시 불일치 → 전체 블록 save-diff 사용
+- **Conflict Reapply Guide**:
+  - `jsonPatch.ts`: 새 파일, 충돌 없음
+  - `server.cjs`: `// ─── JSON Patch helpers ───` 주석 블록 + `POST /api/save-json-patch` 엔드포인트 추가. `save-diff`의 블록 저장 루프에 `.json` 추출/저장 추가. `save-capabilities` 응답에 `jsonPatch: true` 추가.
+  - `risuSave.ts`: `RisuSaveEncoder`에 `currentJsonStrings`, `previousJsonSnapshots` 필드 + `set()`에서 JSON string 캡처 + `getChangedBlocksWithPatches()`, `promoteSnapshots()`, `initSnapshots()` 메서드 + `hashString()` export 추가
+  - `nodeStorage.ts`: `_jsonPatchSupported` 필드 + `supportsJsonPatch()`, `saveJsonPatch()` 추가
+  - `globalApi.svelte.ts`: `initialBlockJsonSnapshots` + `setInitialBlockJsonSnapshots()` 변수/함수. `saveDb()` 내 encoder init 후 스냅샷 초기화. 저장 루프에서 `supportsJsonPatch()` 분기 추가.
+  - `bootstrap.ts`: `buildBlockJsonSnapshots()` 함수 + 블록 로딩 성공 후 `setInitialBlockJsonSnapshots()` 호출
+
 ## Conflict-Prone Files
 
 향후 `upstream/main`과 병합 시 충돌 가능성이 높은 파일:

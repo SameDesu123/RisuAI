@@ -120,12 +120,19 @@ export async function hashBlock(data: Uint8Array): Promise<string> {
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+export async function hashString(str: string): Promise<string> {
+    const data = new TextEncoder().encode(str);
+    return hashBlock(data);
+}
+
 export class RisuSaveEncoder {
 
     private blocks: { [key: string]: Uint8Array } = {};
     private compression: boolean = false;
     private changedBlockNames: Set<string> = new Set();
     private deletedBlockNames: Set<string> = new Set();
+    private currentJsonStrings: Map<string, string> = new Map();
+    private previousJsonSnapshots: Map<string, string> = new Map();
 
     async init(data:Database,arg:{
         compression?: boolean,
@@ -195,9 +202,11 @@ export class RisuSaveEncoder {
         for(const character of data.characters) {
             const index = toSave.character.indexOf(character.chaId);
             if (index !== -1) {
+                const jsonStr = JSON.stringify(character);
+                this.currentJsonStrings.set(character.chaId, jsonStr);
                 this.blocks[character.chaId] = await this.encodeBlock({
                     compression: this.compression,
-                    data: JSON.stringify(character),
+                    data: jsonStr,
                     type: RisuSaveType.CHARACTER_WITH_CHAT,
                     name: character.chaId
                 }, {
@@ -208,9 +217,11 @@ export class RisuSaveEncoder {
                 toSave.character.splice(index, 1);
             }
             else if(!this.blocks[character.chaId]){
+                const jsonStr = JSON.stringify(character);
+                this.currentJsonStrings.set(character.chaId, jsonStr);
                 this.blocks[character.chaId] = await this.encodeBlock({
                     compression: this.compression,
-                    data: JSON.stringify(character),
+                    data: jsonStr,
                     type: RisuSaveType.CHARACTER_WITH_CHAT,
                     name: character.chaId
                 }, {
@@ -232,18 +243,22 @@ export class RisuSaveEncoder {
         }
 
         if(toSave.botPreset){
+            const presetJson = JSON.stringify(data.botPresets);
+            this.currentJsonStrings.set('preset', presetJson);
             this.blocks['preset'] = await this.encodeBlock({
                 compression: this.compression,
-                data: JSON.stringify(data.botPresets),
+                data: presetJson,
                 type: RisuSaveType.BOTPRESET,
                 name: 'preset'
             });
             this.changedBlockNames.add('preset');
         }
         if(toSave.modules){
+            const modulesJson = JSON.stringify(data.modules);
+            this.currentJsonStrings.set('modules', modulesJson);
             this.blocks['modules'] = await this.encodeBlock({
                 compression: this.compression,
-                data: JSON.stringify(data.modules),
+                data: modulesJson,
                 type: RisuSaveType.MODULES,
                 name: 'modules'
             });
@@ -251,9 +266,11 @@ export class RisuSaveEncoder {
         }
 
         obj["__directory"] = Object.keys(this.blocks).filter(key => key !== 'root');
+        const rootJson = JSON.stringify(obj);
+        this.currentJsonStrings.set('root', rootJson);
         this.blocks['root'] = await this.encodeBlock({
             compression: this.compression,
-            data: JSON.stringify(obj),
+            data: rootJson,
             type: RisuSaveType.ROOT,
             name: 'root'
         });
@@ -306,6 +323,73 @@ export class RisuSaveEncoder {
     clearChangeTracking(): void {
         this.changedBlockNames.clear();
         this.deletedBlockNames.clear();
+    }
+
+    /**
+     * Generate JSON patches for changed blocks where a previous snapshot exists.
+     * Blocks without a previous snapshot are returned as full binary blocks.
+     */
+    async getChangedBlocksWithPatches(): Promise<{
+        patches: Record<string, import('./jsonPatch').PatchOp[]>;
+        fullBlocks: Record<string, Uint8Array>;
+        expectedHashes: Record<string, string>;
+    }> {
+        const { generatePatch, estimatePatchSize } = await import('./jsonPatch');
+        const patches: Record<string, import('./jsonPatch').PatchOp[]> = {};
+        const fullBlocks: Record<string, Uint8Array> = {};
+        const expectedHashes: Record<string, string> = {};
+
+        for (const name of this.changedBlockNames) {
+            const currentJson = this.currentJsonStrings.get(name);
+            const previousJson = this.previousJsonSnapshots.get(name);
+
+            if (!currentJson || !previousJson) {
+                if (this.blocks[name]) {
+                    fullBlocks[name] = this.blocks[name];
+                }
+                continue;
+            }
+
+            try {
+                const oldObj = JSON.parse(previousJson);
+                const newObj = JSON.parse(currentJson);
+                const ops = generatePatch(oldObj, newObj);
+
+                if (!ops || estimatePatchSize(ops) > currentJson.length * 0.7) {
+                    fullBlocks[name] = this.blocks[name];
+                } else {
+                    patches[name] = ops;
+                    expectedHashes[name] = await hashString(currentJson);
+                }
+            } catch {
+                if (this.blocks[name]) {
+                    fullBlocks[name] = this.blocks[name];
+                }
+            }
+        }
+
+        return { patches, fullBlocks, expectedHashes };
+    }
+
+    /**
+     * After a successful patch save, promote current JSON strings
+     * to previous snapshots for the next diff cycle.
+     */
+    promoteSnapshots(): void {
+        for (const name of this.changedBlockNames) {
+            const json = this.currentJsonStrings.get(name);
+            if (json) {
+                this.previousJsonSnapshots.set(name, json);
+            }
+        }
+    }
+
+    /**
+     * Initialize previous JSON snapshots from loaded data.
+     * Called after bootstrap to enable patches from the first save.
+     */
+    initSnapshots(blockJsonMap: Map<string, string>): void {
+        this.previousJsonSnapshots = new Map(blockJsonMap);
     }
 
     async encodeBlock(arg:EncodeBlockArg, option:EncodeBlockOption = { remote: 'none' }){
