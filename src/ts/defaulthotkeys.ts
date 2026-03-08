@@ -81,9 +81,6 @@ export const defaultHotkeys: Hotkey[] = [
         action: 'toggleCSS'
     },
 
-    //Needs to implement after this
-
-
     {
         key: '[',
         ctrl: true,
@@ -132,5 +129,16 @@ export const defaultHotkeys: Hotkey[] = [
         key: 'g',
         ctrl: true,
         action: 'scrollToActiveChar'
+    },
+    {
+        key: 'i',
+        ctrl: true,
+        action: 'import'
+    },
+    {
+        key: 'e',
+        ctrl: true,
+        shift: true,
+        action: 'export'
     },
 ]

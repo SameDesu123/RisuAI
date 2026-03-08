@@ -2,6 +2,7 @@ import { get } from "svelte/store"
 import { alertMd, alertSelect, alertToast, alertWait, doingAlert, alertRequestLogs } from "./alert"
 import { changeToPreset as changeToPreset2, getDatabase  } from "./storage/database.svelte"
 import { alertStore, MobileGUIStack, MobileSideBar, openPersonaList, openPresetList, OpenRealmStore, PlaygroundStore, QuickSettings, SafeModeStore, selectedCharID, settingsOpen } from "./stores.svelte"
+import { importCharacter, exportCharacterCard } from "./characterCards"
 import { language } from "src/lang"
 import { updateTextThemeAndCSS } from "./gui/colorscheme"
 import { defaultHotkeys } from "./defaulthotkeys"
@@ -27,8 +28,8 @@ export function initHotkey(){
         let hotkeyRan = false
         for(const hotkey of hotKeys){
             let hotKeyRanThisTime = true
-            
-            
+
+
             hotkey.ctrl = hotkey.ctrl ?? false
             hotkey.alt = hotkey.alt ?? false
             hotkey.shift = hotkey.shift ?? false
@@ -173,6 +174,23 @@ export function initHotkey(){
                 case 'scrollToActiveChar':{
                     if(database.enableScrollToActiveChar !== false){
                         window.dispatchEvent(new CustomEvent('scrollToActiveCharacter'))
+                    }
+                    break
+                }
+                case 'toggleVoice':{
+                    database.playMessage = !database.playMessage
+                    alertToast(`Voice: ${database.playMessage ? 'ON' : 'OFF'}`)
+                    break
+                }
+                case 'import':{
+                    await importCharacter()
+                    break
+                }
+                case 'export':{
+                    const charId = get(selectedCharID)
+                    const char = charId >= 0 ? database.characters[charId] : null
+                    if(char && char.type !== 'group'){
+                        await exportCharacterCard(char, 'png')
                     }
                     break
                 }
