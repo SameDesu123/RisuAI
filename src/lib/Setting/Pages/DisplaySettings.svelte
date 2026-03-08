@@ -234,17 +234,6 @@
     <span class="text-textcolor">{language.settingsCloseButtonSize} <Help key="settingsCloseButtonSize"/></span>
     <SliderInput min={16} max={48} step={1} bind:value={DBState.db.settingsCloseButtonSize} marginBottom />
 
-    <span class="text-textcolor mt-4">{language.chatRenderLimit}</span>
-    <SelectInput bind:value={DBState.db.chatRenderLimitMode}>
-        <option value="auto">{language.chatRenderLimitAuto}</option>
-        <option value="manual">{language.chatRenderLimitManual}</option>
-    </SelectInput>
-
-    {#if DBState.db.chatRenderLimitMode === 'manual'}
-        <span class="text-textcolor mt-2">{language.chatRenderLimitCount}</span>
-        <SliderInput min={3} max={50} step={1} bind:value={DBState.db.chatRenderLimitCount} marginBottom />
-    {/if}
-
 {/if}
 
 {#if submenu === 2 || submenu === -1}

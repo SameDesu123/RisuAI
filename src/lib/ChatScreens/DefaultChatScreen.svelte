@@ -43,6 +43,7 @@
     let messageInput:string = $state('')
     let messageInputTranslate:string = $state('')
     let openMenu = $state(false)
+    let loadPages = $state(30)
     let autoMode = $state(false)
     let rerolls:Message[][] = []
     let rerollid = -1
@@ -57,37 +58,9 @@
     let currentCharacter = $derived(DBState.db.characters[$selectedCharID])
     let currentChat = $derived(currentCharacter?.chats[currentCharacter.chatPage]?.message ?? [])
 
-    function getInitialLoadPages(): number {
-        const mode = DBState.db.chatRenderLimitMode ?? 'auto'
-        if (mode === 'manual') {
-            return DBState.db.chatRenderLimitCount ?? 20
-        }
-        const msgCount = currentCharacter?.chats[currentCharacter.chatPage]?.message?.length ?? 0
-        if (msgCount > 300) return 5
-        if (msgCount > 150) return 8
-        if (msgCount > 50) return 12
-        return 20
-    }
-
-    let loadPages = $state(getInitialLoadPages())
-
     function scrollToBottom() {
         chatsInstance?.scrollToLatestMessage();
     }
-
-    let prevCharId = -1
-    let prevChatPage = -1
-    $effect(() => {
-        const charId = $selectedCharID
-        const char = DBState.db.characters[charId]
-        const chatPage = char?.chatPage ?? -1
-        if (charId !== prevCharId || chatPage !== prevChatPage) {
-            loadPages = getInitialLoadPages()
-            prevCharId = charId
-            prevChatPage = chatPage
-        }
-    })
-
     $effect(() => {
         if(ScrollToMessageStore.value !== -1){
             const index = ScrollToMessageStore.value
@@ -599,10 +572,7 @@
             //@ts-expect-error scrollHeight/clientHeight/scrollTop don't exist on EventTarget, but target is HTMLElement here
             const scrolled = (e.target.scrollHeight - e.target.clientHeight + e.target.scrollTop)
             if(scrolled < 100 && DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.length > loadPages){
-                const increment = DBState.db.chatRenderLimitMode === 'manual'
-                    ? Math.max(5, Math.floor((DBState.db.chatRenderLimitCount ?? 20) / 2))
-                    : 15
-                loadPages += increment
+                loadPages += 15
             }
             const chatTarget = e.target as HTMLElement;
             const chatsContainer = (DBState.db.fixedChatTextarea && chatTarget.children[1]) ? chatTarget.children[1] : chatTarget.children[0];
