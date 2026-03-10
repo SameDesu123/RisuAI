@@ -503,7 +503,7 @@
                                 {#await getCharImage(emo[1], 'plain')}
                                     <td class="font-medium truncate w-1/3"></td>
                                 {:then im}
-                                    <td class="font-medium truncate w-1/3"><img src={im} alt="img" class="w-full"></td>                        
+                                    <td class="font-medium truncate w-1/3"><img src={im} alt="img" class="w-full" decoding="async"></td>                        
                                 {/await}
                                 <td class="font-medium truncate w-1/2">
                                     <TextInput marginBottom size='lg' bind:value={DBState.db.characters[$selectedCharID].emotionImages[i][0]} />
@@ -622,7 +622,7 @@
                                         {:else if assetFileExtensions[i] === 'mp3'}
                                             <audio controls class="mt-2 px-2 w-full h-16 m-1 rounded-md" loop><source src={assetFilePath[i]} type="audio/mpeg"></audio>
                                         {:else if ['png', 'webp', 'jpeg', 'jpg', 'gif'].includes(assetFileExtensions[i])}
-                                            <img src={assetFilePath[i]} class="w-16 h-16 m-1 rounded-md" alt={assets[0]}/>
+                                            <img src={assetFilePath[i]} class="w-16 h-16 m-1 rounded-md" alt={assets[0]} decoding="async" loading="lazy"/>
                                         {/if}
                                     {/if}
                                     <TextInput size="sm" marginBottom bind:value={DBState.db.characters[$selectedCharID].additionalAssets[i][0]} placeholder="..." />
