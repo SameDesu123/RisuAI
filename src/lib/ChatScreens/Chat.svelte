@@ -842,7 +842,7 @@
 
 {#snippet renderGuiHtmlPart(dom:HTMLElement)}
     {#if dom.tagName === 'IMG'}
-        <img class={dom.getAttribute('class') ?? ''} alt="" style={dom.getAttribute('style') ?? ''} />
+        <img class={dom.getAttribute('class') ?? ''} alt="" style={dom.getAttribute('style') ?? ''} decoding="async" />
     {:else if dom.tagName === 'A'}
         <a target="_blank" rel="noreferrer" href={
             (dom.getAttribute('href') && dom.getAttribute('href').startsWith('https')) ? dom.getAttribute('href') : ''
