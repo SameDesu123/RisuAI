@@ -1086,17 +1086,24 @@ app.post('/api/save-diff', async (req, res) => {
     }
 });
 
-app.get('/api/save-blocks', async (req, res) => {
+// Support both GET (backward compat) and POST (for large block lists)
+const handleSaveBlocks = async (req, res) => {
     if (!await checkAuth(req, res)) return;
 
     try {
-        const namesParam = req.query.names;
-        if (!namesParam) {
-            res.status(400).json({ error: 'names parameter required' });
-            return;
+        // Get names from POST body or GET query string
+        let names;
+        if (req.method === 'POST' && req.body && req.body.names) {
+            names = req.body.names.filter(n => isSafeBlockName(n));
+        } else {
+            const namesParam = req.query.names;
+            if (!namesParam) {
+                res.status(400).json({ error: 'names parameter required' });
+                return;
+            }
+            names = namesParam.split(',').filter(n => isSafeBlockName(n));
         }
 
-        const names = namesParam.split(',').filter(n => isSafeBlockName(n));
         const buffers = [];
         let totalSize = 0;
 
@@ -1125,7 +1132,9 @@ app.get('/api/save-blocks', async (req, res) => {
         console.error('[Server] save-blocks error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
-});
+};
+app.get('/api/save-blocks', handleSaveBlocks);
+app.post('/api/save-blocks', handleSaveBlocks);
 
 app.post('/api/save-json-patch', async (req, res) => {
     if (!await checkAuth(req, res)) return;

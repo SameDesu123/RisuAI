@@ -148,15 +148,18 @@ export async function loadData() {
                 await forageStorage.Init()
 
                 let blockLoadSuccess = false
+                let blockStorageExists = false
 
                 // Try block-based loading for NodeStorage with diff save support
                 if (isNodeServer && forageStorage.realStorage instanceof NodeStorage) {
                     const nodeStorage = forageStorage.realStorage as NodeStorage
-                    try {
+
+                    const tryLoadBlocks = async (): Promise<boolean> => {
                         if (await nodeStorage.supportsDiffSave()) {
                             LoadingStatusState.text = "Checking Block Storage..."
                             const manifest = await nodeStorage.getManifest()
                             if (manifest.exists && Object.keys(manifest.blocks).length > 0) {
+                                blockStorageExists = true
                                 LoadingStatusState.text = "Loading Save Blocks..."
                                 const blockNames = Object.keys(manifest.blocks)
                                 const blocks = await nodeStorage.getBlocks(blockNames)
@@ -182,12 +185,30 @@ export async function loadData() {
                                 setDatabase(decoded)
                                 // Build JSON snapshots for json-patch support
                                 setInitialBlockJsonSnapshots(buildBlockJsonSnapshots(decoded))
-                                blockLoadSuccess = true
+                                return true
                             }
                         }
+                        return false
+                    }
+
+                    try {
+                        blockLoadSuccess = await tryLoadBlocks()
                     } catch (error) {
-                        console.error('Block-based load failed, falling back to monolithic:', error)
-                        blockLoadSuccess = false
+                        console.error('Block-based load failed, retrying...', error)
+                        // Retry once before giving up
+                        try {
+                            LoadingStatusState.text = "Block load failed. Retrying..."
+                            await sleep(1000)
+                            blockLoadSuccess = await tryLoadBlocks()
+                        } catch (retryError) {
+                            console.error('Block-based load retry also failed:', retryError)
+                            if (blockStorageExists) {
+                                // Block storage exists but can't be loaded — warn user
+                                // Do NOT silently fall back to stale monolithic data
+                                alertError('Block storage load failed. Your data may be outdated. Please check server logs.')
+                            }
+                            blockLoadSuccess = false
+                        }
                     }
                 }
 
@@ -612,6 +633,14 @@ async function cleanChunks() {
         )
         for (const remote of remotes) {
             try {
+                // Skip .meta files - they are metadata, not remote saves
+                if (remote.name.endsWith('.meta')) {
+                    // Clean up recursively-created .meta.meta... files
+                    if (/\.meta\.meta/.test(remote.name)) {
+                        await remove('remotes/' + remote.name, { baseDir: BaseDirectory.AppData })
+                    }
+                    continue
+                }
                 const name = getBasename(remote.name).slice(0, -10) //remove .local.bin
                 const fexists = remoteUncleanables.has(name)
                 if(!fexists){
@@ -637,7 +666,13 @@ async function cleanChunks() {
                             await writeFile(metaPath, new TextEncoder().encode(JSON.stringify(metaJson)), { baseDir: BaseDirectory.AppData })
                         }
                     } catch (error) {}
-                    await remove('remotes/' + remote.name, { baseDir: BaseDirectory.AppData })
+                    if (okayToDelete) {
+                        await remove('remotes/' + remote.name, { baseDir: BaseDirectory.AppData })
+                        // Also remove the .meta file for the deleted remote
+                        try {
+                            await remove('remotes/' + remote.name + '.meta', { baseDir: BaseDirectory.AppData })
+                        } catch (error) {}
+                    }
                 }
             } catch (error) {
                 console.log('error', remote.name)
@@ -646,6 +681,7 @@ async function cleanChunks() {
     }
     else {
         const indexes = await forageStorage.keys()
+        const indexSet = new Set(indexes)
         const characterIds = new Set<string>(
             db.characters.map((v) => v.chaId)
         )
@@ -657,13 +693,21 @@ async function cleanChunks() {
                 }
             }
             else if (asset.startsWith('remotes/')) {
+                // Skip .meta files - they are metadata, not remote saves
+                if (asset.endsWith('.meta')) {
+                    // Clean up recursively-created .meta.meta... files
+                    if (/\.meta\.meta/.test(asset)) {
+                        await forageStorage.removeItem(asset)
+                    }
+                    continue
+                }
                 const name = getBasename(asset).slice(0, -10) //remove .local.bin
                 const exists = characterIds.has(name)
                 if(!exists){
                     let okayToDelete = false
                     try {
                         const metaPath = asset + '.meta'
-                        const metaExists = (await forageStorage.keys()).includes(metaPath)
+                        const metaExists = indexSet.has(metaPath)
                         if (metaExists) {
                             const metaData: Uint8Array = await forageStorage.getItem(metaPath) as unknown as Uint8Array
                             const metaJson = JSON.parse(new TextDecoder().decode(metaData))
@@ -682,6 +726,10 @@ async function cleanChunks() {
                     } catch (error) {}
                     if (okayToDelete) {
                         await forageStorage.removeItem(asset)
+                        // Also remove the .meta file for the deleted remote
+                        try {
+                            await forageStorage.removeItem(asset + '.meta')
+                        } catch (error) {}
                     }
                 }
             }

@@ -264,8 +264,13 @@ export class NodeStorage{
 
     async getBlocks(names: string[]): Promise<Record<string, Uint8Array>> {
         await this.checkAuth();
-        const res = await fetch(`/api/save-blocks?names=${encodeURIComponent(names.join(','))}`, {
-            headers: { 'risu-auth': await this.createAuth() }
+        const res = await fetch('/api/save-blocks', {
+            method: 'POST',
+            headers: {
+                'risu-auth': await this.createAuth(),
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({ names })
         });
         if (!res.ok) throw new Error('getBlocks failed');
 

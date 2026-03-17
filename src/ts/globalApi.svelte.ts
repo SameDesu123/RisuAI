@@ -409,6 +409,7 @@ export async function saveDb() {
 
     let savetrys = 0
     let lastDbData = new Uint8Array(0)
+    let diffSaveSyncCounter = 0
     await sleep(1000)
     while (true) {
         if (!changed) {
@@ -504,6 +505,20 @@ export async function saveDb() {
                     }
                 }
                 encoder.clearChangeTracking()
+                // Periodically sync monolithic file so fallback data stays current
+                diffSaveSyncCounter++
+                if (diffSaveSyncCounter >= 5) {
+                    diffSaveSyncCounter = 0
+                    try {
+                        const fullEncoded = encoder.encode()
+                        if (fullEncoded) {
+                            await forageStorage.setItem('database/database.bin', new Uint8Array(fullEncoded))
+                            console.log('[Save] Monolithic fallback synced')
+                        }
+                    } catch (e) {
+                        console.warn('[Save] Failed to sync monolithic fallback:', e)
+                    }
+                }
             } else {
                 const encoded = encoder.encode()
                 if (!encoded) {

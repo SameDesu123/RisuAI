@@ -133,6 +133,7 @@ export class RisuSaveEncoder {
     private deletedBlockNames: Set<string> = new Set();
     private currentJsonStrings: Map<string, string> = new Map();
     private previousJsonSnapshots: Map<string, string> = new Map();
+    private cachedStorageKeys: Set<string> | null = null;
 
     async init(data:Database,arg:{
         compression?: boolean,
@@ -453,10 +454,12 @@ export class RisuSaveEncoder {
                 fileExists = await exists(fileName, { baseDir: BaseDirectory.AppData });
             }
             else{
-                const stored = await forageStorage.keys();
-                if(stored.includes(fileName)){
-                    fileExists = true;
+                // Use cached keys to avoid repeated /api/list calls
+                if(!this.cachedStorageKeys){
+                    const stored = await forageStorage.keys();
+                    this.cachedStorageKeys = new Set(stored);
                 }
+                fileExists = this.cachedStorageKeys.has(fileName);
             }
             if(!fileExists){
                 console.log(`Remote file ${fileName} does not exist, disabling skipRemoteSaving for this block.`);
