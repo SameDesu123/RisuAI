@@ -26,6 +26,7 @@ interface ProviderPlugin {
     versionOfPlugin?: string
     updateURL?: string
     enabled?: boolean
+    allowedIPC?: string[]
 }
 interface ProviderPluginCustomLink {
     link: string
@@ -179,6 +180,7 @@ export async function importPlugin(code:string|null = null, argu:{
         let updateURL: string = ''
         let versionOfPlugin: string = '' //This is the version of the plugin itself, not the API version
         let apiVersion = '2.0'
+        let ipcList: string[] = []
         for (const line of splitedJs) {
             if (line.startsWith('//@name')) {
                 const provied = line.slice(7)
@@ -300,6 +302,18 @@ export async function importPlugin(code:string|null = null, argu:{
                     return
                 }
             }
+
+            if(line.startsWith('//@allowed-ipc')){
+                const provied = line.trim().split(' ')
+                if(provied.length < 2){
+                    showError('plugin allowed IPC declaration is incorrect, did you put space after //@allowed-ipc?')
+                    return
+                }
+
+                const allowedIPCList = provied.slice(1)
+
+                ipcList.push(...allowedIPCList)
+            }
         }
 
         if (name.length === 0) {
@@ -368,6 +382,7 @@ export async function importPlugin(code:string|null = null, argu:{
             argMeta: argMeta,
             versionOfPlugin: versionOfPlugin,
             updateURL: updateURL,
+            allowedIPC: ipcList,
             enabled: true
         }
 
@@ -744,6 +759,7 @@ export const getV2PluginAPIs = () => {
             db.pluginCustomStorage ??= {}
             for (const key of Object.keys(newDb)) {
                 if (key === 'plugins') {
+                    console.warn('[WARN] Plugin attempted to access plugin directly. this would be blocked in future versions. Instead, use the provided APIs to manage plugins. Attempting to handle plugin installation via plugin for new plugins in the provided database object.')
                     newDb[key] = await handlePluginInstallViaPlugin(newDb.plugins)
                 }
                 
@@ -908,7 +924,7 @@ export async function pluginProcess(arg: {
     }
 }
 
-async function handlePluginInstallViaPlugin(plugins: RisuPlugin[]){
+export async function handlePluginInstallViaPlugin(plugins: RisuPlugin[]){
 
     const trimmedPlugins: RisuPlugin[] = []
     for(const plugin of plugins){
