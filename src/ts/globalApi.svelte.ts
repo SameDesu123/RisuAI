@@ -45,6 +45,22 @@ import { isTauri, isNodeServer } from "./platform";
 
 export const forageStorage = new AutoStorage()
 
+/**
+ * Dynamically generates a risu-auth JWT token for Node.js server requests.
+ * Uses NodeStorage.createAuth() instead of localStorage to ensure fresh tokens.
+ */
+async function getNodeAuth(): Promise<string | null> {
+    if (!isNodeServer) return null
+    try {
+        if (forageStorage.realStorage instanceof NodeStorage) {
+            return await forageStorage.realStorage.createAuth()
+        }
+    } catch (e) {
+        console.error('Failed to generate node auth token:', e)
+    }
+    return null
+}
+
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
 
 interface fetchLog {
@@ -878,7 +894,7 @@ async function fetchWithProxy(url: string, arg: GlobalFetchArgs): Promise<Global
 
         // Add risu-auth header for Node.js server
         if (isNodeServer) {
-            const auth = localStorage.getItem('risuauth');
+            const auth = await getNodeAuth();
             if (auth) {
                 headers["risu-auth"] = auth;
             }
