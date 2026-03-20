@@ -167,6 +167,26 @@ NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
 - **Root Cause**: 타입스크립트의 `crypto.subtle.digest` 인자 타입 호환 문제(`Uint8Array<ArrayBufferLike>` -> `BufferSource`).
 - **Fix**: 타입 에러 방지를 위해 명시적으로 `as BufferSource` 타입 단언 추가.
 
+### 17. fix(auth): dynamically generate risu-auth token in fetchWithProxy and fetchNative
+- **File**: `src/ts/globalApi.svelte.ts`
+- **Root Cause**: `fetchWithProxy`와 `fetchNative`가 `localStorage.getItem('risuauth')`로 인증 토큰을 읽지만, 이 키는 코드베이스 어디에서도 설정되지 않음. `NodeStorage.createAuth()`가 동적으로 JWT를 생성하지만 localStorage에 저장하지 않아, Node.js 서버 사용자의 `/proxy2` 프록시 요청이 항상 `{"error":"No auth header"}` 400 에러로 실패.
+- **Fix**: `forageStorage.realStorage`를 통해 `NodeStorage.createAuth()`를 호출하는 `getNodeAuth()` 헬퍼 함수 추가. `fetchWithProxy`와 `fetchNative`의 localStorage 읽기를 동적 JWT 생성으로 교체.
+- **핵심 코드**:
+  ```typescript
+  async function getNodeAuth(): Promise<string | null> {
+      if (!isNodeServer) return null
+      try {
+          if (forageStorage.realStorage instanceof NodeStorage) {
+              return await forageStorage.realStorage.createAuth()
+          }
+      } catch (e) {
+          console.error('Failed to generate node auth token:', e)
+      }
+      return null
+  }
+  ```
+- **Conflict Reapply Guide**: `forageStorage` 선언 직후에 `getNodeAuth()` 함수 추가. `fetchWithProxy` 내 `localStorage.getItem('risuauth')` → `await getNodeAuth()`, `fetchNative` 내 인라인 spread → `const nodeAuth = await getNodeAuth()` + `...authHeaders`로 교체.
+
 ## Conflict-Prone Files
 
 향후 `upstream/main`과 병합 시 충돌 가능성이 높은 파일:
@@ -181,7 +201,7 @@ NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
 | `src/ts/process/request/anthropic.ts` | SSE parser deferred event fix |
 | `src/ts/storage/risuSave.ts` | RisuSaveEncoder 변경 추적 및 캐싱 로직 추가 |
 | `src/ts/storage/nodeStorage.ts` | diff save transport 및 예외 처리 로직 추가 |
-| `src/ts/globalApi.svelte.ts` | 저장 루프 diff 분기 |
+| `src/ts/globalApi.svelte.ts` | 저장 루프 diff 분기 + getNodeAuth 헬퍼 |
 | `src/ts/bootstrap.ts` | 블록 단위 로딩 로직 및 에러 처리 경로 추가 |
 
 ## How to Sync with Upstream
