@@ -259,9 +259,11 @@ export class MCPClient{
         }
 
         if(this.customTransport){
-            return new Promise<RPCRequestResult>((resolve) => {
+            return new Promise<RPCRequestResult>((resolve, reject) => {
+                let timeoutId: ReturnType<typeof setTimeout>
                 const func = (message:JsonRPC) => {
                     if(message.id === body.id){
+                        clearTimeout(timeoutId)
                         resolve({
                             rpc: message,
                             http: {
@@ -269,13 +271,22 @@ export class MCPClient{
                                 headers: {}
                             }
                         })
-                        this.customTransport.removeListener(func)
+                        this.customTransport?.removeListener(func)
                     }
                 }
+
+                timeoutId = setTimeout(() => {
+                    this.customTransport?.removeListener(func)
+                    reject(new Error(`MCP request timeout for method: ${method}`))
+                }, 60000)
+
                 Promise.resolve(this.customTransport.addListener(func))
-                    .then(() => this.customTransport.send(body as JsonRPC))
-                    // TODO: handle send errors properly (e.g. timeout, reject with RPC error)
-                    .catch(() => {})
+                    .then(() => this.customTransport?.send(body as JsonRPC))
+                    .catch((error) => {
+                        clearTimeout(timeoutId)
+                        this.customTransport?.removeListener(func)
+                        reject(new Error(`MCP request failed to send: ${error?.message || error}`))
+                    })
             })
         }
 
