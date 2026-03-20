@@ -145,7 +145,7 @@ export class NodeStorage{
         if (this._diffSaveSupported !== null) return this._diffSaveSupported;
         try {
             const res = await fetch('/api/save-capabilities');
-            if (res.ok) {
+            if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
                 const data = await res.json();
                 this._diffSaveSupported = !!data.diffSave;
                 this._jsonPatchSupported = !!data.jsonPatch;
@@ -293,11 +293,22 @@ export class NodeStorage{
     private async checkAuth(){
 
         if(!this.authChecked){
-            const data = await (await fetch('/api/test_auth',{
-                headers: {
-                    'risu-auth': await this.createAuth()
+            let data: any;
+            try {
+                const res = await fetch('/api/test_auth',{
+                    headers: {
+                        'risu-auth': await this.createAuth()
+                    }
+                });
+                
+                if (!res.ok || !res.headers.get('content-type')?.includes('application/json')) {
+                    throw new Error("Node server API unavailable or returned HTML. Check your backend configuration.");
                 }
-            })).json()
+                data = await res.json();
+            } catch (error) {
+                console.error("NodeStorage checkAuth failed:", error);
+                throw error;
+            }
 
             if(data.status === 'unset'){
                 const input = await digestPassword(await alertInput(language.setNodePassword))
