@@ -1701,6 +1701,9 @@ export async function fetchNative(url: string, arg: {
     }
     else if (throughProxy) {
 
+        const nodeAuth = await getNodeAuth();
+        const authHeaders = nodeAuth ? { "risu-auth": nodeAuth } : {};
+
         const r = await fetch(hubURL + `/proxy2`, {
             body: realBody as any,
             headers: arg.useRisuTk ? {
@@ -1708,13 +1711,13 @@ export async function fetchNative(url: string, arg: {
                 "risu-url": encodeURIComponent(url),
                 "Content-Type": "application/json",
                 "x-risu-tk": "use",
-                ...(isNodeServer && localStorage.getItem('risuauth') ? { "risu-auth": localStorage.getItem('risuauth') } : {}),
+                ...authHeaders,
                 ...(DBState?.db?.requestLocation && { "risu-location": DBState.db.requestLocation }),
             } : {
                 "risu-header": encodeURIComponent(JSON.stringify(headers)),
                 "risu-url": encodeURIComponent(url),
                 "Content-Type": "application/json",
-                ...(isNodeServer && localStorage.getItem('risuauth') ? { "risu-auth": localStorage.getItem('risuauth') } : {}),
+                ...authHeaders,
                 ...(DBState?.db?.requestLocation && { "risu-location": DBState.db.requestLocation }),
             },
             method: arg.method,
