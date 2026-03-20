@@ -152,6 +152,21 @@ NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
   - `globalApi.svelte.ts`: `initialBlockJsonSnapshots` + `setInitialBlockJsonSnapshots()` 변수/함수. `saveDb()` 내 encoder init 후 스냅샷 초기화. 저장 루프에서 `supportsJsonPatch()` 분기 추가.
   - `bootstrap.ts`: `buildBlockJsonSnapshots()` 함수 + 블록 로딩 성공 후 `setInitialBlockJsonSnapshots()` 호출
 
+### 14. fix: prevent save data loss from block loading failures
+- **Files**: `src/ts/bootstrap.ts`, `src/ts/storage/risuSave.ts`
+- **Root Cause**: 로딩 중 블록 로드 실패나 타임아웃 발생 시 에러가 조용히 처리되고 빈 상태로 초기화되어 기존 저장 데이터가 덮어씌워질 위험이 있었음. 또한 `RisuSaveEncoder` 초기화 시 `forageStorage.keys()`를 블록마다 반복 호출하여 성능이 저하됨.
+- **Fix**: `bootstrap.ts`에서 로딩 실패로 인해 데이터가 비어있을 경우 명시적으로 에러를 스로우하여 유실을 방지. `risuSave.ts`에서 `cachedStorageKeys`를 도입해 반복적인 keys() 호출을 최적화.
+
+### 15. fix(nodeServer): gracefully handle SPA HTML fallback in NodeStorage API fetch
+- **File**: `src/ts/storage/nodeStorage.ts`
+- **Root Cause**: Node 서버 측 라우팅 문제나 404 시 SPA fallback으로 인해 HTML이 반환될 때 이를 JSON으로 파싱하려다 발생하는 `Unexpected token '<'` 에러.
+- **Fix**: fetch 응답 헤더의 `content-type`이 `application/json`을 포함하는지 먼저 확인하도록 조건문 추가.
+
+### 16. fix(storage): cast Uint8Array to BufferSource in hashBlock to fix type error
+- **File**: `src/ts/storage/risuSave.ts`
+- **Root Cause**: 타입스크립트의 `crypto.subtle.digest` 인자 타입 호환 문제(`Uint8Array<ArrayBufferLike>` -> `BufferSource`).
+- **Fix**: 타입 에러 방지를 위해 명시적으로 `as BufferSource` 타입 단언 추가.
+
 ## Conflict-Prone Files
 
 향후 `upstream/main`과 병합 시 충돌 가능성이 높은 파일:
@@ -164,10 +179,10 @@ NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
 | `src/ts/plugins/plugins.svelte.ts` | API v2.0 지원 추가 |
 | `src/ts/process/index.svelte.ts` | stream truncation fix + final chunk persistence |
 | `src/ts/process/request/anthropic.ts` | SSE parser deferred event fix |
-| `src/ts/storage/risuSave.ts` | RisuSaveEncoder 변경 추적 확장 |
-| `src/ts/storage/nodeStorage.ts` | diff save transport 메서드 추가 |
+| `src/ts/storage/risuSave.ts` | RisuSaveEncoder 변경 추적 및 캐싱 로직 추가 |
+| `src/ts/storage/nodeStorage.ts` | diff save transport 및 예외 처리 로직 추가 |
 | `src/ts/globalApi.svelte.ts` | 저장 루프 diff 분기 |
-| `src/ts/bootstrap.ts` | 블록 기반 로딩 경로 추가 |
+| `src/ts/bootstrap.ts` | 블록 단위 로딩 로직 및 에러 처리 경로 추가 |
 
 ## How to Sync with Upstream
 
