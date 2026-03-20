@@ -2,6 +2,7 @@
     import { ColorSchemeTypeStore } from "src/ts/gui/colorscheme";
     import { ParseMarkdown } from "src/ts/parser/parser.svelte";
     import { parseMultilangString, toLangName } from "src/ts/util";
+    import { DBState } from "src/ts/stores.svelte";
 
     interface Props {
         value: string;
@@ -12,7 +13,12 @@
     let valueObject: {[code:string]:string} = $derived(parseMultilangString(value))
     let selectedLang = $state("en")
     $effect.pre(() => {
-        if(valueObject["en"] === undefined){
+        const uiLang = DBState.db.language
+        if(valueObject[uiLang] !== undefined){
+            selectedLang = uiLang
+        } else if(valueObject["en"] !== undefined){
+            selectedLang = "en"
+        } else {
             selectedLang = "xx"
         }
     });
