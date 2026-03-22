@@ -23,7 +23,7 @@ async function initTransformers() {
         },
         match: async (url: URL | string) => {
             if (typeof url === 'string') {
-                if (Object.keys(tfMap).includes(url)) {
+                if (Object.prototype.hasOwnProperty.call(tfMap, url)) {
                     const assetId = tfMap[url]
                     return new Response(asBuffer(await loadAsset(assetId)))
                 }

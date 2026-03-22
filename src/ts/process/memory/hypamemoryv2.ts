@@ -318,7 +318,7 @@ export class HypaProcessorV2<TMetadata> {
   }
 
   private isLocalModel(): boolean {
-    return Object.keys(localModels.models).includes(this.options.model);
+    return this.options.model in localModels.models;
   }
 
   private chunkArray<T>(array: T[], size: number): T[][] {
