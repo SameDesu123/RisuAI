@@ -171,10 +171,18 @@
         const imgs = bodyRoot?.querySelectorAll('img:not([src^="data:"]):not([src^="http:"]):not([src^="https:"]):not([src^="blob:"]):not([src^="file:"]):not([src^="tauri:"]):not([noimage])') as NodeListOf<HTMLImageElement>
         
         if (imgs && imgs.length > 0) {
+            // Hoist asset computation outside the image loop
+            const assets = getModuleAssets().concat(getCurrentCharacter().additionalAssets ?? [])
+            const styl = getCurrentCharacter().prebuiltAssetStyle
+            const assetMap = new Map(assets.map(asset => [asset[0].toLocaleLowerCase(), asset[1]]))
+            const dista = assets.map(asset => ({
+                name: asset[0].toLocaleLowerCase(),
+                path: asset[1]
+            }))
+
             imgs.forEach(async (img) => {
                 const name = img.getAttribute('src')?.toLocaleLowerCase() || ''
 
-                console.log(name)
                 if(
                     name.length > 200 ||
                     name.includes(':')
@@ -183,14 +191,11 @@
                     return
                 }
                 
-                const assets = getModuleAssets().concat(getCurrentCharacter().additionalAssets ?? [])
-                const styl = getCurrentCharacter().prebuiltAssetStyle
-                console.log('Checking image:', name, 'Assets:', assets)
-                const foundAsset = assets.find(asset => asset[0].toLocaleLowerCase() === name)
-                if(foundAsset){
+                const foundPath = assetMap.get(name)
+                if(foundPath){
                     img.classList.add('root-loaded-image')
                     img.classList.add('root-loaded-image-' + styl)
-                    img.src = await getFileSrc(foundAsset[1])
+                    img.src = await getFileSrc(foundPath)
                     return
                 }
 
@@ -198,15 +203,6 @@
                     img.setAttribute('noimage', 'true')
                     return
                 }
-                const dista:{
-                    name:string,
-                    path:string
-                }[] = assets.map(asset => {
-                    return {
-                        name: asset[0].toLocaleLowerCase(),
-                        path: asset[1]
-                    }
-                })
 
                 const prefixLoc = name.lastIndexOf('.')
                 const prefix = prefixLoc > 0 ? name.substring(0, prefixLoc) : ''
