@@ -95,17 +95,19 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
 
     let isAborted = false
-    let findCharCache:{[key:string]:character} = {}
+    const findCharCache = new Map<string, character>()
     function findCharacterbyIdwithCache(id:string){
-        const d = findCharCache[id]
-        if(!!d){
+        const d = findCharCache.get(id)
+        if(d){
             return d
         }
-        else{
-            const r = findCharacterbyId(id)
-            findCharCache[id] = r
-            return r
+        const r = findCharacterbyId(id)
+        if(findCharCache.size >= 50){
+            const firstKey = findCharCache.keys().next().value
+            findCharCache.delete(firstKey)
         }
+        findCharCache.set(id, r)
+        return r
     }
 
 
