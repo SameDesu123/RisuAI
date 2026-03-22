@@ -19,6 +19,8 @@ let cache={
     trans: ['']
 }
 
+const BLACKLIST_NODES = new Set(["img", "iframe", "script", "style", "div", "button", "audio", "video"]);
+
 let bergamotTranslate: (text: string, from: string, to: string, html?: boolean) => Promise<string>|null = null
 
 export const LLMCacheStorage = localforage.createInstance({
@@ -431,9 +433,8 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
                 node instanceof HTMLElement
             ) {
                 const children = Array.from(node.childNodes);
-                const blacklist = ["img", "iframe", "script", "style", "div", "button", "audio", "video"];
                 const hasBlacklistChild = children.some((child) =>
-                    blacklist.includes(child.nodeName.toLowerCase())
+                    BLACKLIST_NODES.has(child.nodeName.toLowerCase())
                 );
                 if (!hasBlacklistChild && (node as Element)?.getAttribute('translate') !== 'no'){
                     const text = getNodetextToSentence(node);
