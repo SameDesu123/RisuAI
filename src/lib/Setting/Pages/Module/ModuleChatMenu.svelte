@@ -19,13 +19,13 @@
 
     function sortModules(modules:RisuModule[], search:string){
         const db = DBState.db
+        const lowerSearch = search.toLowerCase()
         return modules.filter((v) => {
             if(search === '') return true
-            return v.name.toLowerCase().includes(search.toLowerCase())
+            return v.name.toLowerCase().includes(lowerSearch)
         
         }).sort((a, b) => {
-            let score = a.name.toLowerCase().localeCompare(b.name.toLowerCase())
-            return score
+            return a.name.toLowerCase().localeCompare(b.name.toLowerCase())
         })
     }
 
