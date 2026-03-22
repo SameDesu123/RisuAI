@@ -107,6 +107,10 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
         return m
     })
 
+    const banCharRegexes = db.banCharacterset?.length > 0
+        ? db.banCharacterset.map(set => new RegExp(`\\p{Script=${set}}`, 'gu'))
+        : []
+
     for(let fallbackIndex=0;fallbackIndex<fallBackModels.length;fallbackIndex++){
         let trys = 0
         arg.formated = safeStructuredClone(originalFormated)
@@ -176,12 +180,9 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
                 }
             }
     
-            if(da.type === 'success' && db.banCharacterset?.length > 0){
+            if(da.type === 'success' && banCharRegexes.length > 0){
                 let failed = false
-                for(const set of db.banCharacterset){
-                    console.log(set)
-                    const checkRegex = new RegExp(`\\p{Script=${set}}`, 'gu')
-    
+                for(const checkRegex of banCharRegexes){
                     if(checkRegex.test(da.result)){
                         trys += 1
                         failed = true
