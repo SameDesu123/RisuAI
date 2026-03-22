@@ -17,7 +17,7 @@ const hubURL = 'https://sv.risuai.xyz';
 const openid = require('openid-client');
 
 let password = ''
-let knownPublicKeysHashes = []
+let knownPublicKeysHashes = new Set()
 
 const savePath = path.join(process.cwd(), "save")
 if(!existsSync(savePath)){
@@ -112,7 +112,7 @@ async function checkAuth(req, res, returnOnlyStatus = false){
 
         //check if public key is known
         const pubKeyHash = await hashJSON(jsonPayload.pub)
-        if(!knownPublicKeysHashes.includes(pubKeyHash)){
+        if(!knownPublicKeysHashes.has(pubKeyHash)){
             console.log('Unknown public key')
             if(returnOnlyStatus){
                 return false;
@@ -375,11 +375,11 @@ async function getSionywAccessToken() {
 
 
 async function hubProxyFunc(req, res) {
-    const excludedHeaders = [
+    const excludedHeaders = new Set([
         'content-encoding',
         'content-length',
         'transfer-encoding'
-    ];
+    ]);
 
     try {
         let externalURL = '';
@@ -424,7 +424,7 @@ async function hubProxyFunc(req, res) {
         
         for (const [key, value] of response.headers.entries()) {
             // Skip encoding-related headers to prevent double decoding
-            if (excludedHeaders.includes(key.toLowerCase())) {
+            if (excludedHeaders.has(key.toLowerCase())) {
                 continue;
             }
             res.setHeader(key, value);
@@ -442,7 +442,7 @@ async function hubProxyFunc(req, res) {
                 duplex: 'half'
             });
             for (const [key, value] of redirectResponse.headers.entries()) {
-                if (excludedHeaders.includes(key.toLowerCase())) {
+                if (excludedHeaders.has(key.toLowerCase())) {
                     continue;
                 }
                 res.setHeader(key, value);
@@ -552,7 +552,7 @@ app.post('/api/login', async (req, res) => {
         return;
     }
     if(req.body.password && req.body.password.trim() === password.trim()){
-        knownPublicKeysHashes.push(await hashJSON(req.body.publicKey))
+        knownPublicKeysHashes.add(await hashJSON(req.body.publicKey))
         res.send({status:'success'})
     }
     else{
@@ -922,7 +922,7 @@ function deleteByPath(obj, segments) {
 
 // Apply an array of JSON patch operations to an object (returns new object)
 function applyJsonPatch(obj, ops) {
-    obj = JSON.parse(JSON.stringify(obj)); // deep clone
+    obj = structuredClone(obj); // deep clone
     for (const op of ops) {
         const segments = op.path.split('/').filter(Boolean);
         if (op.op === 'replace' || op.op === 'add') {
