@@ -75,6 +75,9 @@
     let modelInfo = $derived(getModelInfo(DBState.db.aiModel))
     let subModelInfo = $derived(getModelInfo(DBState.db.subModel))
     let openRouterSearchQuery = $state("")
+    let openRouterSearchTerms = $derived(
+        openRouterSearchQuery.trim() === "" ? null : openRouterSearchQuery.trim().toLowerCase().split(/\s+/)
+    )
 </script>
 <h2 class="mb-2 text-2xl font-bold mt-2">{language.chatBot}</h2>
 
@@ -229,10 +232,9 @@
                     <OptionInput value="risu/free">Free Auto</OptionInput>
                     <OptionInput value="openrouter/auto">OpenRouter Auto</OptionInput>
                     {#each m.filter(model => {
-                        if (openRouterSearchQuery === "") return true;
-                        const searchTerms = openRouterSearchQuery.trim().toLowerCase().split(/\s+/);
+                        if (!openRouterSearchTerms) return true;
                         const modelText = (model.name + " " + model.id).toLowerCase();
-                        return searchTerms.every(term => modelText.includes(term));
+                        return openRouterSearchTerms.every(term => modelText.includes(term));
                     }) as model}
                         <OptionInput value={model.id}>{model.name}</OptionInput>
                     {/each}

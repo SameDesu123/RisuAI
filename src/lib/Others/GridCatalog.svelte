@@ -26,6 +26,7 @@
     }
 
     function formatChars(search:string, db:Database, trash = false){
+        const processedSearch = search.toLocaleLowerCase().replace(/ /g,"")
         let charas:{
             image:string
             index:number
@@ -42,7 +43,7 @@
             if(!c.trashTime && trash){
                 continue
             }
-            if(c.name.replace(/ /g,"").toLocaleLowerCase().includes(search.toLocaleLowerCase().replace(/ /g,""))){
+            if(c.name.replace(/ /g,"").toLocaleLowerCase().includes(processedSearch)){
                 charas.push({
                     image: c.image,
                     index: i,

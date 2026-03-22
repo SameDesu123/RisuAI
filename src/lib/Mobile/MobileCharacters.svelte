@@ -13,6 +13,8 @@
 
     const agoFormatter = new Intl.RelativeTimeFormat(navigator.languages, { style: 'short' });
 
+    let lowerSearch = $derived($MobileSearch.toLocaleLowerCase());
+
     let {gridMode = false, endGrid = () => {}}: Props = $props();
 
     function makeAgoText(time:number){
@@ -64,7 +66,7 @@
 </script>
 <div class="flex flex-col items-center w-full overflow-y-auto h-full">
     {#each sortChar(DBState.db.characters) as char, i}
-        {#if char.name.toLocaleLowerCase().includes($MobileSearch.toLocaleLowerCase())}
+        {#if char.name.toLocaleLowerCase().includes(lowerSearch)}
             <button class="flex p-2 border-t-darkborderc gap-2 w-full" class:border-t={i !== 0} onclick={() => {
                 changeChar(char.i)
                 endGrid()

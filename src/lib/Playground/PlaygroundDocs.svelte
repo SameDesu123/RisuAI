@@ -25,9 +25,11 @@
         }
     })
 
+    let lowerSearchTerm = $derived(searchTerm.toLowerCase());
+
     let searchedDoc = $derived(doc.filter(item => {
-        return item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.alias.some(alias => alias.toLowerCase().includes(searchTerm.toLowerCase()));
+        return item.name.toLowerCase().includes(lowerSearchTerm) ||
+            item.alias.some(alias => alias.toLowerCase().includes(lowerSearchTerm));
     }))
 </script>
 
