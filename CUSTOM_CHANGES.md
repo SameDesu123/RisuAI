@@ -167,7 +167,13 @@ NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
 - **Root Cause**: 타입스크립트의 `crypto.subtle.digest` 인자 타입 호환 문제(`Uint8Array<ArrayBufferLike>` -> `BufferSource`).
 - **Fix**: 타입 에러 방지를 위해 명시적으로 `as BufferSource` 타입 단언 추가.
 
-### 17. fix(auth): dynamically generate risu-auth token in fetchWithProxy and fetchNative
+### 17. fix: apply additional parameters to OpenAIResponseAPI format
+- **File**: `src/ts/process/request/openAI/requests.ts`
+- **Root Cause**: OpenAI Response API 포맷(`requestOpenAIResponseAPI`) 사용 시 `reverse_proxy` 및 `xcustom:::` 모델의 추가 파라미터(`additionalParams`, `customModels[].params`)가 적용되지 않아 커스텀 헤더나 바디 파라미터를 설정할 수 없음.
+- **Fix**: `requestOpenAIResponseAPI` 함수에 기존 `requestOpenAI`와 동일한 추가 파라미터 처리 로직 추가. `header::` 접두사, `json::` 접두사, `{{none}}` 삭제, 타입 추론(boolean/null/number/string) 등 모든 케이스 지원.
+- **Conflict Reapply Guide**: `requestOpenAIResponseAPI` 함수 내 `headers["X-Proxy-Risu"]` 설정 직후, `previewBody` 체크 전에 추가 파라미터 적용 블록 삽입.
+
+### 18. fix(auth): dynamically generate risu-auth token in fetchWithProxy and fetchNative
 - **File**: `src/ts/globalApi.svelte.ts`
 - **Root Cause**: `fetchWithProxy`와 `fetchNative`가 `localStorage.getItem('risuauth')`로 인증 토큰을 읽지만, 이 키는 코드베이스 어디에서도 설정되지 않음. `NodeStorage.createAuth()`가 동적으로 JWT를 생성하지만 localStorage에 저장하지 않아, Node.js 서버 사용자의 `/proxy2` 프록시 요청이 항상 `{"error":"No auth header"}` 400 에러로 실패.
 - **Fix**: `forageStorage.realStorage`를 통해 `NodeStorage.createAuth()`를 호출하는 `getNodeAuth()` 헬퍼 함수 추가. `fetchWithProxy`와 `fetchNative`의 localStorage 읽기를 동적 JWT 생성으로 교체.
