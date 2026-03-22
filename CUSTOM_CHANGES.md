@@ -193,22 +193,98 @@ NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
   ```
 - **Conflict Reapply Guide**: `forageStorage` 선언 직후에 `getNodeAuth()` 함수 추가. `fetchWithProxy` 내 `localStorage.getItem('risuauth')` → `await getNodeAuth()`, `fetchNative` 내 인라인 spread → `const nodeAuth = await getNodeAuth()` + `...authHeaders`로 교체.
 
+### 19. perf: 코드베이스 전반 성능 최적화 (32 commits)
+
+전체 코드베이스를 스캔하여 반복적인 비효율 패턴을 최적화. 각 변경은 독립 커밋으로 분리됨.
+
+#### 주요 최적화 패턴
+
+**1. Array.includes() → Set.has() (O(n) → O(1) 조회)**
+- `src/ts/process/scripts.ts` — flag 중복 제거 Set
+- `src/ts/storage/accountStorage.ts` — seenWarnings Set
+- `src/ts/process/triggers.ts` — allowlist Set들, 역방향 순회, 단일패스 루프
+- `src/ts/globalApi.svelte.ts` — 채팅명 유일성 검사 Set
+- `src/ts/process/stringlize.ts` — 청크 중복제거 Set
+- `server/node/server.cjs` — knownPublicKeysHashes, excludedHeaders Set
+- `src/ts/plugins/pluginSafeClass.ts` — tagWhitelist, allowedEvents Set
+- `src/ts/plugins/apiV3/v3.svelte.ts` — authorizationHeaders Set
+- `src/ts/sync/multiuser.ts` — excludeAssets Set
+- `src/ts/characterCards.ts` — tag 중복제거 Set
+- `src/ts/util.ts` — tag 제외 검색 Set
+- `src/ts/process/memory/hypav3.ts` — selectedSummarySet (2곳)
+- `src/ts/process/templates/templateCheck.ts` — range resolution Set
+- `src/ts/process/lorebook.svelte.ts` — activatedIndexSet
+- `src/ts/parser/parser.svelte.ts` — imageCBS, videoExtensions, blobSrcNodeNames Set
+- `src/ts/translator/translator.ts` — BLACKLIST_NODES Set
+- `src/lib/Setting/Pages/Module/ModuleSettings.svelte` — moduleIntegrationSet
+
+**2. Map 기반 O(1) 조회 인덱스**
+- `src/ts/drive/drive.ts` — fileNames Set + fileMap for O(1) 파일 조회
+- `src/ts/model/modellist.ts` — lazy Map 인덱스 (getModelInfo O(1))
+- `src/ts/process/memory/hypav3.ts` — summaryIndexMap for 정렬 비교자
+
+**3. 불필요한 객체 복사/비교 최적화**
+- `src/ts/cbs.ts` — JSON.parse/stringify → structuredClone
+- `src/ts/storage/jsonPatch.ts` — JSON.stringify 비교 → key-by-key 비교
+- `server/node/server.cjs` — structuredClone 사용
+- `src/ts/process/transformers.ts` — hasOwnProperty.call
+
+**4. 정규식/문자열 최적화**
+- `src/ts/process/request/request.ts` — 반복 루프 전 정규식 사전 컴파일
+- `src/ts/process/request/google.ts` — 단일패스 thought/content 분리
+- `src/ts/process/stableDiff.ts` — 6단계 replaceAll → 단일 정규식
+- `src/ts/parser/parser.svelte.ts` — replaceAll('\n','').replaceAll('\t','') → /[\n\t]/g 합침
+- `src/ts/process/memory/hypamemoryv2.ts`, `hypamemory.ts` — Object.keys().includes() → `in` 연산자
+
+**5. 캐시/바운딩**
+- `src/ts/process/index.svelte.ts` — 무한 객체 캐시 → 50엔트리 바운디드 Map (FIFO)
+- `src/ts/gui/branches.ts` — 재귀 slice(1) → index 파라미터
+- `src/ts/process/memory/supaMemory.ts` — 메모리 미변경 시 불필요한 split 회피
+
+**6. UI 컴포넌트 최적화**
+- `src/lib/ChatScreens/Chat.svelte` — CSS getPropertyValue 결과 캐싱 (17회 → 6회 호출)
+- `src/lib/ChatScreens/ChatBody.svelte` — 이미지 루프 밖으로 에셋 계산 호이스팅 + Map
+- `src/lib/Others/GridCatalog.svelte` — 검색어 toLowerCase 루프 밖으로 호이스팅
+- `src/lib/Mobile/MobileCharacters.svelte` — $derived로 검색어 캐싱
+- `src/lib/Playground/PlaygroundDocs.svelte` — 검색어 $derived 캐싱
+- `src/lib/Setting/Pages/BotSettings.svelte` — 검색어 $derived 사전 분리
+- `src/lib/Setting/Pages/Module/ModuleChatMenu.svelte`, `ModuleSettings.svelte` — sortModules 내 toLowerCase 캐싱
+
+**7. 디버그 로그 제거**
+- `src/ts/process/stringlize.ts` — 4개 console.log 제거
+- `src/ts/parser/parser.svelte.ts` — 4개 console.log 제거
+- `src/ts/process/stableDiff.ts` — 9개 console.log 제거
+- `src/ts/translator/translator.ts` — 5개 console.log 제거
+- `src/lib/ChatScreens/ChatBody.svelte` — 2개 console.log 제거
+
+#### Conflict Reapply Guide
+성능 최적화는 대부분 기존 코드의 데이터 구조 교체이므로, upstream 변경 시:
+1. `Array` → `Set` 변환: 해당 배열이 upstream에서 변경되었으면, 새 값으로 Set을 다시 생성
+2. `.includes()` → `.has()`: upstream에서 새 `.includes()` 호출이 추가되었으면 `.has()`로 교체
+3. 캐시 변수: upstream에서 해당 함수가 리팩토링되었으면, 새 구조에 맞게 캐시 재배치
+4. console.log 제거: upstream에서 새 디버그 로그가 추가될 수 있으므로, 빌드 후 확인 권장
+
 ## Conflict-Prone Files
 
 향후 `upstream/main`과 병합 시 충돌 가능성이 높은 파일:
 
 | File | Reason |
 |------|--------|
-| `server/node/server.cjs` | keepalive, stream 관련 커스텀 로직 + diff save 시스템 |
-| `src/ts/process/request/google.ts` | SSE parser 구조 변경 (parseLines/flush) |
+| `server/node/server.cjs` | keepalive, stream 관련 커스텀 로직 + diff save 시스템 + Set 최적화 |
+| `src/ts/process/request/google.ts` | SSE parser 구조 변경 (parseLines/flush) + 단일패스 최적화 |
 | `src/ts/process/request/openAI/requests.ts` | SSE parser 구조 변경 (parseLines/flush) |
 | `src/ts/plugins/plugins.svelte.ts` | API v2.0 지원 추가 |
-| `src/ts/process/index.svelte.ts` | stream truncation fix + final chunk persistence |
+| `src/ts/process/index.svelte.ts` | stream truncation fix + final chunk persistence + bounded Map cache |
 | `src/ts/process/request/anthropic.ts` | SSE parser deferred event fix |
 | `src/ts/storage/risuSave.ts` | RisuSaveEncoder 변경 추적 및 캐싱 로직 추가 |
 | `src/ts/storage/nodeStorage.ts` | diff save transport 및 예외 처리 로직 추가 |
-| `src/ts/globalApi.svelte.ts` | 저장 루프 diff 분기 + getNodeAuth 헬퍼 |
+| `src/ts/globalApi.svelte.ts` | 저장 루프 diff 분기 + getNodeAuth 헬퍼 + Set 최적화 |
 | `src/ts/bootstrap.ts` | 블록 단위 로딩 로직 및 에러 처리 경로 추가 |
+| `src/ts/process/triggers.ts` | 다수 Set 변환 및 루프 최적화 |
+| `src/ts/parser/parser.svelte.ts` | Set 변환 + console.log 제거 |
+| `src/ts/model/modellist.ts` | lazy Map 인덱스 추가 |
+| `src/ts/process/memory/hypav3.ts` | selectedSummarySet + summaryIndexMap |
+| `src/ts/plugins/pluginSafeClass.ts` | tagWhitelist, allowedEvents Set 변환 |
 
 ## How to Sync with Upstream
 
