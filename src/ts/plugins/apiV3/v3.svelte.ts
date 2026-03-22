@@ -228,7 +228,7 @@ class SafeElement {
         const realOptions = typeof options === 'boolean' ? { capture: options } : options || {};
 
         //allowed with unlimited
-        const allowedDocumentEventListeners = [
+        const allowedDocumentEventListeners = new Set([
             'click',
             'dblclick',
             'contextmenu',
@@ -247,15 +247,15 @@ class SafeElement {
             'pointerup',
             'scroll',
             'scrollend'
-        ]
+        ])
 
         //allowed, but it has fingerprinting issues,
         //so it will be delayed random ms.
-        const allowedDelayedEventListeners = [
+        const allowedDelayedEventListeners = new Set([
             'keydown',
             'keyup',
             'keypress'
-        ]
+        ])
 
         const id = v4()
 
@@ -293,7 +293,7 @@ class SafeElement {
 
         }
 
-        if(allowedDocumentEventListeners.includes(type)){
+        if(allowedDocumentEventListeners.has(type)){
             const modifiedListener = (event: any) => {
                 listener(trimEvent(event))
             }
@@ -301,7 +301,7 @@ class SafeElement {
             document.addEventListener(type, modifiedListener, realOptions)
             return id;
         }
-        else if(allowedDelayedEventListeners.includes(type)){
+        else if(allowedDelayedEventListeners.has(type)){
             const modifiedListener = (event: any) => {
                 let delay = 0;
                 try {
@@ -340,7 +340,7 @@ class SafeDocument extends SafeElement {
         super(document.documentElement);
     }
     createElement(tagName: string): SafeElement {
-        if(!tagWhitelist.includes(tagName.toLowerCase())) {
+        if(!tagWhitelist.has(tagName.toLowerCase())) {
             console.warn(`Creation of <${tagName}> elements is restricted. Creating a <div> instead.`);
             tagName = 'div';
         }
@@ -588,11 +588,11 @@ const urlBlacklist = [
     'sionyw.com',
 ]
 
-const authorizationHeaders = [
+const authorizationHeaders = new Set([
     'x-api-key',
     'authorization',
     'proxy-authorization',
-]
+])
 
 const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
 
@@ -611,7 +611,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             //scan headers
             const headers = options?.headers || {};
             for(const headerName in headers){
-                if(authorizationHeaders.includes(headerName.toLowerCase())){
+                if(authorizationHeaders.has(headerName.toLowerCase())){
                     console.warn(`Request contains potentially sensitive header '${headerName}'. handling of such headers may be changed to only work with nativeFetch.`);
                 }
             }
@@ -627,7 +627,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             //scan headers
             const headers = options?.headers || {};
             for(const headerName in headers){
-                if(authorizationHeaders.includes(headerName.toLowerCase())){
+                if(authorizationHeaders.has(headerName.toLowerCase())){
                     console.warn(`Request contains potentially sensitive header '${headerName}'. handling of such headers may be changed to use server-side approch with write-only api access in the future for better security.`);
                 }
             }

@@ -41,7 +41,11 @@ export class SafeLocalStorage {
     }
 
     get length(): number {
-        return this.keys().length;
+        let count = 0
+        for (let i = 0; i < localStorage.length; i++) {
+            if (localStorage.key(i)?.startsWith('safe_plugin_')) count++
+        }
+        return count
     }
 
 
@@ -99,7 +103,7 @@ export const SafeIdbFactory = {
     }
 }
 
-export const tagWhitelist = [
+export const tagWhitelist = new Set([
     'a',
     'abbr',
     'acronym',
@@ -266,7 +270,7 @@ export const tagWhitelist = [
     'tspan',
     'view',
     'vkern',
-];
+]);
 
 const restrictElement = <T extends Node>(element: T): T => {
     //since we already trimed out, just return the element
@@ -276,6 +280,8 @@ const restrictElement = <T extends Node>(element: T): T => {
 const restrictNodeList = <T extends Element, Q extends NodeListOf<T>|HTMLCollectionOf<T> >(nodeList: Q): Q => {
     return nodeList;
 }
+
+const allowedDocumentEvents = new Set(['click', 'keydown', 'keyup', 'input', 'change', 'submit', 'focus', 'blur', 'mouseover', 'mouseout', 'mousemove', 'mousedown', 'mouseup']);
 
 export const SafeDocument = {
     body: document.body,
@@ -290,7 +296,7 @@ export const SafeDocument = {
     createElement: (tagName: string): HTMLElement => {
         console.log('Creating element:', tagName);
         tagName = tagName.toLowerCase().trim();
-        if (!tagWhitelist.includes(tagName.toLowerCase())) {
+        if (!tagWhitelist.has(tagName.toLowerCase())) {
             throw new Error(`Creation of <${tagName}> elements is not allowed in plugin context.`);
         }
         if(tagName.toLowerCase() === 'a'){
@@ -308,7 +314,7 @@ export const SafeDocument = {
     createElementNS: (namespaceURI: string, qualifiedName: string): Element => {
         console.log('Creating namespaced element:', qualifiedName);
         qualifiedName = qualifiedName.toLowerCase().trim();
-        if (!tagWhitelist.includes(qualifiedName.toLowerCase())) {
+        if (!tagWhitelist.has(qualifiedName.toLowerCase())) {
             throw new Error(`Creation of <${qualifiedName}> elements is not allowed in plugin context.`);
         }
         if(qualifiedName.toLowerCase() === 'a'){
@@ -399,16 +405,14 @@ export const SafeDocument = {
         return document.hasFocus();
     },
     addEventListener: (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void => {
-        const allowedEvents = ['click', 'keydown', 'keyup', 'input', 'change', 'submit', 'focus', 'blur', 'mouseover', 'mouseout', 'mousemove', 'mousedown', 'mouseup'];
-        if(!allowedEvents.includes(type)) {
+        if(!allowedDocumentEvents.has(type)) {
             console.warn(`Event type '${type}' is not allowed in plugin context.`);
             return;
         }
         document.addEventListener(type, listener, options);
     },
     removeEventListener: (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions): void => {
-        const allowedEvents = ['click', 'keydown', 'keyup', 'input', 'change', 'submit', 'focus', 'blur', 'mouseover', 'mouseout', 'mousemove', 'mousedown', 'mouseup'];
-        if(!allowedEvents.includes(type)) {
+        if(!allowedDocumentEvents.has(type)) {
             console.warn(`Event type '${type}' is not allowed in plugin context.`);
             return;
         }
