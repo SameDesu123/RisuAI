@@ -585,7 +585,7 @@ export async function registerModelDynamic(){
                 }
 
                 const id = model.name.startsWith('models/') ? model.name.replace('models/', '') : model.name
-                const exists = LLMModels.find(m => m.id === id || m.internalID === id)
+                const exists = getLLMModelMap().get(id) || getLLMModelMap().get('dynamic_google_' + id)
 
                 if(!exists){
                     LLMModels.push({
@@ -627,7 +627,7 @@ export async function registerModelDynamic(){
             }[] = json?.data || []
 
             for(let model of models){
-                const exists = LLMModels.find(m => m.id === model.id || m.internalID === model.id)
+                const exists = getLLMModelMap().get(model.id) || getLLMModelMap().get(`dynamic_anthropic_${model.id}`)
                 if(!exists){
                     LLMModels.push({
                         name: model.display_name || model.id,
@@ -661,6 +661,21 @@ export async function registerModelDynamic(){
 //testing purpose only, not used in production
 globalThis.registerModelDynamic = registerModelDynamic
 
+let _llmModelMapVersion = 0
+let _llmModelMapLastSize = 0
+const _llmModelMap = new Map<string, LLMModel>()
+
+function getLLMModelMap(): Map<string, LLMModel> {
+    if (LLMModels.length !== _llmModelMapLastSize) {
+        _llmModelMap.clear()
+        for (const model of LLMModels) {
+            _llmModelMap.set(model.id, model)
+        }
+        _llmModelMapLastSize = LLMModels.length
+    }
+    return _llmModelMap
+}
+
 export function getModelInfo(id?: string | null): LLMModel{
 
     const db = getDatabase()
@@ -678,7 +693,7 @@ export function getModelInfo(id?: string | null): LLMModel{
             tokenizer: LLMTokenizer.Unknown
         }
     }
-    const found:LLMModel = safeStructuredClone(LLMModels.find(model => model.id === id))
+    const found:LLMModel = safeStructuredClone(getLLMModelMap().get(id))
     
     if(found){
         if(db.enableCustomFlags){
