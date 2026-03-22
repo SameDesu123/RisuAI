@@ -837,7 +837,6 @@ export function addMetadataToElement(data:string, modelShortName:string){
         }
     }
 
-    console.log('Encoded metadata:', encodedMetaCode.length, 'characters')
     let d =  data.replace(/\<p\>/g, (v) => {
         return '<p>' + encodedMetaCode
     })
@@ -1698,7 +1697,7 @@ export function risuChatParser(da:string, arg:{
                             break
                         }
                         if(blockType.type === 'function'){
-                            console.log(matchResult)
+                            functions.set(blockType.funcArg[0], {
                                 data: matchResult,
                                 arg: blockType.funcArg.slice(1)
                             })
@@ -1728,7 +1727,7 @@ export function risuChatParser(da:string, arg:{
                     const argData = dat.split('::').slice(1)
                     const funcName = argData[0]
                     const func = functions.get(funcName)
-                    console.log(func)
+                    if(func){
                         let data = func.data
                         for(let i = 0;i < argData.length;i++){
                             data = data.replaceAll(`{{arg::${i}}}`, argData[i])
