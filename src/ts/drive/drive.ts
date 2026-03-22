@@ -122,9 +122,7 @@ async function backupDrive(ACCESS_TOKEN:string) {
 
     const files:DriveFile[] = await getFilesInFolder(ACCESS_TOKEN)
 
-    const fileNames = files.map((d) => {
-        return d.name
-    })
+    const fileNames = new Set(files.map((d) => d.name))
 
     if(isTauri){
         const assets = await readDir('assets', {baseDir: BaseDirectory.AppData})
@@ -140,7 +138,7 @@ async function backupDrive(ACCESS_TOKEN:string) {
                 continue
             }
             const formatedKey = newFormatKeys(key)
-            if(!fileNames.includes(formatedKey)){
+            if(!fileNames.has(formatedKey)){
                 await createFileInFolder(ACCESS_TOKEN, formatedKey, await readFile('assets/' + asset.name, {baseDir: BaseDirectory.AppData}))
             }
         }
@@ -158,7 +156,7 @@ async function backupDrive(ACCESS_TOKEN:string) {
                 continue
             }
             const formatedKey = newFormatKeys(key)
-            if(!fileNames.includes(formatedKey)){
+            if(!fileNames.has(formatedKey)){
                 await createFileInFolder(ACCESS_TOKEN, formatedKey, await forageStorage.getItem(key) as unknown as Uint8Array)
             }
         }
@@ -210,9 +208,8 @@ async function loadDrive(ACCESS_TOKEN:string, mode: 'backup'|'sync'):Promise<voi
             return foragekeys.includes('assets/' + images)
         }
     }
-    const fileNames = files.map((d) => {
-        return d.name
-    })
+    const fileNames = new Set(files.map((d) => d.name))
+    const fileMap = new Map(files.map((f) => [f.name, f]))
 
 
     let dbs:[DriveFile,number][] = []
@@ -306,20 +303,17 @@ async function loadDrive(ACCESS_TOKEN:string, mode: 'backup'|'sync'):Promise<voi
                 }
                 else{
                     if(formatedImage.length >= 7){
-                        if(fileNames.includes(formatedImage)){
-                            for(const file of files){
-                                if(file.name === formatedImage){
-                                    const fData = await getFileData(ACCESS_TOKEN, file.id)
-                                    if(isTauri){
-                                        await writeFile(`assets/` + images, fData ,{baseDir: BaseDirectory.AppData})
-        
-                                    }
-                                    else{
-                                        await forageStorage.setItem('assets/' + images, fData)
-                                    }
-                                    tries = 3
-                                }
+                        const file = fileMap.get(formatedImage)
+                        if(file){
+                            const fData = await getFileData(ACCESS_TOKEN, file.id)
+                            if(isTauri){
+                                await writeFile(`assets/` + images, fData ,{baseDir: BaseDirectory.AppData})
+    
                             }
+                            else{
+                                await forageStorage.setItem('assets/' + images, fData)
+                            }
+                            tries = 3
                         }
                         else{
                             alertStore.set({
