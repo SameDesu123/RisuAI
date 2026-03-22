@@ -367,8 +367,8 @@ export async function supaMemory(
                     supaMemory = result
                     currentTokens -= await tokenize(oldSupaMemory)
                     currentTokens += await tokenize(supaMemory)
+                    SupaMemoryList = supaMemory.split('\n\n').filter((value) => value.length > 1)
                 }
-                SupaMemoryList = supaMemory.split('\n\n').filter((value) => value.length > 1)
                 SupaMemoryList.push(result.replace(/\n+/g,'\n'))
                 currentTokens += tokenz
                 supaMemory = SupaMemoryList.join('\n\n')
