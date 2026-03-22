@@ -448,32 +448,40 @@
                     await ParseMarkdown(msgDisplay, getCurrentCharacter(), 'normal', idx, getCbsCondition())
                 , 'text/html')
                 
+                // Cache CSS property values to avoid repeated DOM reads
+                const fontColorQuote1 = root.style.getPropertyValue('--FontColorQuote1')
+                const fontColorQuote2 = root.style.getPropertyValue('--FontColorQuote2')
+                const fontColorStandard = root.style.getPropertyValue('--FontColorStandard')
+                const fontColorItalic = root.style.getPropertyValue('--FontColorItalic')
+                const fontColorBold = root.style.getPropertyValue('--FontColorBold')
+                const fontColorItalicBold = root.style.getPropertyValue('--FontColorItalicBold')
+
                 doc.querySelectorAll('mark').forEach((el) => {
                     const d = el.getAttribute('risu-mark')
                     if(d === 'quote1' || d === 'quote2'){
                         const newEle = document.createElement('div')
                         newEle.textContent = el.textContent
                         newEle.setAttribute('style', `background: transparent; color: ${
-                            root.style.getPropertyValue('--FontColorQuote' + d.slice(-1))
+                            d === 'quote1' ? fontColorQuote1 : fontColorQuote2
                         };`)
                         el.replaceWith(newEle)
                         return
                     }
                 })
                 doc.querySelectorAll('p').forEach((el) => {
-                    el.setAttribute('style', `color: ${root.style.getPropertyValue('--FontColorStandard')};`)
+                    el.setAttribute('style', `color: ${fontColorStandard};`)
                 })
                 doc.querySelectorAll('em').forEach((el) => {
-                    el.setAttribute('style', `font-style: italic; color: ${root.style.getPropertyValue('--FontColorItalic')};`)
+                    el.setAttribute('style', `font-style: italic; color: ${fontColorItalic};`)
                 })
                 doc.querySelectorAll('strong').forEach((el) => {
-                    el.setAttribute('style', `font-weight: bold; color: ${root.style.getPropertyValue('--FontColorBold')};`)
+                    el.setAttribute('style', `font-weight: bold; color: ${fontColorBold};`)
                 })
                 doc.querySelectorAll('em strong').forEach((el) => {
-                    el.setAttribute('style', `font-weight: bold; font-style: italic; color: ${root.style.getPropertyValue('--FontColorItalicBold')};`)
+                    el.setAttribute('style', `font-weight: bold; font-style: italic; color: ${fontColorItalicBold};`)
                 })
                 doc.querySelectorAll('strong em').forEach((el) => {
-                    el.setAttribute('style', `font-weight: bold; font-style: italic; color: ${root.style.getPropertyValue('--FontColorItalicBold')};`)
+                    el.setAttribute('style', `font-weight: bold; font-style: italic; color: ${fontColorItalicBold};`)
                 })
                 
                 const imgs = doc.querySelectorAll('img')
@@ -624,18 +632,25 @@
                     }
                 }
                 
-                const html = `<div style="font-family: 'Segoe UI', Roboto, Arial, sans-serif; color: ${root.style.getPropertyValue('--risu-theme-textcolor')}; line-height: 1.6; max-width: 600px; margin: 1rem auto; background: ${root.style.getPropertyValue('--risu-theme-bgcolor')}; border-radius: 12px; box-shadow: 0px 4px 12px rgba(0,0,0,0.15); overflow: hidden;">
+                // Cache theme colors for HTML template
+                const themeTextColor = root.style.getPropertyValue('--risu-theme-textcolor')
+                const themeBgColor = root.style.getPropertyValue('--risu-theme-bgcolor')
+                const themeDarkBorderC = root.style.getPropertyValue('--risu-theme-darkborderc')
+                const themeDarkBg = root.style.getPropertyValue('--risu-theme-darkbg')
+                const themeTextColor2 = root.style.getPropertyValue('--risu-theme-textcolor2')
+
+                const html = `<div style="font-family: 'Segoe UI', Roboto, Arial, sans-serif; color: ${themeTextColor}; line-height: 1.6; max-width: 600px; margin: 1rem auto; background: ${themeBgColor}; border-radius: 12px; box-shadow: 0px 4px 12px rgba(0,0,0,0.15); overflow: hidden;">
 <div style="padding: 20px;">
 <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 1rem; text-align: center;">
-    ${finalHasValidImage ? `<img style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid ${root.style.getPropertyValue('--risu-theme-darkborderc')}; margin-bottom: 0.75rem; object-fit: cover;" src="${finalIconDataUrl}" alt="profile">` : ''}
-    <h3 style="color: ${root.style.getPropertyValue('--risu-theme-textcolor')}; font-weight: 600; font-size: 1.5rem; margin: 0 0 0.5rem 0;">${displayName}</h3>
-    ${!isUserMessage ? `<span style="display: inline-block; border-radius: 16px; font-size: 0.8rem; padding: 0.25rem 0.75rem; background: ${root.style.getPropertyValue('--risu-theme-darkbg')}; color: ${root.style.getPropertyValue('--risu-theme-textcolor')}; border: 1px solid ${root.style.getPropertyValue('--risu-theme-darkborderc')};">${modelInfo}</span>` : ''}
+    ${finalHasValidImage ? `<img style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid ${themeDarkBorderC}; margin-bottom: 0.75rem; object-fit: cover;" src="${finalIconDataUrl}" alt="profile">` : ''}
+    <h3 style="color: ${themeTextColor}; font-weight: 600; font-size: 1.5rem; margin: 0 0 0.5rem 0;">${displayName}</h3>
+    ${!isUserMessage ? `<span style="display: inline-block; border-radius: 16px; font-size: 0.8rem; padding: 0.25rem 0.75rem; background: ${themeDarkBg}; color: ${themeTextColor}; border: 1px solid ${themeDarkBorderC};">${modelInfo}</span>` : ''}
 </div>
-<div style="border-top: 1px solid ${root.style.getPropertyValue('--risu-theme-darkborderc')}; padding-top: 1rem;">
+<div style="border-top: 1px solid ${themeDarkBorderC}; padding-top: 1rem;">
     ${doc.body.innerHTML}
 </div>
-<div style="text-align: center; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid ${root.style.getPropertyValue('--risu-theme-darkborderc')};">
-    <span style="font-size: 0.75rem; color: ${root.style.getPropertyValue('--risu-theme-textcolor2')}; opacity: 0.7;">From Risuai</span>
+<div style="text-align: center; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid ${themeDarkBorderC};">
+    <span style="font-size: 0.75rem; color: ${themeTextColor2}; opacity: 0.7;">From Risuai</span>
 </div>
 </div>
 </div>`
