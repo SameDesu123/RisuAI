@@ -1034,6 +1034,9 @@ export const requestAllowList = [
     ...safeSubset
 ]
 
+const displayAllowSet = new Set(displayAllowList)
+const requestAllowSet = new Set(requestAllowList)
+
 export async function runTrigger(char:character,mode:triggerMode, arg:{
     chat: Chat,
     recursiveCount?: number
@@ -1275,9 +1278,15 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
             else if(condition.type === 'exists'){
                 const conditionValue = risuChatParser(condition.value,{chara:char})
                 const val = risuChatParser(conditionValue,{chara:char})
-                let da =  chat.message.slice(0-condition.depth).map((v)=>v.data).join(' ')
+                const msgs = chat.message
+                const start = Math.max(0, msgs.length - condition.depth)
+                let da = ''
+                for (let i = start; i < msgs.length; i++) {
+                    if (da) da += ' '
+                    da += msgs[i].data
+                }
                 if(condition.type2 === 'strict'){
-                    pass = da.split(' ').includes(val)
+                    pass = (` ${da} `).includes(` ${val} `)
                 }
                 else if(condition.type2 === 'loose'){
                     pass = da.toLowerCase().includes(val.toLowerCase())
@@ -1296,10 +1305,10 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
 
         for(let index = 0; index < trigger.effect.length; index++){
             const effect = trigger.effect[index]
-            if(mode === 'display' && !displayAllowList.includes(effect.type)){
+            if(mode === 'display' && !displayAllowSet.has(effect.type)){
                 continue
             }
-            if(mode === 'request' && !requestAllowList.includes(effect.type)){
+            if(mode === 'request' && !requestAllowSet.has(effect.type)){
                 continue
             }
             
@@ -2028,9 +2037,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     let source = effect.sourceType === 'value' ? risuChatParser(effect.source,{chara:char}) : getVar(risuChatParser(effect.source,{chara:char}))
                     let index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
                     let value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    const source2 = [...source]
-                    source2[index] = value
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), source2.join(''))
+                    setVar(risuChatParser(effect.outputVar, {chara:char}), source.slice(0, index) + value + source.slice(index + 1))
                     break
                 }
                 case 'v2SplitString':{
@@ -2271,12 +2278,18 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     break
                 }
                 case 'v2GetLastUserMessage':{
-                    let lastUserMessage = chat.message.slice().reverse().find((v) => v.role === 'user')
+                    let lastUserMessage: typeof chat.message[0] | undefined
+                    for (let i = chat.message.length - 1; i >= 0; i--) {
+                        if (chat.message[i].role === 'user') { lastUserMessage = chat.message[i]; break }
+                    }
                     setVar(risuChatParser(effect.outputVar, {chara:char}), lastUserMessage?.data ?? 'null')
                     break
                 }
                 case 'v2GetLastCharMessage':{
-                    let lastCharMessage = chat.message.slice().reverse().find((v) => v.role === 'char')
+                    let lastCharMessage: typeof chat.message[0] | undefined
+                    for (let i = chat.message.length - 1; i >= 0; i--) {
+                        if (chat.message[i].role === 'char') { lastCharMessage = chat.message[i]; break }
+                    }
                     setVar(risuChatParser(effect.outputVar, {chara:char}), lastCharMessage?.data ?? 'null')
                     break
                 }
@@ -2416,9 +2429,15 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                         break
                     }
                     let pass = false
-                    let da =  chat.message.slice(0-depth).map((v)=>v.data).join(' ')
+                    const msgs = chat.message
+                    const start = Math.max(0, msgs.length - depth)
+                    let da = ''
+                    for (let i = start; i < msgs.length; i++) {
+                        if (da) da += ' '
+                        da += msgs[i].data
+                    }
                     if(condition === 'strict'){
-                        pass = da.split(' ').includes(value)
+                        pass = (` ${da} `).includes(` ${value} `)
                     }
                     else if(condition === 'loose'){
                         pass = da.toLowerCase().includes(value.toLowerCase())
@@ -2436,9 +2455,10 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                 }
                 case 'v2GetAllLorebooks':{
                     char.globalLore = char.globalLore ?? []
-                    const allPrompts = char.globalLore
-                        .filter(lore => lore && lore.content !== undefined)
-                        .map(lore => lore.content)
+                    const allPrompts: string[] = []
+                    for (const lore of char.globalLore) {
+                        if (lore && lore.content !== undefined) allPrompts.push(lore.content)
+                    }
                     setVar(risuChatParser(effect.outputVar, {chara:char}), JSON.stringify(allPrompts))
                     break
                 }
@@ -2446,14 +2466,13 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     char.globalLore = char.globalLore ?? []
                     const name = effect.nameType === 'value' ? risuChatParser(effect.name,{chara:char}) : getVar(risuChatParser(effect.name,{chara:char}))
                     const regex = new RegExp(name, 'i')
-                    const matchingIndices = char.globalLore
-                        .map((lore, index) => {
-                            if(lore && lore.comment !== undefined && regex.test(lore.comment)){
-                                return index
-                            }
-                            return -1
-                        })
-                        .filter(index => index !== -1)
+                    const matchingIndices: number[] = []
+                    for (let idx = 0; idx < char.globalLore.length; idx++) {
+                        const lore = char.globalLore[idx]
+                        if (lore && lore.comment !== undefined && regex.test(lore.comment)) {
+                            matchingIndices.push(idx)
+                        }
+                    }
                     setVar(risuChatParser(effect.outputVar, {chara:char}), JSON.stringify(matchingIndices))
                     break
                 }
