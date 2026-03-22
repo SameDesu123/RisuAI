@@ -63,7 +63,6 @@ export async function stableDiff(currentChar:character,prompt:string){
 
 export async function generateAIImage(genPrompt:string, currentChar:character, neg:string, returnSdData:string):Promise<string|false>{
     const db = getDatabase()
-    console.log(db.sdProvider)
     if(db.sdProvider === 'webui'){
 
 
@@ -102,7 +101,6 @@ export async function generateAIImage(genPrompt:string, currentChar:character, n
             else if(da.ok){
                 let charemotions = get(CharEmotion)
                 const img = `data:image/png;base64,${da.data.images[0]}`
-                console.log(img)
                 const emos:[string, string,number][] = [[img, img, Date.now()]]
                 charemotions[currentChar.chaId] = emos
                 CharEmotion.set(charemotions)
@@ -344,13 +342,11 @@ export async function generateAIImage(genPrompt:string, currentChar:character, n
                 reqlist.body.parameters.noise = db.NAIImgConfig.noise || 0;
             }
             
-            console.log({img2img:reqlist});
         }else{
 
             reqlist = commonReq;
             reqlist.body.action = 'generate';
 
-            console.log({nothing:reqlist});
            
         }
         try {
@@ -401,7 +397,6 @@ export async function generateAIImage(genPrompt:string, currentChar:character, n
             }
         })
 
-        console.log(da)
 
         if(returnSdData === 'inlay'){
             let res = da?.data?.data?.[0]?.b64_json
@@ -494,10 +489,8 @@ export async function generateAIImage(genPrompt:string, currentChar:character, n
         }
 
         const fetchWrapper = async (url: string, options = {}) => {
-            console.log(url)
             const response = await globalFetch(url, options)
             if (!response.ok) {
-                console.log(JSON.stringify(response.data))
                 throw new Error(JSON.stringify(response.data))
             }
             return response.data
@@ -536,7 +529,6 @@ export async function generateAIImage(genPrompt:string, currentChar:character, n
                 headers: { 'Content-Type': 'application/json' },
                 body: { 'prompt': prompt }
             })
-            console.log(`prompt id: ${id}`)
 
             let item
 
@@ -546,7 +538,6 @@ export async function generateAIImage(genPrompt:string, currentChar:character, n
                 headers: { 'Content-Type': 'application/json' },
                 method: 'GET'
             })).json())[id])) {
-                console.log("Checking /history...")
                 if (Date.now() - startTime >= timeout) {
                     alertError("Error: Image generation took longer than expected.");
                     return false

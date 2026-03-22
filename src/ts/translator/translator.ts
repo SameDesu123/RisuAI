@@ -299,7 +299,6 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
         return applyEdittransRegex(await bergamotTranslate(html, from, to, true), charArg, alwaysExistChar)
     }
     const dom = new DOMParser().parseFromString(html, 'text/html');
-    console.log(html)
 
     let promises: Promise<void>[] = [];
     let translationChunks: {
@@ -336,7 +335,6 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
 
         const split = translated.split('■')
 
-        console.log(split.length, currentChunk.chunks.length)
 
         if(split.length !== currentChunk.chunks.length){
             //try translating one by one
@@ -348,7 +346,6 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
         }
         
         for(let i = 0; i < split.length; i++){
-            console.log(split[i])
             currentChunk.resolvers[i](split[i])
         }
 
@@ -511,7 +508,6 @@ async function translateLLM(text:string, arg:{to:string, from:string, regenerate
     const charIndex = get(selectedCharID)
     const currentChar = db.characters[charIndex]
     let translatorNote = ""
-    console.log(arg.translatorNote)
     if(arg.translatorNote){
         translatorNote = arg.translatorNote
     }
@@ -520,7 +516,6 @@ async function translateLLM(text:string, arg:{to:string, from:string, regenerate
     } else {
         translatorNote = ""
     }
-    console.log(translatorNote)
 
     let formated:OpenAIChat[] = []
     let prompt = db.translatorPrompt || `You are a translator. translate the following html or text into {{slot}}. do not output anything other than the translation.`

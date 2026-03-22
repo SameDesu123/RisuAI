@@ -838,8 +838,6 @@ export function addMetadataToElement(data:string, modelShortName:string){
     }
 
     console.log('Encoded metadata:', encodedMetaCode.length, 'characters')
-    console.log('This requires at least', Math.ceil(encodedMetaCode.length / 32), '<p> tags to store')
-
     let d =  data.replace(/\<p\>/g, (v) => {
         return '<p>' + encodedMetaCode
     })
@@ -1701,7 +1699,6 @@ export function risuChatParser(da:string, arg:{
                         }
                         if(blockType.type === 'function'){
                             console.log(matchResult)
-                            functions.set(blockType.funcArg[0], {
                                 data: matchResult,
                                 arg: blockType.funcArg.slice(1)
                             })
@@ -1732,7 +1729,6 @@ export function risuChatParser(da:string, arg:{
                     const funcName = argData[0]
                     const func = functions.get(funcName)
                     console.log(func)
-                    if(func){
                         let data = func.data
                         for(let i = 0;i < argData.length;i++){
                             data = data.replaceAll(`{{arg::${i}}}`, argData[i])
