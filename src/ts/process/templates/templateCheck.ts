@@ -48,7 +48,9 @@ export function templateCheck(db:Database){
 
     let warnings:string[] = []
 
-    let unresolvedRanges = startRanges.filter(x => !endRanges.includes(x)).concat(endRanges.filter(x => !startRanges.includes(x)))
+    const startSet = new Set(startRanges)
+    const endSet = new Set(endRanges)
+    let unresolvedRanges = startRanges.filter(x => !endSet.has(x)).concat(endRanges.filter(x => !startSet.has(x)))
 
     if(mainPrompts === 0){
         warnings.push('No main prompt entry found')
