@@ -239,6 +239,7 @@ export async function loadLoreBookV3Prompt(){
         }|null
     }[] = []
     let activatedIndexes:number[] = []
+    const activatedIndexSet = new Set<number>()
     let disabledUIPrompts:string[] = []
     let matchTimes = 0
     let keepActivateAfterMatch = false
@@ -246,7 +247,7 @@ export async function loadLoreBookV3Prompt(){
     while(matching){
         matching = false
         for(let i=0;i<fullLore.length;i++){
-            if(activatedIndexes.includes(i)){
+            if(activatedIndexSet.has(i)){
                 continue
             }
             if(!fullLore[i].alwaysActive && !fullLore[i].key){
@@ -278,7 +279,7 @@ export async function loadLoreBookV3Prompt(){
                 activated = false
                 for(let j=0;j<i;j++){
                     if(fullLore[j].id === fullLore[i].id){
-                        if(!activatedIndexes.includes(j)){
+                        if(!activatedIndexSet.has(j)){
                             fullLore[i].comment = fullLore[j].comment
                             fullLore[i].content = fullLore[j].content
                             fullLore[i].alwaysActive = true
@@ -567,6 +568,7 @@ export async function loadLoreBookV3Prompt(){
                     inject: inject ?? null
                 })
                 activatedIndexes.push(i)
+                activatedIndexSet.add(i)
 
                 if(keepActivateAfterMatch){
                     setChatVar('__internal_ka_' + (fullLore[i].id ?? pickHashRand(5555,fullLore[i].content).toString()), 'true')
