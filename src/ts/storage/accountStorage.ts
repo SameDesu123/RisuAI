@@ -13,7 +13,7 @@ export const AccountWarning = writable('')
 const risuSession = Date.now().toFixed(0)
 const cachedForage = localforage.createInstance({name: "risuaiAccountCached"})
 
-let seenWarnings:string[] = []
+let seenWarnings = new Set<string>()
 
 export class AccountStorage{
     auth:string
@@ -56,8 +56,8 @@ export class AccountStorage{
             if(da.headers.get('Content-Type') === 'application/json'){
                 const json = JSON.parse(await getDaText())
                 if(json?.warning){
-                    if(!seenWarnings.includes(json.warning)){
-                        seenWarnings.push(json.warning)
+                    if(!seenWarnings.has(json.warning)){
+                        seenWarnings.add(json.warning)
                         AccountWarning.set(json.warning)
                     }
                 }
