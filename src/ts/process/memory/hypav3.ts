@@ -860,8 +860,9 @@ async function hypaMemoryV3MainExp(
     }
 
     // Sort selected summaries chronologically (by index)
+    const summaryIndexMap = new Map(data.summaries.map((s, i) => [s, i]));
     selectedSummaries.sort(
-        (a, b) => data.summaries.indexOf(a) - data.summaries.indexOf(b)
+        (a, b) => (summaryIndexMap.get(a) ?? 0) - (summaryIndexMap.get(b) ?? 0)
     );
 
     // Generate final memory prompt
@@ -1529,8 +1530,9 @@ async function hypaMemoryV3Main(
     }
 
     // Sort selected summaries chronologically (by index)
+    const summaryIndexMap = new Map(data.summaries.map((s, i) => [s, i]));
     selectedSummaries.sort(
-        (a, b) => data.summaries.indexOf(a) - data.summaries.indexOf(b)
+        (a, b) => (summaryIndexMap.get(a) ?? 0) - (summaryIndexMap.get(b) ?? 0)
     );
 
     // Generate final memory prompt
