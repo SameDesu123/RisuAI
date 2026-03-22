@@ -93,9 +93,10 @@ export async function createMultiuserRoom(){
                 data: char
             });
             if(excludeAssets !== null){
+                const excludeSet = new Set(excludeAssets)
                 if(char.additionalAssets){
                     const ass = char.additionalAssets.filter((asset) => {
-                        return !excludeAssets.includes(asset[1])
+                        return !excludeSet.has(asset[1])
                     })
 
                     for(const a of ass){
@@ -109,7 +110,7 @@ export async function createMultiuserRoom(){
                 }
                 if(char.emotionImages){
                     const ass = char.emotionImages.filter((asset) => {
-                        return !excludeAssets.includes(asset[1])
+                        return !excludeSet.has(asset[1])
                     })
                     
                     for(const a of ass){
