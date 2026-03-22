@@ -1697,9 +1697,7 @@ export async function shareRisuHub2(char:character, arg:{
         alertWait("Uploading...")
         
     
-        let tags = tagList.filter((v, i) => {
-            return (!!v) && (tagList.indexOf(v) === i)
-        })
+        let tags = [...new Set(tagList.filter(Boolean))]
         char.tags = tags
     
     
