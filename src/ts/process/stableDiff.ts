@@ -119,13 +119,11 @@ export async function generateAIImage(genPrompt:string, currentChar:character, n
         }
     }
     if(db.sdProvider === 'novelai'){
-        genPrompt = genPrompt
-            .replaceAll('\\(', "♧")
-            .replaceAll('\\)', "♤")
-            .replaceAll('(','{')
-            .replaceAll(')','}')
-            .replaceAll('♧','(')
-            .replaceAll('♤',')')
+        // Single-pass: swap unescaped parens to braces, unescape escaped parens
+        genPrompt = genPrompt.replace(/\\([()])|([()])/g, (_, escaped, unescaped) => {
+            if (escaped) return escaped
+            return unescaped === '(' ? '{' : '}'
+        })
 
         let reqlist:any = {}
 
