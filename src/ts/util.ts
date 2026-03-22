@@ -976,7 +976,8 @@ export const searchTagList = (query:string) => {
         }
     }
 
-    return result.filter(v => splited.indexOf(v) === -1)
+    const splitedSet = new Set(splited)
+    return result.filter(v => !splitedSet.has(v))
 }
 
 export const isKnownUri = (uri:string) => {
