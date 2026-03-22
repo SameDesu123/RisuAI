@@ -167,7 +167,7 @@ export async function processScriptFull(char:character|groupChat|simpleCharacter
             flag = flag.trim().replace(/[^dgimsuvy]/g, '')
 
             //remove repeated flags
-            flag = flag.split('').filter((v, i, a) => a.indexOf(v) === i).join('')
+            flag = [...new Set(flag)].join('')
             
             if(flag.length === 0){
                 flag = 'u'
