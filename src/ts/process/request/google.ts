@@ -627,8 +627,13 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
                 rDatas[i].text = extracted
             }
         }
-        const thoughts = rDatas.filter(d => d.thought).map(d => d.text).join('\n\n')
-        const content = rDatas.filter(d => !d.thought).map(d => d.text).join('\n\n')
+        const thoughtParts: string[] = []
+        const contentParts: string[] = []
+        for (const d of rDatas) {
+            (d.thought ? thoughtParts : contentParts).push(d.text)
+        }
+        const thoughts = thoughtParts.join('\n\n')
+        const content = contentParts.join('\n\n')
         return (thoughts ? `<Thoughts>\n\n${thoughts}\n\n</Thoughts>\n\n` : '') + content
     }
 
