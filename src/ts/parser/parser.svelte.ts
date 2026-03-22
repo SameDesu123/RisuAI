@@ -110,8 +110,10 @@ DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
     }
 })
 
+const blobSrcNodeNames = new Set(['IMG', 'SOURCE', 'VIDEO', 'AUDIO', 'STYLE'])
+
 DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
-    if (['IMG', 'SOURCE', 'VIDEO', 'AUDIO', 'STYLE'].includes(node.nodeName) && data.attrName === 'src') {
+    if (blobSrcNodeNames.has(node.nodeName) && data.attrName === 'src') {
         if (data.attrValue.startsWith('blob:')) {
             data.forceKeepAttr = true;
         }
@@ -476,8 +478,8 @@ $effect.root(() => {
     })
 })
 
-const imageCBS = ['img', 'image', 'emotion', 'asset', 'bg', 'raw', 'path']
-const videoExtensions = ['mp4', 'webm', 'avi', 'm4p', 'm4v']
+const imageCBS = new Set(['img', 'image', 'emotion', 'asset', 'bg', 'raw', 'path'])
+const videoExtensions = new Set(['mp4', 'webm', 'avi', 'm4p', 'm4v'])
 
 async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|character, mode:'normal'|'back', arg:{ch:number}){
     const assetWidthString = (DBState.db.assetWidth && DBState.db.assetWidth !== -1 || DBState.db.assetWidth === 0) ? `max-width:${DBState.db.assetWidth}rem;` : ''
@@ -497,7 +499,7 @@ async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|c
 
         // Skip image-related assets when hideAllImages is enabled
         // raw and path are also included as they're used in CSS background-image
-        if(DBState.db.hideAllImages && imageCBS.includes(type)){
+        if(DBState.db.hideAllImages && imageCBS.has(type)){
             return ''  // Hide the image asset
         }
 
@@ -570,7 +572,7 @@ async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|c
                 }
                 break
             case 'asset':{
-                if(match.ext && videoExtensions.includes(match.ext)){
+                if(match.ext && videoExtensions.has(match.ext)){
                     return `<video autoplay muted loop><source src="${p}" type="video/mp4"></video>\n`
                 }
                 return `<img src="${p}" alt="${p}" style="${assetWidthString} "/>\n`
@@ -1471,7 +1473,7 @@ function blockEndMatcher(p1:string,type:{type:blockMatch,type2?:string,mode?:str
         }
 
         case 'normalize':{
-            return p1Trimmed.trim().replaceAll('\n','').replaceAll('\t','')
+            return p1Trimmed.trim().replaceAll(/[\n\t]/g, '')
             .replaceAll(/\\u([0-9A-Fa-f]{4})/g, (match, p1) => {
                 return String.fromCharCode(parseInt(p1, 16))
             })
