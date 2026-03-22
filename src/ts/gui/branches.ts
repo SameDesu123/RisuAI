@@ -6,12 +6,12 @@ type ChatBranch = {
     chatId: number,
 }
 
-function search(left: string[], branch: ChatBranch, chatId:number){
-    if(left.length === 0){
+function search(items: string[], index: number, branch: ChatBranch, chatId:number){
+    if(index >= items.length){
         return
     }
 
-    const current = left[0]
+    const current = items[index]
     if(!branch.children.has(current)){
         branch.children.set(current, {
             children: new Map(),
@@ -20,7 +20,7 @@ function search(left: string[], branch: ChatBranch, chatId:number){
         })
     }
 
-    search(left.slice(1), branch.children.get(current)!, chatId)
+    search(items, index + 1, branch.children.get(current)!, chatId)
 }
 
 function getMaxChildren(branch: ChatBranch){
@@ -84,7 +84,7 @@ export function getChatBranches(){
             chatList.push(simpleHasher(message.data))
         }
 
-        search(chatList, mainBranch, i++)
+        search(chatList, 0, mainBranch, i++)
     }
 
     getMaxChildren(mainBranch)
