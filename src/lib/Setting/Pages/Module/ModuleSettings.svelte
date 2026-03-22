@@ -20,6 +20,9 @@
     let mode = $state(0)
     let editModuleIndex = $state(-1)
     let moduleSearch = $state('')
+    let moduleIntegrationSet = $derived(new Set(
+        DBState.db.moduleIntergration?.split(',').map((s) => s.trim()).filter(Boolean) ?? []
+    ))
 
     function sortModules(modules:RisuModule[], search:string){
         return modules.filter((v) => {
@@ -59,7 +62,7 @@
                         <button class={(DBState.db.enabledModules.includes(rmodule.id)) ?
                                 "mr-2 cursor-pointer text-blue-500" :
                                 rmodule.namespace && 
-                                DBState.db.moduleIntergration?.split(',').map((s) => s.trim()).includes(rmodule.namespace) ?
+                                moduleIntegrationSet.has(rmodule.namespace) ?
                                 "text-amber-500 hover:text-green-500 mr-2 cursor-pointer" :
                                 "text-textcolor2 hover:text-green-500 mr-2 cursor-pointer"
                             } use:tooltip={language.enableGlobal} onclick={async (e) => {
