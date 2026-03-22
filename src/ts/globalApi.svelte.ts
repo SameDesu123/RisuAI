@@ -2209,7 +2209,8 @@ export function createChatCopyName(originalName: string,type:'Copy'|'Branch'): s
     let copyIndex = 1
     let newName = `${name} (${type})`
     const char = getCurrentCharacter()
-    while (char.chats.find((v) => v.name === newName)) {
+    const chatNames = new Set(char.chats.map(c => c.name))
+    while (chatNames.has(newName)) {
         copyIndex++
         newName = `${name} (${type} ${copyIndex})`
     }
