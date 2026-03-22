@@ -12,7 +12,7 @@ export const defaultCBSRegisterArg: CBSRegisterArg = {
     getPersonaPrompt: () => 'placeholder_persona',
     risuChatParser: (text: string) => text,
     makeArray: (arr: string[]) => JSON.stringify(arr),
-    safeStructuredClone: <T>(obj: T) => JSON.parse(JSON.stringify(obj)),
+    safeStructuredClone: <T>(obj: T) => structuredClone(obj),
     parseArray: (str: string) => {
         try { return JSON.parse(str) } 
         catch { return [] }
