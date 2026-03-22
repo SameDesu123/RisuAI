@@ -187,18 +187,24 @@ export function getUnstringlizerChunks(formated:OpenAIChat[], char:string, mode:
         }
     }
 
+    const chunkSet = new Set(chunks)
+
     for(const form of formated){
         if(form.name){
             charNames.push(form.name)
             if(mode === 'ain'){
-                if(!chunks.includes(`${form.name} `)){
-                    chunks.push(`${form.name} `)
+                const key = `${form.name} `
+                if(!chunkSet.has(key)){
+                    chunkSet.add(key)
+                    chunks.push(key)
                     chunks.push(`${form.name}　`)
                 }
             }
             else{
-                if(!chunks.includes(`${form.name}:`)){
-                    chunks.push(`${form.name}:`)
+                const key = `${form.name}:`
+                if(!chunkSet.has(key)){
+                    chunkSet.add(key)
+                    chunks.push(key)
                     chunks.push(`${form.name}：`)
                     chunks.push(`${form.name}: `)
                     chunks.push(`${form.name}： `) 
