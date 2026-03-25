@@ -13,9 +13,9 @@ name: "CodeQL Advanced"
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "chore/codeql-manual-trigger" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "chore/codeql-manual-trigger" ]
   schedule:
     - cron: '45 18 * * 6'
   workflow_dispatch:
