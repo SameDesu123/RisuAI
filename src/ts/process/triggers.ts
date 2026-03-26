@@ -314,6 +314,7 @@ export type triggerV2RunLLM = {
     value: string,
     valueType: 'var'|'value',
     model: 'model'|'submodel',
+    streaming?: boolean,
     outputVar: string,
     indent: number
 }
@@ -1036,6 +1037,26 @@ export const requestAllowList = [
 
 const displayAllowSet = new Set(displayAllowList)
 const requestAllowSet = new Set(requestAllowList)
+
+async function collectStreamingText(stream: ReadableStream<{ [key: string]: string }>): Promise<string> {
+    const reader = stream.getReader()
+    let lastChunk = ''
+
+    while (true) {
+        const { done, value } = await reader.read()
+        if (value) {
+            const firstKey = Object.keys(value)[0]
+            if (firstKey) {
+                lastChunk = value[firstKey] ?? lastChunk
+            }
+        }
+        if (done) {
+            break
+        }
+    }
+
+    return lastChunk
+}
 
 export async function runTrigger(char:character,mode:triggerMode, arg:{
     chat: Chat,
@@ -1893,12 +1914,16 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     let result = await requestChatData({
                         formated: promptbody,
                         bias: {},
-                        useStreaming: false,
+                        useStreaming: effect.streaming ?? false,
                         noMultiGen: true,
                     }, effect.model)
 
-                    if(result.type === 'fail' || result.type === 'streaming' || result.type === 'multiline'){
+                    if(result.type === 'fail' || result.type === 'multiline'){
                         setVar(risuChatParser(effect.outputVar, {chara:char}), 'null')
+                    }
+                    else if(result.type === 'streaming'){
+                        const text = await collectStreamingText(result.result)
+                        setVar(risuChatParser(effect.outputVar, {chara:char}), text)
                     }
                     else{
                         setVar(risuChatParser(effect.outputVar, {chara:char}), result.result)
@@ -2457,7 +2482,9 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     char.globalLore = char.globalLore ?? []
                     const allPrompts: string[] = []
                     for (const lore of char.globalLore) {
-                        if (lore && lore.content !== undefined) allPrompts.push(lore.content)
+                        if (lore && lore.content !== undefined) {
+                            allPrompts.push(lore.content)
+                        }
                     }
                     setVar(risuChatParser(effect.outputVar, {chara:char}), JSON.stringify(allPrompts))
                     break
@@ -2467,10 +2494,10 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     const name = effect.nameType === 'value' ? risuChatParser(effect.name,{chara:char}) : getVar(risuChatParser(effect.name,{chara:char}))
                     const regex = new RegExp(name, 'i')
                     const matchingIndices: number[] = []
-                    for (let idx = 0; idx < char.globalLore.length; idx++) {
-                        const lore = char.globalLore[idx]
+                    for (let i = 0; i < char.globalLore.length; i++) {
+                        const lore = char.globalLore[i]
                         if (lore && lore.comment !== undefined && regex.test(lore.comment)) {
-                            matchingIndices.push(idx)
+                            matchingIndices.push(i)
                         }
                     }
                     setVar(risuChatParser(effect.outputVar, {chara:char}), JSON.stringify(matchingIndices))
