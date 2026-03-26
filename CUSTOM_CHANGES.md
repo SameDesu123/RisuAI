@@ -286,6 +286,24 @@ NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
 | `src/ts/process/memory/hypav3.ts` | selectedSummarySet + summaryIndexMap |
 | `src/ts/plugins/pluginSafeClass.ts` | tagWhitelist, allowedEvents Set 변환 |
 
+### 20. fix(server): remove overly restrictive rate limiters from storage/proxy APIs
+
+- **File**: `server/node/server.cjs`
+- **Root Cause**: upstream에서 추가된 `authenticatedRouteLimiter`(90req/min)와 `authRouteLimiter`(90req/min)가 `/api/read`, `/api/write`, `/api/list`, `/api/test_auth`, `/proxy` 등에 적용되어, 블록 기반 diff save/load 시 대량의 API 요청이 rate limit에 걸려 초기 로딩 실패.
+- **Fix**: `authenticatedRouteLimiter`와 `authRouteLimiter`를 완전히 제거. `loginRouteLimiter`(10req/30s)만 로그인 brute-force 방지 목적으로 유지. 이미 `checkAuth`로 인증 보호가 되어 있으므로 rate limit 불필요.
+  - `validate: { trustProxy: false, xForwardedForHeader: false }` 옵션으로 `X-Forwarded-For` ValidationError 방지
+- **Conflict Reapply Guide**: upstream `server.cjs`에서 rate limiter가 추가될 때 `/api/read`, `/api/write`, `/api/list`, `/api/test_auth`, `/proxy*` 라우트에는 적용하지 말 것. `loginRouteLimiter`만 `/api/login`에 유지.
+
+### 21. fix(server): fix nodeCrypto and knownPublicKeysHashes.includes errors from upstream merge
+
+- **File**: `server/node/server.cjs`
+- **Root Cause 1**: upstream의 `hashData()` 함수가 `nodeCrypto.createHash()`를 사용하는데, 이 파일에서 crypto는 `const crypto = require('crypto')`로 임포트되어 있어 `ReferenceError` 발생.
+- **Root Cause 2**: upstream이 새로 추가한 `verifyAuth()` 코드에서 `knownPublicKeysHashes.includes()`를 사용하는데, 커스텀 브랜치에서 이를 `Set`으로 최적화(커밋 19)했으므로 `.has()`로 호출해야 함.
+- **Fix**:
+  - `nodeCrypto.createHash()` → `crypto.createHash()`
+  - `knownPublicKeysHashes.includes()` → `knownPublicKeysHashes.has()`
+- **Conflict Reapply Guide**: upstream에서 `hashData()`나 `knownPublicKeysHashes` 관련 코드가 추가/변경될 때 동일하게 적용.
+
 ## How to Sync with Upstream
 
 ```bash
