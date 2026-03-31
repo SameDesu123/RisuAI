@@ -17,6 +17,10 @@ import { getLLMCache, searchLLMCache } from "src/ts/translator/translator";
 import { hasher } from "src/ts/parser/parser.svelte";
 import localforage from "localforage";
 import { LLMFlags, LLMFormat, LLMProvider, LLMTokenizer, type LLMModel } from "src/ts/model/types";
+import { sendChat as processSendChat, doingChat } from "src/ts/process/index.svelte";
+import { getModelInfo } from "src/ts/model/modellist";
+import type { ModelModeExtended } from "src/ts/process/request/shared";
+import { requestChatDataMain } from "src/ts/process/request/request";
 
 /*
     V3 API for RisuAI Plugins
@@ -524,7 +528,7 @@ type PluginV3ProviderOptions = PluginV2ProviderOptions & {
 
 export const customV3ProviderMetaStore:LLMModel[] = []
 
-const getPluginPermission = async (pluginName: string, permissionDesc: 'fetchLogs'|'db'|'mainDom'|'replacer'|'provider', reconfirm: boolean|'periodically' = false) => {
+const getPluginPermission = async (pluginName: string, permissionDesc: 'fetchLogs'|'db'|'mainDom'|'replacer'|'provider'|'sendChat', reconfirm: boolean|'periodically' = false) => {
     if(permissionGivenPlugins.has(pluginName)){
         return true;
     }
@@ -565,6 +569,7 @@ const getPluginPermission = async (pluginName: string, permissionDesc: 'fetchLog
         : permissionDesc === 'mainDom' ? language.mainDomAccessConsent.replace("{}", pluginName)
         : permissionDesc === 'replacer' ? language.replacerPermissionConsent.replace("{}", pluginName)
         : permissionDesc === 'provider' ? language.providerPermissionConsent.replace("{}", pluginName)
+        : permissionDesc === 'sendChat' ? language.sendChatConsent.replace("{}", pluginName)
         : `Error`
     if(alertTitle === 'Error'){
         return false;
@@ -877,7 +882,8 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             name:string,
             callback: any,
             icon:string = '',
-            iconType:'html'|'img'|'none' = 'none'
+            iconType:'html'|'img'|'none' = 'none',
+            id?:string
         ) => {
             if(iconType !== 'html' && iconType !== 'img' && iconType !== 'none'){
                 throw new Error("iconType must be 'html', 'img' or 'none'");
@@ -885,19 +891,29 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             if(typeof name !== 'string' || name.trim() === ''){
                 throw new Error("name must be a non-empty string");
             }
-            const id = v4()
-            additionalSettingsMenu.push({
-                id,
+            const menuId = id || v4()
+            const menuDef:MenuDef = {
+                id: menuId,
                 name,
                 icon,
                 iconType,
                 callback
-            })
+            }
+            const existingIndex = additionalSettingsMenu.findIndex(item => item.id === menuId)
+            if(existingIndex !== -1){
+                additionalSettingsMenu[existingIndex] = menuDef
+                addPluginUnloadCallback(
+                    plugin.name,
+                    makeMenuUnloadCallback(menuId, additionalSettingsMenu)
+                )
+                return {id: menuId}
+            }
+            additionalSettingsMenu.push(menuDef)
             addPluginUnloadCallback(
                 plugin.name,
-                makeMenuUnloadCallback(id, additionalSettingsMenu)
+                makeMenuUnloadCallback(menuId, additionalSettingsMenu)
             )
-            return {id:id};
+            return {id: menuId};
         },
         registerBodyIntercepter: async (callback: (body: any, type: string) => any) => {
 
@@ -931,13 +947,13 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                 name: string,
                 icon: string,
                 iconType: 'html'|'img'|'none',
-                location?: 'action'|'chat'|'hamburger'
+                location?: 'action'|'chat'|'hamburger',
+                id?: string
             },
             callback: () => void
         ) => {
-            let { name, icon, iconType, location } = arg;
+            let { name, icon, iconType, location, id: providedId } = arg;
             location = location || 'action';
-            //Reserved for future use
             if(iconType !== 'html' && iconType !== 'img' && iconType !== 'none'){
                 throw new Error("iconType must be 'html', 'img' or 'none'");
             }
@@ -947,13 +963,26 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             if(typeof icon !== 'string'){
                 throw new Error("icon must be a string");
             }
-            const id = v4()
+            const id = providedId || v4()
             const menuDef:MenuDef = {
                 name,
                 icon,
                 iconType,
                 callback,
                 id
+            }
+
+            const buttonStores = [additionalFloatingActionButtons, additionalHamburgerMenu, additionalChatMenu]
+            for(const store of buttonStores){
+                const existingIndex = store.findIndex(item => item.id === id)
+                if(existingIndex !== -1){
+                    store[existingIndex] = menuDef
+                    addPluginUnloadCallback(
+                        plugin.name,
+                        makeMenuUnloadCallback(id, store)
+                    )
+                    return {id}
+                }
             }
 
             switch(location){
@@ -985,7 +1014,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                     throw new Error("Invalid location for button")
                 }
             }
-            return {id:id};
+            return {id};
         },
         registerMCP: registerMCPModule,
         unregisterMCP: unregisterMCPModule,
@@ -1111,6 +1140,62 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                     'keys': '_keysSafeLocalStorage',
                 }
             }
+        },
+        runLLMModel: async (options: {
+            mode: ModelModeExtended
+            messages: OpenAIChat[]
+            staticModel?: string
+        }) => {
+            return requestChatDataMain({
+                formated: options.messages,
+                bias: {},
+                staticModel: options.staticModel,
+
+                //Executing plugin provider is block because it can be used for loopholes for ipc right now.
+                blockPlugins: true
+            }, options.mode)
+        },
+        sendChat: async (message: string) => {
+            const conf = await getPluginPermission(plugin.name, 'sendChat');
+            if(!conf){
+                return false;
+            }
+
+            if(typeof message !== 'string'){
+                throw new Error("Message must be a string");
+            }
+
+            if(get(doingChat)){
+                throw new Error("A chat is already in progress");
+            }
+
+            const charId = get(selectedCharID);
+            const char = DBState.db.characters[charId];
+            if(!char){
+                throw new Error("No character selected");
+            }
+
+            const chat = char.chats[char.chatPage];
+            if(!chat){
+                throw new Error("No active chat found");
+            }
+
+            if(message){
+                chat.message.push({
+                    role: 'user',
+                    data: message,
+                    time: Date.now(),
+                });
+            }
+
+            if(getModelInfo(DBState.db.aiModel).id.startsWith('pluginmodel:::')){
+                // Executing plugin provider is block because it can be used for loopholes for ipc right now.
+                throw new Error("Sending chat with plugin-based model is currently blocked");    
+            }
+
+            await processSendChat(-1, {});
+
+            return true;
         },
         addPluginChannelListener: (channelName: string, callback: Function) => {
             pluginChannel.set(plugin.name + channelName, callback);

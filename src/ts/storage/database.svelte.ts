@@ -15,7 +15,7 @@ import { type HypaV3Settings, type HypaV3Preset, createHypaV3Preset } from '../p
 import { isTauri, isNodeServer } from "src/ts/platform"
 
 //APP_VERSION_POINT is to locate the app version in the database file for version bumping
-export let appVer = "2026.2.291" //<APP_VERSION_POINT>
+export let appVer = "2026.3.332" //<APP_VERSION_POINT>
 export let webAppSubVer = ''
 
 
@@ -219,6 +219,9 @@ export function setDatabase(data:Database){
     }
     if(checkNullish(data.hypaMemoryKey)){
         data.hypaMemoryKey = ""
+    }
+    if(checkNullish(data.voyageApiKey)){
+        data.voyageApiKey = ""
     }
     if(checkNullish(data.supaModelType)){
         data.supaModelType = "none"
@@ -661,6 +664,8 @@ export function setDatabase(data:Database){
     // Because its likely they are power users who would benefit from the features
     data.enableRisuaiProTools ??= data.plugins.length > 0
     data.keepSessionAlive ??= 'off'
+    data.loadouts ??= []
+    data.longPressToPopupEditor ??= false
     changeLanguage(data.language)
     setDatabaseLite(data)
 }
@@ -825,6 +830,7 @@ export interface Database{
     useStreaming:boolean
     supaMemoryKey:string
     hypaMemoryKey:string
+    voyageApiKey:string
     supaModelType:string
     textScreenColor?:string
     textBorder?:boolean
@@ -1185,6 +1191,8 @@ export interface Database{
     disableSeperateParameterChangeOnPresetChange?:boolean
     saveSignatures?:boolean
     keepSessionAlive: 'off' | 'pip' | 'sound'
+    longPressToPopupEditor?: boolean
+    loadouts: Loadout[]
 }
 
 export interface SeparateParameters{
@@ -2157,6 +2165,7 @@ import type { HypaModel } from '../process/memory/hypamemory';
 import type { SerializableHypaV3Data } from '../process/memory/hypav3';
 import { defaultHotkeys, type Hotkey } from '../defaulthotkeys';
 import type { OpenAIChat } from '../process/index.svelte';
+import type { Loadout } from '../loadout';
 
 export async function downloadPreset(id:number, type:'json'|'risupreset'|'return' = 'json'){
     saveCurrentPreset()

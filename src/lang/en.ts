@@ -143,8 +143,6 @@ export const languageEnglish = {
             "- Scope is OpenAI-compatible request paths only.\n" +
             "- This does not bypass Cloudflare origin limits between two public domains.\n" +
             "- Use your self-host URL (where `globalThis.__NODE__ === true`) for this feature to take effect.",
-        forcePlainFetch: "If enabled, it will use browser fetch api instead of native http request. This can cause CORS errors.",
-        autoFillRequestURL: "If enabled, it will autofill request URL to match the current model.",
         chainOfThought: "If enabled, it will add chain of thought prompt to the prompt.",
         gptVisionQuality: "This option is used to set the quality of the image detection model. The higher the quality, the more accurate the detection, but more tokens are used.",
         genTimes:
@@ -1080,6 +1078,11 @@ export const languageEnglish = {
     openRouterProviderOnly: "Allowed Providers",
     openRouterProviderIgnore: "Ignored Providers",
     openRouterSearchModel: "Search models...",
+    openRouterSortByName: "Name",
+    openRouterSortByPrice: "Price",
+    openRouterSortByProvider: "Provider",
+    openRouterSortAsc: "Asc",
+    openRouterSortDesc: "Desc",
     geminiApiKey: "Gemini API Key",
     removePunctuationHypa: "Memory Punctuation Removal",
     memoryLimitThickness: "Memory Limit Thickness",
@@ -1466,6 +1469,8 @@ export const languageEnglish = {
         webcam: "Toggle Webcam",
         focusInput: "Focus Input",
         scrollToActiveChar: "Scroll to Active Character",
+        popupEditor: "Popup Editor",
+        loadout: "Loadout",
     },
     screenTooSmall: "Screen is too small to show the interface.",
     advancedModelSettings: "Advanced Model Settings",
@@ -1575,6 +1580,7 @@ export const languageEnglish = {
     mainDomAccessConsent: "Plugin {} is requesting to access the main Document, which may expose sensitive information. Do you want to allow this?",
     replacerPermissionConsent: "Plugin {} is requesting permission to replace content in the chat, which may be used to manipulate the conversation. Do you want to allow this?",
     providerPermissionConsent: "Plugin {} is requesting permission to access the provider, which may allow it to make unauthorized API calls. Do you want to allow this?",
+    sendChatConsent: "Plugin {} is requesting permission to send chat messages on your behalf, which will trigger AI responses. Do you want to allow this?",
     pluginV2Warning: "Plugin V2 and V2.1 is considered unsafe and will stop working in future versions. **Please do not use these versions of plugins.**. If you are the developer of this plugin, please update to V3 as soon as possible.",
     createFolderOnBranch: "Create Folder on Branch",
     hamburgerButtonBottom: "Move Menu Button to Bottom of Sidebar",
@@ -1623,6 +1629,9 @@ export const languageEnglish = {
     keepSessionAlive: "Keep Session Alive",
     keepSessionAlivePip: "Via PIP",
     keepSessionAliveSound: "Via Sound",
+    loadouts: "Loadouts",
+    loadout: "Loadout",
+    longPressToPopupEditor: "Long press to open popup editor",
 } satisfies I18nTranslation;
 
 type I18nTranslationFunction = (...args: any[]) => string;
