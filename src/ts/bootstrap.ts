@@ -77,6 +77,21 @@ function buildBlockJsonSnapshots(db: any): Map<string, string> {
         snapshots.set('modules', JSON.stringify(db.modules))
     }
 
+    // Loadouts block
+    if (db.loadouts) {
+        snapshots.set('loadouts', JSON.stringify(db.loadouts))
+    }
+
+    // Plugins block
+    if (db.plugins) {
+        snapshots.set('plugins', JSON.stringify(db.plugins))
+    }
+
+    // Plugin storage block
+    if (db.pluginCustomStorage) {
+        snapshots.set('pluginStorage', JSON.stringify(db.pluginCustomStorage))
+    }
+
     // Character blocks
     if (db.characters) {
         for (const character of db.characters) {

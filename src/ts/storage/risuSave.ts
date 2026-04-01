@@ -294,30 +294,39 @@ export class RisuSaveEncoder {
         }
 
         if(toSave.loadouts){
+            const loadoutsJson = JSON.stringify(data.loadouts);
+            this.currentJsonStrings.set('loadouts', loadoutsJson);
             this.blocks['loadouts'] = await this.encodeBlock({
                 compression: this.compression,
-                data: JSON.stringify(data.loadouts),
+                data: loadoutsJson,
                 type: RisuSaveType.LOADOUTS,
                 name: 'loadouts'
             });
+            this.changedBlockNames.add('loadouts');
         }
 
         if(toSave.pluginCustomStorage){
+            const pluginStorageJson = JSON.stringify(data.pluginCustomStorage);
+            this.currentJsonStrings.set('pluginStorage', pluginStorageJson);
             this.blocks['pluginStorage'] = await this.encodeBlock({
                 compression: this.compression,
-                data: JSON.stringify(data.pluginCustomStorage),
+                data: pluginStorageJson,
                 type: RisuSaveType.PLUGIN_STORAGE,
                 name: 'pluginStorage'
             });
+            this.changedBlockNames.add('pluginStorage');
         }
 
         if(toSave.plugins){
+            const pluginsJson = JSON.stringify(data.plugins);
+            this.currentJsonStrings.set('plugins', pluginsJson);
             this.blocks['plugins'] = await this.encodeBlock({
                 compression: this.compression,
-                data: JSON.stringify(data.plugins),
+                data: pluginsJson,
                 type: RisuSaveType.PLUGINS,
                 name: 'plugins'
             });
+            this.changedBlockNames.add('plugins');
         }
 
         obj["__directory"] = Object.keys(this.blocks).filter(key => key !== 'root');

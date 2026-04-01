@@ -459,6 +459,9 @@ export async function saveDb() {
             changeTracker.chat = changeTracker.chat.length === 0 ? [] : [changeTracker.chat[0]]
             changeTracker.botPreset = false
             changeTracker.modules = false
+            changeTracker.loadouts = false
+            changeTracker.plugins = false
+            changeTracker.pluginCustomStorage = false
             if (gotChannel) {
                 //Data is saved in other tab
                 await sleep(1000)
