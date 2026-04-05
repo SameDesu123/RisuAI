@@ -73,7 +73,8 @@
         hljs.registerLanguage('json', json)
     }
 
-    function highlightJson(code: string): string {
+    function highlightJson(code: string | undefined | null): string {
+        if (!code) return ''
         try {
             return hljs.highlight(code, { language: 'json' }).value
         } catch {
