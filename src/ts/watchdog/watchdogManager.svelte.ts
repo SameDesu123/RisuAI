@@ -5,9 +5,6 @@
  * Sends periodic heartbeats to the watchdog worker and handles freeze events.
  */
 
-import { get } from 'svelte/store'
-import { doingChat, chatProcessStage } from '../process/index.svelte'
-
 const HEARTBEAT_INTERVAL_MS = 1000
 const FREEZE_THRESHOLD_MS = 5000
 const RESUME_GRACE_PERIOD_MS = 3000
@@ -104,6 +101,7 @@ function handleVisibilityChange() {
             if (worker) {
                 worker.postMessage({ type: 'resume' })
             }
+            sendHeartbeat()
             heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS)
             resumeGraceTimer = null
         }, RESUME_GRACE_PERIOD_MS)

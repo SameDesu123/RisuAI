@@ -7,6 +7,16 @@
     let visible = $derived(watchdogState.frozen || watchdogState.recovered)
     let isDoingChat = $derived($doingChat)
 
+    // Auto-dismiss recovered notification after 8 seconds
+    $effect(() => {
+        if (watchdogState.recovered && !watchdogState.frozen) {
+            const timer = setTimeout(() => {
+                dismissFreezeNotification()
+            }, 8000)
+            return () => clearTimeout(timer)
+        }
+    })
+
     function getStageName(stage: number): string {
         const stages = language.freezeDetection?.stages
         if (!stages) return `Stage ${stage}`
@@ -37,17 +47,11 @@
 {#if visible}
     <div class="fixed inset-0 z-[60] flex items-start justify-center pt-8 pointer-events-none">
         <div 
-            class="pointer-events-auto max-w-md w-full mx-4 rounded-xl shadow-2xl border overflow-hidden transition-all duration-300"
-            class:bg-red-950={watchdogState.frozen}
-            class:border-red-800={watchdogState.frozen}
-            class:bg-darkbg={watchdogState.recovered}
-            class:border-green-800={watchdogState.recovered}
+            class="pointer-events-auto max-w-md w-full mx-4 rounded-xl shadow-2xl border overflow-hidden transition-all duration-300 {watchdogState.frozen ? 'bg-red-950 border-red-800' : 'bg-darkbg border-green-800'}"
         >
             <!-- Header -->
             <div 
-                class="px-4 py-3 flex items-center gap-3"
-                class:bg-red-900/50={watchdogState.frozen}
-                class:bg-green-900/30={watchdogState.recovered}
+                class="px-4 py-3 flex items-center gap-3 {watchdogState.frozen ? 'bg-red-900/50' : 'bg-green-900/30'}"
             >
                 {#if watchdogState.frozen}
                     <div class="shrink-0">
