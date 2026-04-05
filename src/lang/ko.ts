@@ -1502,4 +1502,15 @@ export const languageKorean = {
     nanoGPTSelectFromList: "목록에서 선택",
     nanoGPTManualInput: "수동 입력",
     nanoGPTManualModelSelect: "수동 모델 선택",
+    "filterByURL": "URL로 필터링...",
+    "allLogs": "전체",
+    "successLogs": "2xx",
+    "errorLogs": "오류",
+    "requestTab": "요청",
+    "responseTab": "응답",
+    "urlLabel": "URL",
+    "headersLabel": "헤더",
+    "requestBodyLabel": "요청 본문",
+    "responseBodyLabel": "응답 본문",
+    "noBody": "본문 없음"
 } satisfies DeepPartial<typeof import('./en').languageEnglish>

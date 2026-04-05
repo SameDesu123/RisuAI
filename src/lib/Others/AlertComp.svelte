@@ -935,7 +935,7 @@
                 <div class="flex-1 relative">
                     <input
                         type="text"
-                        placeholder="Filter by URL..."
+                        placeholder={language.filterByURL}
                         bind:value={logSearch}
                         class="w-full bg-bgcolor border border-darkborderc rounded text-sm text-textcolor px-3 py-1.5 pr-8 focus:outline-none focus:border-blue-500 placeholder:text-textcolor2"
                     />
@@ -954,7 +954,7 @@
                             <button
                                 class="px-3 py-1.5 transition-colors flex-1 sm:flex-initial {logFilter === f ? 'bg-blue-600 text-white' : 'bg-bgcolor text-textcolor2 hover:text-textcolor'}"
                                 onclick={() => { logFilter = f }}
-                            >{f === 'all' ? 'All' : f === 'success' ? '2xx' : 'Error'}</button>
+                            >{f === 'all' ? language.allLogs : f === 'success' ? language.successLogs : language.errorLogs}</button>
                         {/each}
                     </div>
                     <Button size="sm" onclick={() => {
@@ -1034,7 +1034,7 @@
                                                         m.set(i, tab)
                                                         activeLogTab = m
                                                     }}
-                                                >{tab}</button>
+                                                >{tab === 'request' ? language.requestTab : language.responseTab}</button>
                                             {/each}
                                         </div>
                                         <!-- Tab content -->
@@ -1043,7 +1043,7 @@
                                                 <!-- URL -->
                                                 <div>
                                                     <div class="flex items-center justify-between mb-1.5">
-                                                        <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">URL</span>
+                                                        <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.urlLabel}</span>
                                                         <button
                                                             class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${i}-url` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
                                                             onclick={(e) => { e.stopPropagation(); copyToClipboard(log.url, `${i}-url`) }}
@@ -1056,7 +1056,7 @@
                                                 <!-- Headers -->
                                                 <div>
                                                     <div class="flex items-center justify-between mb-1.5">
-                                                        <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">Headers</span>
+                                                        <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.headersLabel}</span>
                                                         <button
                                                             class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${i}-header` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
                                                             onclick={(e) => { e.stopPropagation(); copyToClipboard(log.header, `${i}-header`) }}
@@ -1069,7 +1069,7 @@
                                                 <!-- Body -->
                                                 <div>
                                                     <div class="flex items-center justify-between mb-1.5">
-                                                        <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">Request Body</span>
+                                                        <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.requestBodyLabel}</span>
                                                         {#if log.body}
                                                             <button
                                                                 class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${i}-body` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
@@ -1082,7 +1082,7 @@
                                                     {#if log.body}
                                                         <pre class="request-log-code hljs">{@html highlightJson(log.body)}</pre>
                                                     {:else}
-                                                        <p class="text-xs text-textcolor2 italic px-1">No body</p>
+                                                        <p class="text-xs text-textcolor2 italic px-1">{language.noBody}</p>
                                                     {/if}
                                                 </div>
                                             {:else}
@@ -1090,7 +1090,7 @@
                                                 <div>
                                                     <div class="flex items-center justify-between mb-1.5">
                                                         <div class="flex items-center gap-2">
-                                                            <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">Response Body</span>
+                                                            <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.responseBodyLabel}</span>
                                                             {#if statusCode}
                                                                 <span class="text-xs font-mono font-bold {statusColor}">{statusCode}</span>
                                                             {/if}

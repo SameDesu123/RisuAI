@@ -1480,4 +1480,15 @@ export const languageChineseTraditional = {
     nanoGPTSelectFromList: "從列表中選擇",
     nanoGPTManualInput: "手動輸入",
     nanoGPTManualModelSelect: "手動模式選擇",
+    "filterByURL": "按 URL 過濾...",
+    "allLogs": "全部",
+    "successLogs": "2xx",
+    "errorLogs": "錯誤",
+    "requestTab": "請求",
+    "responseTab": "響應",
+    "urlLabel": "URL",
+    "headersLabel": "請求頭",
+    "requestBodyLabel": "請求體",
+    "responseBodyLabel": "響應體",
+    "noBody": "無正文"
 } satisfies DeepPartial<typeof import('./en').languageEnglish>;

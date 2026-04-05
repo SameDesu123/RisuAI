@@ -1668,10 +1668,23 @@ export const languageEnglish = {
     modelGridContext: (n: string) => `Context: ${n}`,
     loadouts: "Loadouts",
     loadout: "Loadout",
+    longPressToPopupEditor: "Long press to open popup editor",
+    disableAprilFools: "Hide cute Iris-chan 💔",
 
     nanoGPTSelectFromList: "Select from List",
     nanoGPTManualInput: "Manual Input",
     nanoGPTManualModelSelect: "Manual Model Select",
+    filterByURL: "Filter by URL...",
+    allLogs: "All",
+    successLogs: "2xx",
+    errorLogs: "Error",
+    requestTab: "Request",
+    responseTab: "Response",
+    urlLabel: "URL",
+    headersLabel: "Headers",
+    requestBodyLabel: "Request Body",
+    responseBodyLabel: "Response Body",
+    noBody: "No body"
 } satisfies I18nTranslation;
 
 type I18nTranslationFunction = (...args: any[]) => string;

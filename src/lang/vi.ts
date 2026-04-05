@@ -1456,4 +1456,15 @@ export const languageVietnamese = {
     nanoGPTSelectFromList: "Chọn từ danh sách",
     nanoGPTManualInput: "Nhập thủ công",
     nanoGPTManualModelSelect: "Chọn mô hình thủ công",
+    "filterByURL": "Lọc theo URL...",
+    "allLogs": "Tất cả",
+    "successLogs": "2xx",
+    "errorLogs": "Lỗi",
+    "requestTab": "Yêu cầu",
+    "responseTab": "Phản hồi",
+    "urlLabel": "URL",
+    "headersLabel": "Headers",
+    "requestBodyLabel": "Nội dung yêu cầu",
+    "responseBodyLabel": "Nội dung phản hồi",
+    "noBody": "Không có nội dung"
 } satisfies DeepPartial<typeof import('./en').languageEnglish>;

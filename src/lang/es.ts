@@ -1455,4 +1455,15 @@ export const languageSpanish = {
     nanoGPTSelectFromList: "Seleccionar de la lista",
     nanoGPTManualInput: "Entrada manual",
     nanoGPTManualModelSelect: "Selección manual de modelo",
+    "filterByURL": "Filtrar por URL...",
+    "allLogs": "Todo",
+    "successLogs": "2xx",
+    "errorLogs": "Error",
+    "requestTab": "Solicitud",
+    "responseTab": "Respuesta",
+    "urlLabel": "URL",
+    "headersLabel": "Encabezados",
+    "requestBodyLabel": "Cuerpo de la solicitud",
+    "responseBodyLabel": "Cuerpo de la respuesta",
+    "noBody": "Sin cuerpo"
 } satisfies DeepPartial<typeof import('./en').languageEnglish>;
