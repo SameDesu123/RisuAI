@@ -320,8 +320,10 @@
         } catch (error) {
             console.error(error)
             alertError(error)
+        } finally {
+            unregisterAbortCallback()
+            abortController = null
         }
-        unregisterAbortCallback()
         lastCharId = $selectedCharID
         $doingChat = false
         if(DBState.db.playMessage){

@@ -61,7 +61,7 @@ let checkTimer: ReturnType<typeof setInterval> | null = null
 
 function startChecking() {
     if (checkTimer !== null) return
-    checkTimer = setInterval(check, checkIntervalMs)
+    checkTimer = setInterval(checkHeartbeat, checkIntervalMs)
 }
 
 function stopChecking() {
@@ -71,7 +71,7 @@ function stopChecking() {
     }
 }
 
-function check() {
+function checkHeartbeat() {
     if (paused) return
 
     const now = Date.now()

@@ -5,6 +5,9 @@
  * Sends periodic heartbeats to the watchdog worker and handles freeze events.
  */
 
+import { get } from 'svelte/store'
+import { doingChat } from '../process/index.svelte'
+
 const HEARTBEAT_INTERVAL_MS = 1000
 const FREEZE_THRESHOLD_MS = 5000
 const RESUME_GRACE_PERIOD_MS = 3000
@@ -23,6 +26,7 @@ let worker: Worker | null = null
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 let abortCallback: (() => void) | null = null
 let resumeGraceTimer: ReturnType<typeof setTimeout> | null = null
+let autoAbortIssued = false
 
 export function registerAbortCallback(callback: () => void) {
     abortCallback = callback
@@ -55,6 +59,7 @@ export function reportActivity(stage: number, description: string) {
 export function reportIdle() {
     watchdogState.stage = -1
     watchdogState.stageDescription = ''
+    autoAbortIssued = false
     if (worker) {
         worker.postMessage({ type: 'activity', stage: -1, description: '' })
     }
@@ -70,6 +75,10 @@ function handleWorkerMessage(e: MessageEvent) {
             watchdogState.stage = data.stage
             watchdogState.stageDescription = data.stageDescription
             watchdogState.recovered = false
+            if (!autoAbortIssued && abortCallback && get(doingChat)) {
+                autoAbortIssued = true
+                abortCallback()
+            }
             break
 
         case 'freeze-recovered':
@@ -111,6 +120,7 @@ function handleVisibilityChange() {
 export function dismissFreezeNotification() {
     watchdogState.recovered = false
     watchdogState.lastFreezeDuration = 0
+    autoAbortIssued = false
 }
 
 export function initWatchdog() {
@@ -158,6 +168,7 @@ export function destroyWatchdog() {
         worker = null
     }
     document.removeEventListener('visibilitychange', handleVisibilityChange)
+    autoAbortIssued = false
     watchdogState.initialized = false
     watchdogState.frozen = false
     watchdogState.recovered = false

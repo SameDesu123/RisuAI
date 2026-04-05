@@ -187,6 +187,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
     }
     doingChat.set(true)
+    try {
 
     if(chatProcessIndex === -1 && DBState.db.presetChain){
         const names = DBState.db.presetChain.split(',').map((v) => v.trim())
@@ -2018,6 +2019,10 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
     reportIdle()
     return true
+    }
+    finally {
+        reportIdle()
+    }
 }
 
 function systemizeChat(chat:OpenAIChat[]){
