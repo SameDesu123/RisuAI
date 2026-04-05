@@ -931,7 +931,7 @@
                 </button>
             </div>
             <!-- Toolbar -->
-            <div class="flex items-center gap-2 px-5 py-3 border-b border-darkborderc bg-darkbg">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 px-5 py-3 border-b border-darkborderc bg-darkbg">
                 <div class="flex-1 relative">
                     <input
                         type="text"
@@ -948,27 +948,29 @@
                         </button>
                     {/if}
                 </div>
-                <div class="flex rounded overflow-hidden border border-darkborderc text-xs">
-                    {#each (['all', 'success', 'error'] as const) as f}
-                        <button
-                            class="px-3 py-1.5 transition-colors {logFilter === f ? 'bg-blue-600 text-white' : 'bg-bgcolor text-textcolor2 hover:text-textcolor'}"
-                            onclick={() => { logFilter = f }}
-                        >{f === 'all' ? 'All' : f === 'success' ? '2xx' : 'Error'}</button>
-                    {/each}
+                <div class="flex items-center gap-2 justify-between">
+                    <div class="flex rounded overflow-hidden border border-darkborderc text-xs flex-1 sm:flex-initial">
+                        {#each (['all', 'success', 'error'] as const) as f}
+                            <button
+                                class="px-3 py-1.5 transition-colors flex-1 sm:flex-initial {logFilter === f ? 'bg-blue-600 text-white' : 'bg-bgcolor text-textcolor2 hover:text-textcolor'}"
+                                onclick={() => { logFilter = f }}
+                            >{f === 'all' ? 'All' : f === 'success' ? '2xx' : 'Error'}</button>
+                        {/each}
+                    </div>
+                    <Button size="sm" onclick={() => {
+                        if(allExpanded) {
+                            expandedLogs = new Set()
+                        } else {
+                            expandedLogs = new Set(filteredLogs.map((_, i) => i))
+                        }
+                        allExpanded = !allExpanded
+                    }}>
+                        {allExpanded ? language.collapseAll : language.expandAll}
+                    </Button>
                 </div>
-                <Button size="sm" onclick={() => {
-                    if(allExpanded) {
-                        expandedLogs = new Set()
-                    } else {
-                        expandedLogs = new Set(filteredLogs.map((_, i) => i))
-                    }
-                    allExpanded = !allExpanded
-                }}>
-                    {allExpanded ? language.collapseAll : language.expandAll}
-                </Button>
             </div>
             <!-- Log list -->
-            <div class="flex-1 overflow-y-auto">
+            <div class="flex-1 overflow-y-auto request-log-container">
                 {#if filteredLogs.length === 0}
                     <div class="text-textcolor2 text-center py-12 text-sm">{language.noRequestLogs}</div>
                 {:else}
@@ -989,7 +991,7 @@
                                     <div class="min-w-0 flex-1">
                                 <!-- Row header -->
                                 <button
-                                    class="w-full flex items-center gap-3 px-4 py-3 text-left"
+                                    class="w-full flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 text-left"
                                     onclick={() => {
                                         const newSet = new Set(expandedLogs)
                                         if(isExpanded) {
@@ -1000,19 +1002,23 @@
                                         expandedLogs = newSet
                                     }}
                                 >
-                                    <span class="shrink-0 {methodColor} text-white text-[10px] font-bold font-mono px-2 py-0.5 rounded min-w-[42px] text-center uppercase tracking-wider">
-                                        {method}
-                                    </span>
-                                    <span class="flex-1 text-textcolor text-sm font-mono truncate text-left" title={log.url}>
-                                        {log.url}
-                                    </span>
-                                    <span class="shrink-0 text-xs font-mono font-semibold {statusColor}">
-                                        {statusCode ?? (log.success ? '200' : 'ERR')}
-                                    </span>
-                                    <span class="shrink-0 text-textcolor2 text-xs whitespace-nowrap">{log.date}</span>
-                                    <span class="shrink-0 text-textcolor2">
-                                        {#if isExpanded}<ChevronUpIcon size={16} />{:else}<ChevronDownIcon size={16} />{/if}
-                                    </span>
+                                    <div class="flex items-center gap-3 flex-1 min-w-0">
+                                        <span class="shrink-0 {methodColor} text-white text-[10px] font-bold font-mono px-2 py-0.5 rounded min-w-[42px] text-center uppercase tracking-wider">
+                                            {method}
+                                        </span>
+                                        <span class="flex-1 text-textcolor text-sm font-mono truncate text-left" title={log.url}>
+                                            {log.url}
+                                        </span>
+                                        <span class="shrink-0 text-xs font-mono font-semibold {statusColor}">
+                                            {statusCode ?? (log.success ? '200' : 'ERR')}
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0 border-t border-darkborderc/20 pt-2 sm:border-t-0 sm:pt-0">
+                                        <span class="text-textcolor2 text-xs font-mono">{log.date}</span>
+                                        <span class="shrink-0 text-textcolor2">
+                                            {#if isExpanded}<ChevronUpIcon size={16} />{:else}<ChevronDownIcon size={16} />{/if}
+                                        </span>
+                                    </div>
                                 </button>
                                 <!-- Expanded detail -->
                                 {#if isExpanded}
@@ -1197,6 +1203,33 @@
     .stack-trace-copy:hover {
         background-color: var(--risu-theme-bgcolor);
         color: var(--risu-theme-textcolor);
+    }
+
+    .request-log-container, .request-log-code {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(128, 128, 128, 0.4) transparent;
+    }
+
+    .request-log-container::-webkit-scrollbar, .request-log-code::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    .request-log-container::-webkit-scrollbar-track, .request-log-code::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .request-log-container::-webkit-scrollbar-thumb, .request-log-code::-webkit-scrollbar-thumb {
+        background: transparent;
+        border-radius: 10px;
+    }
+
+    .request-log-container:hover::-webkit-scrollbar-thumb, .request-log-code:hover::-webkit-scrollbar-thumb {
+        background: rgba(128, 128, 128, 0.4);
+    }
+
+    .request-log-container::-webkit-scrollbar-thumb:hover, .request-log-code::-webkit-scrollbar-thumb:hover {
+        background: rgba(128, 128, 128, 0.6);
     }
 
     .request-log-code {
