@@ -50,6 +50,7 @@ export const forageStorage = new AutoStorage()
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
 
 interface fetchLog {
+    id: string
     body: string
     header: string
     response: string
@@ -63,6 +64,64 @@ interface fetchLog {
 }
 
 let fetchLog: fetchLog[] = []
+
+function stringifyFetchLogContent(value: unknown) {
+    if (typeof value === 'string') {
+        return value
+    }
+
+    try {
+        return JSON.stringify(value, null, 2)
+    } catch {
+        return `${value}`
+    }
+}
+
+function createFetchLogEntry(arg: {
+    body: unknown
+    headers?: { [key: string]: string }
+    response: unknown
+    success: boolean
+    url: string
+    resType?: string
+    chatId?: string
+    status?: number
+    method?: string
+}): fetchLog {
+    return {
+        id: uuidv4(),
+        body: stringifyFetchLogContent(arg.body),
+        header: JSON.stringify(arg.headers ?? {}, null, 2),
+        response: stringifyFetchLogContent(arg.response),
+        responseType: arg.resType ?? 'json',
+        success: arg.success,
+        date: (new Date()).toLocaleTimeString(),
+        url: arg.url,
+        chatId: arg.chatId,
+        status: arg.status,
+        method: arg.method ?? 'POST'
+    }
+}
+
+function updateFetchLog(logId: string, patch: Partial<Pick<fetchLog, 'response' | 'success' | 'status' | 'method'>>) {
+    const log = fetchLog.find((entry) => entry.id === logId)
+    if (!log) {
+        return
+    }
+
+    if (patch.response !== undefined) {
+        log.response = patch.response
+    }
+    if (patch.success !== undefined) {
+        log.success = patch.success
+    }
+    if (patch.status !== undefined) {
+        log.status = patch.status
+    }
+    if (patch.method !== undefined) {
+        log.method = patch.method
+    }
+}
 
 export async function downloadFile(name: string, dat: Uint8Array | ArrayBuffer | string) {
     if (typeof (dat) === 'string') {
@@ -657,20 +716,10 @@ export function addFetchLog(arg: {
     chatId?: string,
     status?: number,
     method?: string
-}): number {
-    fetchLog.unshift({
-        body: typeof (arg.body) === 'string' ? arg.body : JSON.stringify(arg.body, null, 2),
-        header: JSON.stringify(arg.headers ?? {}, null, 2),
-        response: typeof (arg.response) === 'string' ? arg.response : JSON.stringify(arg.response, null, 2),
-        responseType: arg.resType ?? 'json',
-        success: arg.success,
-        date: (new Date()).toLocaleTimeString(),
-        url: arg.url,
-        chatId: arg.chatId,
-        status: arg.status,
-        method: arg.method ?? 'POST'
-    });
-    return 0;
+}): string {
+    const logEntry = createFetchLogEntry(arg)
+    fetchLog.unshift(logEntry);
+    return logEntry.id;
 }
 
 /**
@@ -750,32 +799,16 @@ export async function globalFetch(url: string, arg: GlobalFetchArgs = {}): Promi
  * @param {GlobalFetchArgs} arg - The arguments for the fetch request.
  */
 function addFetchLogInGlobalFetch(response: any, success: boolean, url: string, arg: GlobalFetchArgs, status?: number) {
-    try {
-        fetchLog.unshift({
-            body: JSON.stringify(arg.body, null, 2),
-            header: JSON.stringify(arg.headers ?? {}, null, 2),
-            response: JSON.stringify(response, null, 2),
-            success: success,
-            date: (new Date()).toLocaleTimeString(),
-            url: url,
-            chatId: arg.chatId,
-            status: status,
-            method: arg.method ?? 'POST'
-        })
-    }
-    catch {
-        fetchLog.unshift({
-            body: JSON.stringify(arg.body, null, 2),
-            header: JSON.stringify(arg.headers ?? {}, null, 2),
-            response: `${response}`,
-            success: success,
-            date: (new Date()).toLocaleTimeString(),
-            url: url,
-            chatId: arg.chatId,
-            status: status,
-            method: arg.method ?? 'POST'
-        })
-    }
+    fetchLog.unshift(createFetchLogEntry({
+        body: arg.body,
+        headers: arg.headers,
+        response,
+        success,
+        url,
+        chatId: arg.chatId,
+        status,
+        method: arg.method ?? 'POST'
+    }))
 
     if (fetchLog.length > 20) {
         fetchLog.pop()
@@ -1466,17 +1499,17 @@ export class AppendableBuffer {
 
 /**
  * Pipes the fetch log to a readable stream.
- * @param {number} fetchLogIndex - The index of the fetch log.
+ * @param {string} fetchLogId - The id of the fetch log.
  * @param {ReadableStream<Uint8Array>} readableStream - The readable stream to pipe.
  * @returns {ReadableStream<Uint8Array>} - The new readable stream.
  */
-const pipeFetchLog = (fetchLogIndex: number, readableStream: ReadableStream<Uint8Array>) => {
+const pipeFetchLog = (fetchLogId: string, readableStream: ReadableStream<Uint8Array>) => {
     
     const splited = readableStream.tee();
     
     (async () => {
         const text = await (new Response(splited[0])).text()
-        fetchLog[fetchLogIndex].response = text
+        updateFetchLog(fetchLogId, { response: text })
     })()
     
     return splited[1]
@@ -1489,7 +1522,7 @@ async function fetchViaProxyJobWs(url: string, arg: {
     signal?: AbortSignal,
     requestTimeoutMs?: number,
     chatId?: string,
-    fetchLogIndex: number
+    fetchLogId: string
 }): Promise<Response> {
     const auth = await getNodeServerProxyAuth();
 
@@ -1552,7 +1585,7 @@ async function fetchViaProxyJobWs(url: string, arg: {
             }
         }
     });
-    const pipedReadable = pipeFetchLog(arg.fetchLogIndex, readable);
+    const pipedReadable = pipeFetchLog(arg.fetchLogId, readable);
 
     const ensureHeadersReady = () => {
         if (!headersReady) {
@@ -1746,7 +1779,7 @@ export async function fetchNative(url: string, arg: {
     }
     const timeoutSignal = buildTimeoutSignal(arg.signal, arg.requestTimeoutMs)
     const requestSignal = timeoutSignal.signal
-    let fetchLogIndex = addFetchLog({
+    const fetchLogId = addFetchLog({
         body: new TextDecoder().decode(realBody),
         headers: arg.headers,
         response: 'Streamed Fetch',
@@ -1754,15 +1787,21 @@ export async function fetchNative(url: string, arg: {
         url: url,
         resType: 'stream',
         chatId: arg.chatId,
+        method: arg.method
     })
     try {
         if (window.userScriptFetch && !throughProxy) {
-            return await window.userScriptFetch(url, {
-            body: realBody as any,
-            headers: headers,
-            method: arg.method,
-            signal: requestSignal
-        })
+            const response = await window.userScriptFetch(url, {
+                body: realBody as any,
+                headers: headers,
+                method: arg.method,
+                signal: requestSignal
+            })
+            updateFetchLog(fetchLogId, {
+                status: response.status,
+                success: response.ok
+            })
+            return response
         }
         else if (isTauri) {
         fetchIndex++
@@ -1818,7 +1857,7 @@ export async function fetchNative(url: string, arg: {
         let resHeaders: { [key: string]: string } = null
         let status = 400
 
-        let readableStream = pipeFetchLog(fetchLogIndex, new ReadableStream<Uint8Array>({
+        let readableStream = pipeFetchLog(fetchLogId, new ReadableStream<Uint8Array>({
             async start(controller) {
                 while (!resolved || nativeFetchData[fetchId].length > 0) {
                     if (nativeFetchData[fetchId].length > 0) {
@@ -1853,10 +1892,15 @@ export async function fetchNative(url: string, arg: {
             throw new Error(error)
         }
 
-        return new Response(readableStream, {
+        const response = new Response(readableStream, {
             headers: new Headers(resHeaders),
             status: status
         })
+        updateFetchLog(fetchLogId, {
+            status,
+            success: status >= 200 && status < 300
+        })
+        return response
 
 
     }
@@ -1869,15 +1913,20 @@ export async function fetchNative(url: string, arg: {
 
         if (useProxyJobWs) {
             try {
-                return await fetchViaProxyJobWs(url, {
+                const response = await fetchViaProxyJobWs(url, {
                     body: realBody,
                     headers,
                     method: arg.method,
                     signal: requestSignal,
                     requestTimeoutMs: arg.requestTimeoutMs,
                     chatId: arg.chatId,
-                    fetchLogIndex
+                    fetchLogId
                 });
+                updateFetchLog(fetchLogId, {
+                    status: response.status,
+                    success: response.ok
+                })
+                return response
             } catch (wsErr) {
                 console.warn('[ProxyJobWS] fallback to /proxy2 due to error:', wsErr);
             }
@@ -1905,19 +1954,35 @@ export async function fetchNative(url: string, arg: {
             signal: requestSignal
         })
 
-        return new Response(r.body, {
+        const response = new Response(r.body, {
             headers: r.headers,
             status: r.status
         })
+        updateFetchLog(fetchLogId, {
+            status: response.status,
+            success: response.ok
+        })
+        return response
     }
     else {
-        return await fetch(url, {
+        const response = await fetch(url, {
             body: realBody as any,
             headers: headers,
             method: arg.method,
             signal: requestSignal,
         })
+        updateFetchLog(fetchLogId, {
+            status: response.status,
+            success: response.ok
+        })
+        return response
     }
+    } catch (error) {
+        updateFetchLog(fetchLogId, {
+            success: false,
+            response: error instanceof Error ? error.message : `${error}`
+        })
+        throw error
     } finally {
         timeoutSignal.cleanup()
     }

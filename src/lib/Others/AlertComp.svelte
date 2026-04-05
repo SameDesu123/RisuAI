@@ -61,12 +61,11 @@
         y:number,
         content:string,
     } = $state(null)
-    let expandedLogs: Set<number> = $state(new Set())
-    let allExpanded = $state(false)
+    let expandedLogs: Set<string> = $state(new Set())
     let copiedKey: string | null = $state(null)
     let logSearch = $state('')
     let logFilter: 'all' | 'success' | 'error' = $state('all')
-    let activeLogTab: Map<number, 'request' | 'response'> = $state(new Map())
+    let activeLogTab: Map<string, 'request' | 'response'> = $state(new Map())
 
     // Register JSON language for syntax highlighting
     if (!hljs.getLanguage('json')) {
@@ -120,7 +119,6 @@
         }
         if($alertStore.type !== 'requestlogs'){
             expandedLogs = new Set()
-            allExpanded = false
             logSearch = ''
             logFilter = 'all'
             activeLogTab = new Map()
@@ -916,6 +914,7 @@
         const matchSearch = logSearch === '' || log.url.toLowerCase().includes(logSearch.toLowerCase())
         return matchFilter && matchSearch
     })}
+    {@const allFilteredExpanded = filteredLogs.length > 0 && filteredLogs.every((log) => expandedLogs.has(log.id))}
     <div class="fixed inset-0 z-50 bg-black/80 flex justify-center items-start overflow-y-auto p-4">
         <div class="bg-darkbg rounded-lg overflow-hidden w-full max-w-4xl my-4 flex flex-col max-h-[90vh]">
             <!-- Header -->
@@ -958,14 +957,13 @@
                         {/each}
                     </div>
                     <Button size="sm" onclick={() => {
-                        if(allExpanded) {
+                        if(allFilteredExpanded) {
                             expandedLogs = new Set()
                         } else {
-                            expandedLogs = new Set(filteredLogs.map((_, i) => i))
+                            expandedLogs = new Set(filteredLogs.map((log) => log.id))
                         }
-                        allExpanded = !allExpanded
                     }}>
-                        {allExpanded ? language.collapseAll : language.expandAll}
+                        {allFilteredExpanded ? language.collapseAll : language.expandAll}
                     </Button>
                 </div>
             </div>
@@ -975,14 +973,14 @@
                     <div class="text-textcolor2 text-center py-12 text-sm">{language.noRequestLogs}</div>
                 {:else}
                     <div class="flex flex-col gap-2 p-2">
-                        {#each filteredLogs as log, i}
-                            {@const isExpanded = expandedLogs.has(i)}
+                        {#each filteredLogs as log (log.id)}
+                            {@const isExpanded = expandedLogs.has(log.id)}
                             {@const method = log.method ?? 'POST'}
                             {@const statusCode = log.status}
                             {@const methodColor = method === 'GET' ? 'bg-green-700' : method === 'DELETE' ? 'bg-red-700' : method === 'PUT' ? 'bg-orange-600' : method === 'PATCH' ? 'bg-yellow-600' : 'bg-blue-600'}
                             {@const statusColor = statusCode === undefined ? (log.success ? 'bg-green-700' : 'bg-red-700') : statusCode >= 500 ? 'bg-red-700' : statusCode >= 400 ? 'bg-yellow-600' : 'bg-green-700'}
                             {@const accentColor = log.success ? 'bg-green-500' : 'bg-red-500'}
-                            {@const activeTab = activeLogTab.get(i) ?? 'request'}
+                            {@const activeTab = activeLogTab.get(log.id) ?? 'request'}
                             <div class="overflow-hidden rounded-lg border border-darkborderc bg-darkbg/60 transition-colors hover:bg-bgcolor/20">
                                 <div class="flex items-stretch">
                                     <div class="flex shrink-0 items-stretch">
@@ -995,9 +993,9 @@
                                     onclick={() => {
                                         const newSet = new Set(expandedLogs)
                                         if(isExpanded) {
-                                            newSet.delete(i)
+                                            newSet.delete(log.id)
                                         } else {
-                                            newSet.add(i)
+                                            newSet.add(log.id)
                                         }
                                         expandedLogs = newSet
                                     }}
@@ -1031,7 +1029,7 @@
                                                     onclick={(e) => {
                                                         e.stopPropagation()
                                                         const m = new Map(activeLogTab)
-                                                        m.set(i, tab)
+                                                        m.set(log.id, tab)
                                                         activeLogTab = m
                                                     }}
                                                 >{tab === 'request' ? language.requestTab : language.responseTab}</button>
@@ -1045,10 +1043,10 @@
                                                     <div class="flex items-center justify-between mb-1.5">
                                                         <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.urlLabel}</span>
                                                         <button
-                                                            class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${i}-url` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
-                                                            onclick={(e) => { e.stopPropagation(); copyToClipboard(log.url, `${i}-url`) }}
+                                                            class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${log.id}-url` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
+                                                            onclick={(e) => { e.stopPropagation(); copyToClipboard(log.url, `${log.id}-url`) }}
                                                         >
-                                                            {#if copiedKey === `${i}-url`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
+                                                            {#if copiedKey === `${log.id}-url`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
                                                         </button>
                                                     </div>
                                                     <pre class="request-log-code text-sm break-all">{log.url}</pre>
@@ -1058,10 +1056,10 @@
                                                     <div class="flex items-center justify-between mb-1.5">
                                                         <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.headersLabel}</span>
                                                         <button
-                                                            class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${i}-header` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
-                                                            onclick={(e) => { e.stopPropagation(); copyToClipboard(log.header, `${i}-header`) }}
+                                                            class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${log.id}-header` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
+                                                            onclick={(e) => { e.stopPropagation(); copyToClipboard(log.header, `${log.id}-header`) }}
                                                         >
-                                                            {#if copiedKey === `${i}-header`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
+                                                            {#if copiedKey === `${log.id}-header`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
                                                         </button>
                                                     </div>
                                                     <pre class="request-log-code hljs max-h-40">{@html highlightJson(log.header)}</pre>
@@ -1072,10 +1070,10 @@
                                                         <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.requestBodyLabel}</span>
                                                         {#if log.body}
                                                             <button
-                                                                class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${i}-body` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
-                                                                onclick={(e) => { e.stopPropagation(); copyToClipboard(log.body, `${i}-body`) }}
+                                                                class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${log.id}-body` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
+                                                                onclick={(e) => { e.stopPropagation(); copyToClipboard(log.body, `${log.id}-body`) }}
                                                             >
-                                                                {#if copiedKey === `${i}-body`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
+                                                                {#if copiedKey === `${log.id}-body`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
                                                             </button>
                                                         {/if}
                                                     </div>
@@ -1092,14 +1090,16 @@
                                                         <div class="flex items-center gap-2">
                                                             <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.responseBodyLabel}</span>
                                                             {#if statusCode}
-                                                                <span class="text-xs font-mono font-bold {statusColor}">{statusCode}</span>
+                                                                <span class="flex shrink-0 items-center justify-center {statusColor} text-white text-[11px] font-bold font-mono px-1 py-0.5 rounded text-center uppercase leading-none">
+                                                                    <span class="translate-y-[0.5px]">{statusCode}</span>
+                                                                </span>
                                                             {/if}
                                                         </div>
                                                         <button
-                                                            class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${i}-response` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
-                                                            onclick={(e) => { e.stopPropagation(); copyToClipboard(log.response, `${i}-response`) }}
+                                                            class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${log.id}-response` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
+                                                            onclick={(e) => { e.stopPropagation(); copyToClipboard(log.response, `${log.id}-response`) }}
                                                         >
-                                                            {#if copiedKey === `${i}-response`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
+                                                            {#if copiedKey === `${log.id}-response`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
                                                         </button>
                                                     </div>
                                                     <pre class="request-log-code hljs max-h-80">{@html highlightJson(log.response)}</pre>
