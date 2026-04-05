@@ -917,7 +917,7 @@
         return matchFilter && matchSearch
     })}
     <div class="fixed inset-0 z-50 bg-black/80 flex justify-center items-start overflow-y-auto p-4">
-        <div class="bg-darkbg rounded-lg w-full max-w-4xl my-4 flex flex-col max-h-[90vh]">
+        <div class="bg-darkbg rounded-lg overflow-hidden w-full max-w-4xl my-4 flex flex-col max-h-[90vh]">
             <!-- Header -->
             <div class="flex items-center justify-between px-5 py-4 border-b border-darkborderc sticky top-0 bg-darkbg z-10">
                 <div class="flex items-center gap-3">
@@ -972,16 +972,21 @@
                 {#if filteredLogs.length === 0}
                     <div class="text-textcolor2 text-center py-12 text-sm">{language.noRequestLogs}</div>
                 {:else}
-                    <div class="divide-y divide-darkborderc rounded-t-lg overflow-hidden">
+                    <div class="flex flex-col gap-2 p-2">
                         {#each filteredLogs as log, i}
                             {@const isExpanded = expandedLogs.has(i)}
                             {@const method = log.method ?? 'POST'}
                             {@const statusCode = log.status}
                             {@const methodColor = method === 'GET' ? 'bg-green-700' : method === 'DELETE' ? 'bg-red-700' : method === 'PUT' ? 'bg-orange-600' : method === 'PATCH' ? 'bg-yellow-600' : 'bg-blue-600'}
                             {@const statusColor = statusCode === undefined ? (log.success ? 'text-green-400' : 'text-red-400') : statusCode >= 500 ? 'text-red-400' : statusCode >= 400 ? 'text-yellow-400' : 'text-green-400'}
-                            {@const accentColor = log.success ? 'border-l-green-500' : 'border-l-red-500'}
+                            {@const accentColor = log.success ? 'bg-green-500' : 'bg-red-500'}
                             {@const activeTab = activeLogTab.get(i) ?? 'request'}
-                            <div class="border-l-4 {accentColor} overflow-hidden transition-colors hover:bg-bgcolor/20">
+                            <div class="overflow-hidden rounded-lg border border-darkborderc bg-darkbg/60 transition-colors hover:bg-bgcolor/20">
+                                <div class="flex items-stretch">
+                                    <div class="flex shrink-0 items-stretch">
+                                        <div class="w-1 {accentColor}"></div>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
                                 <!-- Row header -->
                                 <button
                                     class="w-full flex items-center gap-3 px-4 py-3 text-left"
@@ -1097,6 +1102,8 @@
                                         </div>
                                     </div>
                                 {/if}
+                                    </div>
+                                </div>
                             </div>
                         {/each}
                     </div>
