@@ -980,7 +980,7 @@
                             {@const method = log.method ?? 'POST'}
                             {@const statusCode = log.status}
                             {@const methodColor = method === 'GET' ? 'bg-green-700' : method === 'DELETE' ? 'bg-red-700' : method === 'PUT' ? 'bg-orange-600' : method === 'PATCH' ? 'bg-yellow-600' : 'bg-blue-600'}
-                            {@const statusColor = statusCode === undefined ? (log.success ? 'text-green-400' : 'text-red-400') : statusCode >= 500 ? 'text-red-400' : statusCode >= 400 ? 'text-yellow-400' : 'text-green-400'}
+                            {@const statusColor = statusCode === undefined ? (log.success ? 'bg-green-700' : 'bg-red-700') : statusCode >= 500 ? 'bg-red-700' : statusCode >= 400 ? 'bg-yellow-600' : 'bg-green-700'}
                             {@const accentColor = log.success ? 'bg-green-500' : 'bg-red-500'}
                             {@const activeTab = activeLogTab.get(i) ?? 'request'}
                             <div class="overflow-hidden rounded-lg border border-darkborderc bg-darkbg/60 transition-colors hover:bg-bgcolor/20">
@@ -1003,14 +1003,14 @@
                                     }}
                                 >
                                     <div class="flex items-center gap-3 flex-1 min-w-0">
-                                        <span class="shrink-0 {methodColor} text-white text-[10px] font-bold font-mono px-2 py-0.5 rounded min-w-[42px] text-center uppercase tracking-wider">
-                                            {method}
+                                        <span class="flex shrink-0 items-center justify-center {methodColor} text-white text-sm font-bold font-mono px-3 py-1 rounded min-w-[64px] text-center uppercase leading-none">
+                                            <span class="translate-y-[1px]">{method}</span>
                                         </span>
                                         <span class="flex-1 text-textcolor text-sm font-mono truncate text-left" title={log.url}>
                                             {log.url}
                                         </span>
-                                        <span class="shrink-0 text-xs font-mono font-semibold {statusColor}">
-                                            {statusCode ?? (log.success ? '200' : 'ERR')}
+                                        <span class="flex shrink-0 items-center justify-center {statusColor} text-white text-sm font-bold font-mono px-2 py-1 rounded min-w-[52px] text-center uppercase leading-none">
+                                            <span class="translate-y-[1px]">{statusCode ?? (log.success ? '200' : 'ERR')}</span>
                                         </span>
                                     </div>
                                     <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0 border-t border-darkborderc/20 pt-2 sm:border-t-0 sm:pt-0">
