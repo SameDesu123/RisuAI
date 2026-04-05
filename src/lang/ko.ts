@@ -1464,4 +1464,24 @@ export const languageKorean = {
         "cancel": "취소",
     },
     "hamburgerButtonBottom": "메뉴 버튼을 사이드바 하단으로 이동",
+    freezeDetection: {
+        title: "메인 스레드 멈춤 감지",
+        description: "애플리케이션이 응답하지 않았습니다. 무거운 처리 작업이 원인일 수 있습니다.",
+        stage: "현재 단계",
+        duration: "멈춤 시간",
+        seconds: "초",
+        abort: "현재 작업 중단",
+        recovered: "복구됨",
+        recoveredDescription: "애플리케이션이 멈춤 상태에서 복구되었습니다.",
+        frozenAt: "멈춤 발생 단계",
+        dismiss: "닫기",
+        stages: {
+            idle: "대기 중",
+            init: "초기화",
+            promptBuilding: "프롬프트 구성 및 토크나이징",
+            memoryProcessing: "메모리 처리",
+            apiRequest: "API 요청 및 스트리밍",
+            postProcessing: "후처리",
+        }
+    }
 } satisfies DeepPartial<typeof import('./en').languageEnglish>

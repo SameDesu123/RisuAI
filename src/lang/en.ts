@@ -1632,7 +1632,27 @@ export const languageEnglish = {
     loadouts: "Loadouts",
     loadout: "Loadout",
     longPressToPopupEditor: "Long press to open popup editor",
-    disableAprilFools: "Hide cute Iris-chan 💔"
+    disableAprilFools: "Hide cute Iris-chan 💔",
+    freezeDetection: {
+        title: "Main Thread Freeze Detected",
+        description: "The application became unresponsive. This may be caused by heavy processing.",
+        stage: "Current Stage",
+        duration: "Frozen for",
+        seconds: "seconds",
+        abort: "Abort Current Operation",
+        recovered: "Recovered",
+        recoveredDescription: "The application has recovered from a freeze.",
+        frozenAt: "Froze during",
+        dismiss: "Dismiss",
+        stages: {
+            idle: "Idle",
+            init: "Initialization",
+            promptBuilding: "Prompt Building & Tokenization",
+            memoryProcessing: "Memory Processing",
+            apiRequest: "API Request & Streaming",
+            postProcessing: "Post-Processing",
+        }
+    }
 } satisfies I18nTranslation;
 
 type I18nTranslationFunction = (...args: any[]) => string;
