@@ -972,7 +972,7 @@
                 {#if filteredLogs.length === 0}
                     <div class="text-textcolor2 text-center py-12 text-sm">{language.noRequestLogs}</div>
                 {:else}
-                    <div class="divide-y divide-darkborderc">
+                    <div class="divide-y divide-darkborderc rounded-t-lg overflow-hidden">
                         {#each filteredLogs as log, i}
                             {@const isExpanded = expandedLogs.has(i)}
                             {@const method = log.method ?? 'POST'}
@@ -981,7 +981,7 @@
                             {@const statusColor = statusCode === undefined ? (log.success ? 'text-green-400' : 'text-red-400') : statusCode >= 500 ? 'text-red-400' : statusCode >= 400 ? 'text-yellow-400' : 'text-green-400'}
                             {@const accentColor = log.success ? 'border-l-green-500' : 'border-l-red-500'}
                             {@const activeTab = activeLogTab.get(i) ?? 'request'}
-                            <div class="border-l-4 {accentColor} transition-colors hover:bg-bgcolor/20">
+                            <div class="border-l-4 {accentColor} overflow-hidden transition-colors hover:bg-bgcolor/20">
                                 <!-- Row header -->
                                 <button
                                     class="w-full flex items-center gap-3 px-4 py-3 text-left"
@@ -1059,14 +1059,20 @@
                                                 <div>
                                                     <div class="flex items-center justify-between mb-1.5">
                                                         <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">Request Body</span>
-                                                        <button
-                                                            class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${i}-body` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
-                                                            onclick={(e) => { e.stopPropagation(); copyToClipboard(log.body, `${i}-body`) }}
-                                                        >
-                                                            {#if copiedKey === `${i}-body`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
-                                                        </button>
+                                                        {#if log.body}
+                                                            <button
+                                                                class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${i}-body` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
+                                                                onclick={(e) => { e.stopPropagation(); copyToClipboard(log.body, `${i}-body`) }}
+                                                            >
+                                                                {#if copiedKey === `${i}-body`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
+                                                            </button>
+                                                        {/if}
                                                     </div>
-                                                    <pre class="request-log-code hljs">{@html highlightJson(log.body)}</pre>
+                                                    {#if log.body}
+                                                        <pre class="request-log-code hljs">{@html highlightJson(log.body)}</pre>
+                                                    {:else}
+                                                        <p class="text-xs text-textcolor2 italic px-1">No body</p>
+                                                    {/if}
                                                 </div>
                                             {:else}
                                                 <!-- Response -->
@@ -1187,8 +1193,8 @@
     }
 
     .request-log-code {
-        background-color: #0f0f1a;
-        color: #e0e0e0;
+        background-color: var(--risu-theme-bgcolor);
+        color: var(--risu-theme-textcolor);
         border: 1px solid var(--risu-theme-darkborderc);
         border-radius: 0.375rem;
         padding: 0.75rem;
