@@ -56,6 +56,7 @@ interface fetchLog {
     success: boolean,
     date: string
     url: string
+    method?: string
     responseType?: string
     chatId?: string
     status?: number
@@ -654,7 +655,8 @@ export function addFetchLog(arg: {
     url: string,
     resType?: string,
     chatId?: string,
-    status?: number
+    status?: number,
+    method?: string
 }): number {
     fetchLog.unshift({
         body: typeof (arg.body) === 'string' ? arg.body : JSON.stringify(arg.body, null, 2),
@@ -665,7 +667,8 @@ export function addFetchLog(arg: {
         date: (new Date()).toLocaleTimeString(),
         url: arg.url,
         chatId: arg.chatId,
-        status: arg.status
+        status: arg.status,
+        method: arg.method ?? 'POST'
     });
     return 0;
 }
@@ -756,7 +759,8 @@ function addFetchLogInGlobalFetch(response: any, success: boolean, url: string, 
             date: (new Date()).toLocaleTimeString(),
             url: url,
             chatId: arg.chatId,
-            status: status
+            status: status,
+            method: arg.method ?? 'POST'
         })
     }
     catch {
@@ -768,7 +772,8 @@ function addFetchLogInGlobalFetch(response: any, success: boolean, url: string, 
             date: (new Date()).toLocaleTimeString(),
             url: url,
             chatId: arg.chatId,
-            status: status
+            status: status,
+            method: arg.method ?? 'POST'
         })
     }
 
