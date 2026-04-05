@@ -8,6 +8,7 @@ import { alertError, alertToast } from "../alert";
 import { parseChatML } from "../parser/chatML";
 import { loadLoreBookV3Prompt } from "./lorebook.svelte";
 import { findCharacterbyId, getAuthorNoteDefaultText, getPersonaPrompt, getUserName, isLastCharPunctuation, trimUntilPunctuation, parseToggleSyntax, prebuiltAssetCommand } from "../util";
+import { reportActivity, reportIdle } from "../watchdog/watchdogManager.svelte";
 import { requestChatData } from "./request/request";
 import { stableDiff } from "./stableDiff";
 import { processScript, processScriptFull, risuChatParser } from "./scripts";
@@ -74,6 +75,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 } = {}):Promise<boolean> {
 
     chatProcessStage.set(0)
+    reportActivity(0, 'Initialization')
     const abortSignal = arg.signal ?? (new AbortController()).signal
     
     // NOTE: `throwError()` can be called before these are populated (e.g. HypaV3 early validation errors).
@@ -205,15 +207,18 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
     if(connectionOpen){
         chatProcessStage.set(4)
+        reportActivity(4, 'Peer sync check')
         const peerSafe = await peerSafeCheck()
         if(!peerSafe){
             peerRevertChat()
             doingChat.set(false)
+            reportIdle()
             throwError(language.otherUserRequesting)
             return false
         }
         await peerSync()
         chatProcessStage.set(0)
+        reportActivity(0, 'Initialization')
     }
 
     DBState.db.statics.messages += 1
@@ -313,6 +318,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     let maxContextTokens = DBState.db.maxContext
 
     chatProcessStage.set(1)
+    reportActivity(1, 'Prompt building & tokenization')
     stageTimings.stage1Start = Date.now()
     let unformated = {
         'main':([] as OpenAIChat[]),
@@ -809,6 +815,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         currentTokens += triggerResult.tokens
         if(triggerResult.stopSending){
             doingChat.set(false)
+            reportIdle()
             return false
         }
     }
@@ -984,6 +991,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     if(nowChatroom.supaMemory && (DBState.db.supaModelType !== 'none' || DBState.db.hanuraiEnable || DBState.db.hypav2 || DBState.db.hypaV3)){
         stageTimings.stage1Duration = Date.now() - stageTimings.stage1Start
         chatProcessStage.set(2)
+        reportActivity(2, 'Memory processing')
         stageTimings.stage2Start = Date.now()
         if(DBState.db.hanuraiEnable){
             const hn = await hanuraiMemory(chats, {
@@ -1053,6 +1061,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
         stageTimings.stage2Duration = Date.now() - stageTimings.stage2Start
         chatProcessStage.set(1)
+        reportActivity(1, 'Post-memory prompt assembly')
     }
     else{
         stageTimings.stage1Duration = Date.now() - stageTimings.stage1Start
@@ -1464,6 +1473,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
 
     chatProcessStage.set(3)
+    reportActivity(3, 'API request & streaming')
     stageTimings.stage3Start = Date.now()
     if(arg.preview){
         previewFormated = formated
@@ -1694,6 +1704,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
     if(needsAutoContinue){
         doingChat.set(false)
+        reportIdle()
         return await sendChat(chatProcessIndex, {
             chatAdditonalTokens: arg.chatAdditonalTokens,
             continue: true,
@@ -1720,6 +1731,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         generationInfo.stageTiming.stage3 = stageTimings.stage3Duration
     }
     chatProcessStage.set(4)
+    reportActivity(4, 'Post-processing')
     stageTimings.stage4Start = Date.now()
 
     if(resendChat){
@@ -1738,6 +1750,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
         
         doingChat.set(false)
+        reportIdle()
         return await sendChat(chatProcessIndex, {
             signal: abortSignal
         })
@@ -2003,6 +2016,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         DBState.db.characters[selectedChar].chats[selectedChat].message[lastMessageIndex].generationInfo = generationInfo
     }
 
+    reportIdle()
     return true
 }
 

@@ -34,6 +34,7 @@
     import PopupEditor from './lib/Others/PopupEditor.svelte';
     import LoadoutModal from './lib/Others/LoadoutModal.svelte';
     import IrisModal from './lib/Others/IrisModal.svelte';
+    import FreezeOverlay from './lib/Others/FreezeOverlay.svelte';
 
 
   
@@ -252,4 +253,5 @@
     {#if irisStore.open}
         <IrisModal />
     {/if}
+    <FreezeOverlay />
 </main>

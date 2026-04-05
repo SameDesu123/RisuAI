@@ -28,6 +28,7 @@
     import { getInlayAsset } from 'src/ts/process/files/inlays';
     import { ConnectionOpenStore } from 'src/ts/sync/multiuser';
     import { coldStorageHeader, preLoadChat } from 'src/ts/process/coldstorage.svelte';
+    import { registerAbortCallback, unregisterAbortCallback } from 'src/ts/watchdog/watchdogManager.svelte';
     import Chats from './Chats.svelte';
     import Button from '../UI/GUI/Button.svelte';
     import PluginDefinedIcon from '../Others/PluginDefinedIcon.svelte';
@@ -306,6 +307,7 @@
         let previousLength = DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.length
         messageInput = ''
         abortController = new AbortController()
+        registerAbortCallback(() => abortController?.abort())
         try {
             await sendChat(-1, {
                 signal:abortController.signal,
@@ -319,6 +321,7 @@
             console.error(error)
             alertError(error)
         }
+        unregisterAbortCallback()
         lastCharId = $selectedCharID
         $doingChat = false
         if(DBState.db.playMessage){

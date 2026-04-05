@@ -6,6 +6,7 @@ import { loadData } from "./ts/bootstrap";
 import { initHotkey } from "./ts/hotkey";
 import { preLoadCheck } from "./preload";
 import { mount } from "svelte";
+import { initWatchdog } from "./ts/watchdog/watchdogManager.svelte";
 
 preLoadCheck()
 let app = mount(App, {
@@ -13,6 +14,7 @@ let app = mount(App, {
 });
 loadData()
 initHotkey()
+initWatchdog()
 document.getElementById('preloading').remove()
 
 export default app;
