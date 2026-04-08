@@ -635,6 +635,7 @@ export function setDatabase(data:Database){
     data.simplifiedToolUse ??= false
     data.streamGeminiThoughts ??= false
     data.settingsCloseButtonSize ??= 24
+    data.experimentalRequestLogViewer ??= false
     data.hideAllImages ??= false
     data.ImagenModel ??= 'imagen-4.0-generate-001'
     data.ImagenImageSize ??= '1K'
@@ -1030,6 +1031,7 @@ export interface Database{
     moduleIntergration: string
     customCSS: string
     betaMobileGUI:boolean
+    experimentalRequestLogViewer:boolean
     jsonSchemaEnabled:boolean
     jsonSchema:string
     strictJsonSchema:boolean

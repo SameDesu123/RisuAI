@@ -304,7 +304,21 @@ export function showHypaV2Alert(){
     })
 }
 
+export async function showLegacyRequestLogs(error?: unknown){
+    if(error){
+        console.error('Failed to open experimental request log viewer, falling back to legacy viewer.', error)
+    }
+
+    const { getRequestLog } = await import("./globalApi.svelte")
+    alertMd(getRequestLog())
+}
+
 export function alertRequestLogs(){
+    if(!getDatabase().experimentalRequestLogViewer){
+        void showLegacyRequestLogs()
+        return
+    }
+
     alertStoreImported.set({
         'type': 'requestlogs',
         'msg': ''

@@ -397,6 +397,13 @@
     </div>
 
     <div class="flex items-center mt-2">
+        <Check bind:check={DBState.db.experimentalRequestLogViewer} name={language.experimentalRequestLogViewer}>
+            <Help key="experimental"/>
+            <Help key="experimentalRequestLogViewer"/>
+        </Check>
+    </div>
+
+    <div class="flex items-center mt-2">
         <Check bind:check={DBState.db.menuSideBar} name={language.menuSideBar}/>
     </div>
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { alertGenerationInfoStore } from "../../ts/alert";
+    import { alertGenerationInfoStore, showLegacyRequestLogs } from "../../ts/alert";
     
     import { DBState } from 'src/ts/stores.svelte';
     import { getCharImage } from '../../ts/characters';
@@ -66,6 +66,10 @@
     let logSearch = $state('')
     let logFilter: 'all' | 'success' | 'error' = $state('all')
     let activeLogTab: Map<string, 'request' | 'response'> = $state(new Map())
+
+    type ViewerRequestLog = ReturnType<typeof getFetchLogs>[number] & {
+        method: string
+    }
 
     // Register JSON language for syntax highlighting
     if (!hljs.getLanguage('json')) {
@@ -155,6 +159,25 @@
         } catch (error) {
             return data
         }
+    }
+
+    function getRequestLogsForViewer(): ViewerRequestLog[] {
+        return getFetchLogs().map((log, index) => ({
+            ...log,
+            id: String(log.id ?? `request-log-${index}`) || `request-log-${index}`,
+            body: String(log.body ?? ''),
+            header: String(log.header ?? '{}'),
+            response: String(log.response ?? ''),
+            success: Boolean(log.success),
+            date: String(log.date ?? ''),
+            url: String(log.url ?? ''),
+            method: String(log.method ?? 'POST') || 'POST',
+            status: typeof log.status === 'number' ? log.status : undefined
+        }))
+    }
+
+    function handleRequestLogsError(error: unknown) {
+        void showLegacyRequestLogs(error)
     }
 </script>
 
@@ -908,215 +931,220 @@
         {/each}
     </div>
 {:else if $alertStore.type === 'requestlogs'}
-    {@const logs = getFetchLogs()}
-    {@const filteredLogs = logs.filter(log => {
-        const matchFilter = logFilter === 'all' || (logFilter === 'success' ? log.success : !log.success)
-        const matchSearch = logSearch === '' || log.url.toLowerCase().includes(logSearch.toLowerCase())
-        return matchFilter && matchSearch
-    })}
-    {@const allFilteredExpanded = filteredLogs.length > 0 && filteredLogs.every((log) => expandedLogs.has(log.id))}
-    <div class="fixed inset-0 z-50 bg-black/80 flex justify-center items-start overflow-y-auto p-4">
-        <div class="bg-darkbg rounded-lg overflow-hidden w-full max-w-4xl my-4 flex flex-col max-h-[90vh]">
-            <!-- Header -->
-            <div class="flex items-center justify-between px-5 py-4 border-b border-darkborderc sticky top-0 bg-darkbg z-10">
-                <div class="flex items-center gap-3">
-                    <h1 class="text-lg font-bold text-textcolor">{language.ShowLog}</h1>
-                    <span class="text-xs text-textcolor2 bg-bgcolor px-2 py-0.5 rounded-full">{logs.length}</span>
-                </div>
-                <button class="text-textcolor2 hover:text-textcolor p-1" onclick={() => {
-                    alertStore.set({ type: 'none', msg: '' })
-                }}>
-                    <XIcon size={20} />
-                </button>
-            </div>
-            <!-- Toolbar -->
-            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 px-5 py-3 border-b border-darkborderc bg-darkbg">
-                <div class="flex-1 relative">
-                    <input
-                        type="text"
-                        placeholder={language.filterByURL}
-                        bind:value={logSearch}
-                        class="w-full bg-bgcolor border border-darkborderc rounded text-sm text-textcolor px-3 py-1.5 pr-8 focus:outline-none focus:border-blue-500 placeholder:text-textcolor2"
-                    />
-                    {#if logSearch}
-                        <button
-                            class="absolute right-2 top-1/2 -translate-y-1/2 text-textcolor2 hover:text-textcolor"
-                            onclick={() => { logSearch = '' }}
-                        >
-                            <XIcon size={14} />
-                        </button>
-                    {/if}
-                </div>
-                <div class="flex items-center gap-2 justify-between">
-                    <div class="flex rounded overflow-hidden border border-darkborderc text-xs flex-1 sm:flex-initial">
-                        {#each (['all', 'success', 'error'] as const) as f}
-                            <button
-                                class="px-3 py-1.5 transition-colors flex-1 sm:flex-initial {logFilter === f ? 'bg-blue-600 text-white' : 'bg-bgcolor text-textcolor2 hover:text-textcolor'}"
-                                onclick={() => { logFilter = f }}
-                            >{f === 'all' ? language.allLogs : f === 'success' ? language.successLogs : language.errorLogs}</button>
-                        {/each}
+    <svelte:boundary onerror={handleRequestLogsError}>
+        {@const logs = getRequestLogsForViewer()}
+        {@const filteredLogs = logs.filter(log => {
+            const matchFilter = logFilter === 'all' || (logFilter === 'success' ? log.success : !log.success)
+            const matchSearch = logSearch === '' || log.url.toLowerCase().includes(logSearch.toLowerCase())
+            return matchFilter && matchSearch
+        })}
+        {@const allFilteredExpanded = filteredLogs.length > 0 && filteredLogs.every((log) => expandedLogs.has(log.id))}
+        <div class="fixed inset-0 z-50 bg-black/80 flex justify-center items-start overflow-y-auto p-4">
+            <div class="bg-darkbg rounded-lg overflow-hidden w-full max-w-4xl my-4 flex flex-col max-h-[90vh]">
+                <!-- Header -->
+                <div class="flex items-center justify-between px-5 py-4 border-b border-darkborderc sticky top-0 bg-darkbg z-10">
+                    <div class="flex items-center gap-3">
+                        <h1 class="text-lg font-bold text-textcolor">{language.ShowLog}</h1>
+                        <span class="text-xs text-textcolor2 bg-bgcolor px-2 py-0.5 rounded-full">{logs.length}</span>
                     </div>
-                    <Button size="sm" onclick={() => {
-                        if(allFilteredExpanded) {
-                            expandedLogs = new Set()
-                        } else {
-                            expandedLogs = new Set(filteredLogs.map((log) => log.id))
-                        }
+                    <button class="text-textcolor2 hover:text-textcolor p-1" onclick={() => {
+                        alertStore.set({ type: 'none', msg: '' })
                     }}>
-                        {allFilteredExpanded ? language.collapseAll : language.expandAll}
-                    </Button>
+                        <XIcon size={20} />
+                    </button>
                 </div>
-            </div>
-            <!-- Log list -->
-            <div class="flex-1 overflow-y-auto request-log-container">
-                {#if filteredLogs.length === 0}
-                    <div class="text-textcolor2 text-center py-12 text-sm">{language.noRequestLogs}</div>
-                {:else}
-                    <div class="flex flex-col gap-2 p-2">
-                        {#each filteredLogs as log (log.id)}
-                            {@const isExpanded = expandedLogs.has(log.id)}
-                            {@const method = log.method ?? 'POST'}
-                            {@const statusCode = log.status}
-                            {@const methodColor = method === 'GET' ? 'bg-green-700' : method === 'DELETE' ? 'bg-red-700' : method === 'PUT' ? 'bg-orange-600' : method === 'PATCH' ? 'bg-yellow-600' : 'bg-blue-600'}
-                            {@const statusColor = statusCode === undefined ? (log.success ? 'bg-green-700' : 'bg-red-700') : statusCode >= 500 ? 'bg-red-700' : statusCode >= 400 ? 'bg-yellow-600' : 'bg-green-700'}
-                            {@const accentColor = log.success ? 'bg-green-500' : 'bg-red-500'}
-                            {@const activeTab = activeLogTab.get(log.id) ?? 'request'}
-                            <div class="overflow-hidden rounded-lg border border-darkborderc bg-darkbg/60 transition-colors hover:bg-bgcolor/20">
-                                <div class="flex items-stretch">
-                                    <div class="flex shrink-0 items-stretch">
-                                        <div class="w-1 {accentColor}"></div>
-                                    </div>
-                                    <div class="min-w-0 flex-1">
-                                <!-- Row header -->
+                <!-- Toolbar -->
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 px-5 py-3 border-b border-darkborderc bg-darkbg">
+                    <div class="flex-1 relative">
+                        <input
+                            type="text"
+                            placeholder={language.filterByURL}
+                            bind:value={logSearch}
+                            class="w-full bg-bgcolor border border-darkborderc rounded text-sm text-textcolor px-3 py-1.5 pr-8 focus:outline-none focus:border-blue-500 placeholder:text-textcolor2"
+                        />
+                        {#if logSearch}
+                            <button
+                                class="absolute right-2 top-1/2 -translate-y-1/2 text-textcolor2 hover:text-textcolor"
+                                onclick={() => { logSearch = '' }}
+                            >
+                                <XIcon size={14} />
+                            </button>
+                        {/if}
+                    </div>
+                    <div class="flex items-center gap-2 justify-between">
+                        <div class="flex rounded overflow-hidden border border-darkborderc text-xs flex-1 sm:flex-initial">
+                            {#each (['all', 'success', 'error'] as const) as f}
                                 <button
-                                    class="w-full flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 text-left"
-                                    onclick={() => {
-                                        const newSet = new Set(expandedLogs)
-                                        if(isExpanded) {
-                                            newSet.delete(log.id)
-                                        } else {
-                                            newSet.add(log.id)
-                                        }
-                                        expandedLogs = newSet
-                                    }}
-                                >
-                                    <div class="flex items-center gap-3 flex-1 min-w-0">
-                                        <span class="flex shrink-0 items-center justify-center {methodColor} text-white text-sm font-bold font-mono px-3 py-1 rounded min-w-[64px] text-center uppercase leading-none">
-                                            <span class="translate-y-[1px]">{method}</span>
-                                        </span>
-                                        <span class="flex-1 text-textcolor text-sm font-mono truncate text-left" title={log.url}>
-                                            {log.url}
-                                        </span>
-                                        <span class="flex shrink-0 items-center justify-center {statusColor} text-white text-sm font-bold font-mono px-2 py-1 rounded min-w-[52px] text-center uppercase leading-none">
-                                            <span class="translate-y-[1px]">{statusCode ?? (log.success ? '200' : 'ERR')}</span>
-                                        </span>
-                                    </div>
-                                    <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0 border-t border-darkborderc/20 pt-2 sm:border-t-0 sm:pt-0">
-                                        <span class="text-textcolor2 text-xs font-mono">{log.date}</span>
-                                        <span class="shrink-0 text-textcolor2">
-                                            {#if isExpanded}<ChevronUpIcon size={16} />{:else}<ChevronDownIcon size={16} />{/if}
-                                        </span>
-                                    </div>
-                                </button>
-                                <!-- Expanded detail -->
-                                {#if isExpanded}
-                                    <div class="border-t border-darkborderc">
-                                        <!-- Tabs -->
-                                        <div class="flex border-b border-darkborderc bg-bgcolor/30">
-                                            {#each (['request', 'response'] as const) as tab}
-                                                <button
-                                                    class="px-5 py-2 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 -mb-px {activeTab === tab ? 'border-blue-500 text-blue-400' : 'border-transparent text-textcolor2 hover:text-textcolor'}"
-                                                    onclick={(e) => {
-                                                        e.stopPropagation()
-                                                        const m = new Map(activeLogTab)
-                                                        m.set(log.id, tab)
-                                                        activeLogTab = m
-                                                    }}
-                                                >{tab === 'request' ? language.requestTab : language.responseTab}</button>
-                                            {/each}
+                                    class="px-3 py-1.5 transition-colors flex-1 sm:flex-initial {logFilter === f ? 'bg-blue-600 text-white' : 'bg-bgcolor text-textcolor2 hover:text-textcolor'}"
+                                    onclick={() => { logFilter = f }}
+                                >{f === 'all' ? language.allLogs : f === 'success' ? language.successLogs : language.errorLogs}</button>
+                            {/each}
+                        </div>
+                        <Button size="sm" onclick={() => {
+                            if(allFilteredExpanded) {
+                                expandedLogs = new Set()
+                            } else {
+                                expandedLogs = new Set(filteredLogs.map((log) => log.id))
+                            }
+                        }}>
+                            {allFilteredExpanded ? language.collapseAll : language.expandAll}
+                        </Button>
+                    </div>
+                </div>
+                <!-- Log list -->
+                <div class="flex-1 overflow-y-auto request-log-container">
+                    {#if filteredLogs.length === 0}
+                        <div class="text-textcolor2 text-center py-12 text-sm">{language.noRequestLogs}</div>
+                    {:else}
+                        <div class="flex flex-col gap-2 p-2">
+                            {#each filteredLogs as log (log.id)}
+                                {@const isExpanded = expandedLogs.has(log.id)}
+                                {@const method = log.method ?? 'POST'}
+                                {@const statusCode = log.status}
+                                {@const methodColor = method === 'GET' ? 'bg-green-700' : method === 'DELETE' ? 'bg-red-700' : method === 'PUT' ? 'bg-orange-600' : method === 'PATCH' ? 'bg-yellow-600' : 'bg-blue-600'}
+                                {@const statusColor = statusCode === undefined ? (log.success ? 'bg-green-700' : 'bg-red-700') : statusCode >= 500 ? 'bg-red-700' : statusCode >= 400 ? 'bg-yellow-600' : 'bg-green-700'}
+                                {@const accentColor = log.success ? 'bg-green-500' : 'bg-red-500'}
+                                {@const activeTab = activeLogTab.get(log.id) ?? 'request'}
+                                <div class="overflow-hidden rounded-lg border border-darkborderc bg-darkbg/60 transition-colors hover:bg-bgcolor/20">
+                                    <div class="flex items-stretch">
+                                        <div class="flex shrink-0 items-stretch">
+                                            <div class="w-1 {accentColor}"></div>
                                         </div>
-                                        <!-- Tab content -->
-                                        <div class="p-4 space-y-4">
-                                            {#if activeTab === 'request'}
-                                                <!-- URL -->
-                                                <div>
-                                                    <div class="flex items-center justify-between mb-1.5">
-                                                        <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.urlLabel}</span>
-                                                        <button
-                                                            class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${log.id}-url` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
-                                                            onclick={(e) => { e.stopPropagation(); copyToClipboard(log.url, `${log.id}-url`) }}
-                                                        >
-                                                            {#if copiedKey === `${log.id}-url`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
-                                                        </button>
-                                                    </div>
-                                                    <pre class="request-log-code text-sm break-all">{log.url}</pre>
-                                                </div>
-                                                <!-- Headers -->
-                                                <div>
-                                                    <div class="flex items-center justify-between mb-1.5">
-                                                        <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.headersLabel}</span>
-                                                        <button
-                                                            class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${log.id}-header` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
-                                                            onclick={(e) => { e.stopPropagation(); copyToClipboard(log.header, `${log.id}-header`) }}
-                                                        >
-                                                            {#if copiedKey === `${log.id}-header`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
-                                                        </button>
-                                                    </div>
-                                                    <pre class="request-log-code hljs max-h-40">{@html highlightJson(log.header)}</pre>
-                                                </div>
-                                                <!-- Body -->
-                                                <div>
-                                                    <div class="flex items-center justify-between mb-1.5">
-                                                        <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.requestBodyLabel}</span>
-                                                        {#if log.body}
+                                        <div class="min-w-0 flex-1">
+                                    <!-- Row header -->
+                                    <button
+                                        class="w-full flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 text-left"
+                                        onclick={() => {
+                                            const newSet = new Set(expandedLogs)
+                                            if(isExpanded) {
+                                                newSet.delete(log.id)
+                                            } else {
+                                                newSet.add(log.id)
+                                            }
+                                            expandedLogs = newSet
+                                        }}
+                                    >
+                                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                                            <span class="flex shrink-0 items-center justify-center {methodColor} text-white text-sm font-bold font-mono px-3 py-1 rounded min-w-[64px] text-center uppercase leading-none">
+                                                <span class="translate-y-[1px]">{method}</span>
+                                            </span>
+                                            <span class="flex-1 text-textcolor text-sm font-mono truncate text-left" title={log.url}>
+                                                {log.url}
+                                            </span>
+                                            <span class="flex shrink-0 items-center justify-center {statusColor} text-white text-sm font-bold font-mono px-2 py-1 rounded min-w-[52px] text-center uppercase leading-none">
+                                                <span class="translate-y-[1px]">{statusCode ?? (log.success ? '200' : 'ERR')}</span>
+                                            </span>
+                                        </div>
+                                        <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0 border-t border-darkborderc/20 pt-2 sm:border-t-0 sm:pt-0">
+                                            <span class="text-textcolor2 text-xs font-mono">{log.date}</span>
+                                            <span class="shrink-0 text-textcolor2">
+                                                {#if isExpanded}<ChevronUpIcon size={16} />{:else}<ChevronDownIcon size={16} />{/if}
+                                            </span>
+                                        </div>
+                                    </button>
+                                    <!-- Expanded detail -->
+                                    {#if isExpanded}
+                                        <div class="border-t border-darkborderc">
+                                            <!-- Tabs -->
+                                            <div class="flex border-b border-darkborderc bg-bgcolor/30">
+                                                {#each (['request', 'response'] as const) as tab}
+                                                    <button
+                                                        class="px-5 py-2 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 -mb-px {activeTab === tab ? 'border-blue-500 text-blue-400' : 'border-transparent text-textcolor2 hover:text-textcolor'}"
+                                                        onclick={(e) => {
+                                                            e.stopPropagation()
+                                                            const m = new Map(activeLogTab)
+                                                            m.set(log.id, tab)
+                                                            activeLogTab = m
+                                                        }}
+                                                    >{tab === 'request' ? language.requestTab : language.responseTab}</button>
+                                                {/each}
+                                            </div>
+                                            <!-- Tab content -->
+                                            <div class="p-4 space-y-4">
+                                                {#if activeTab === 'request'}
+                                                    <!-- URL -->
+                                                    <div>
+                                                        <div class="flex items-center justify-between mb-1.5">
+                                                            <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.urlLabel}</span>
                                                             <button
-                                                                class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${log.id}-body` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
-                                                                onclick={(e) => { e.stopPropagation(); copyToClipboard(log.body, `${log.id}-body`) }}
+                                                                class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${log.id}-url` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
+                                                                onclick={(e) => { e.stopPropagation(); copyToClipboard(log.url, `${log.id}-url`) }}
                                                             >
-                                                                {#if copiedKey === `${log.id}-body`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
+                                                                {#if copiedKey === `${log.id}-url`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
                                                             </button>
-                                                        {/if}
+                                                        </div>
+                                                        <pre class="request-log-code text-sm break-all">{log.url}</pre>
                                                     </div>
-                                                    {#if log.body}
-                                                        <pre class="request-log-code hljs">{@html highlightJson(log.body)}</pre>
-                                                    {:else}
-                                                        <p class="text-xs text-textcolor2 italic px-1">{language.noBody}</p>
-                                                    {/if}
-                                                </div>
-                                            {:else}
-                                                <!-- Response -->
-                                                <div>
-                                                    <div class="flex items-center justify-between mb-1.5">
-                                                        <div class="flex items-center gap-2">
-                                                            <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.responseBodyLabel}</span>
-                                                            {#if statusCode}
-                                                                <span class="flex shrink-0 items-center justify-center {statusColor} text-white text-[11px] font-bold font-mono px-1 py-0.5 rounded text-center uppercase leading-none">
-                                                                    <span class="translate-y-[0.5px]">{statusCode}</span>
-                                                                </span>
+                                                    <!-- Headers -->
+                                                    <div>
+                                                        <div class="flex items-center justify-between mb-1.5">
+                                                            <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.headersLabel}</span>
+                                                            <button
+                                                                class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${log.id}-header` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
+                                                                onclick={(e) => { e.stopPropagation(); copyToClipboard(log.header, `${log.id}-header`) }}
+                                                            >
+                                                                {#if copiedKey === `${log.id}-header`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
+                                                            </button>
+                                                        </div>
+                                                        <pre class="request-log-code hljs max-h-40">{@html highlightJson(log.header)}</pre>
+                                                    </div>
+                                                    <!-- Body -->
+                                                    <div>
+                                                        <div class="flex items-center justify-between mb-1.5">
+                                                            <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.requestBodyLabel}</span>
+                                                            {#if log.body}
+                                                                <button
+                                                                    class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${log.id}-body` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
+                                                                    onclick={(e) => { e.stopPropagation(); copyToClipboard(log.body, `${log.id}-body`) }}
+                                                                >
+                                                                    {#if copiedKey === `${log.id}-body`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
+                                                                </button>
                                                             {/if}
                                                         </div>
-                                                        <button
-                                                            class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${log.id}-response` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
-                                                            onclick={(e) => { e.stopPropagation(); copyToClipboard(log.response, `${log.id}-response`) }}
-                                                        >
-                                                            {#if copiedKey === `${log.id}-response`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
-                                                        </button>
+                                                        {#if log.body}
+                                                            <pre class="request-log-code hljs">{@html highlightJson(log.body)}</pre>
+                                                        {:else}
+                                                            <p class="text-xs text-textcolor2 italic px-1">{language.noBody}</p>
+                                                        {/if}
                                                     </div>
-                                                    <pre class="request-log-code hljs max-h-80">{@html highlightJson(log.response)}</pre>
-                                                </div>
-                                            {/if}
+                                                {:else}
+                                                    <!-- Response -->
+                                                    <div>
+                                                        <div class="flex items-center justify-between mb-1.5">
+                                                            <div class="flex items-center gap-2">
+                                                                <span class="text-xs font-semibold uppercase tracking-wider text-textcolor2">{language.responseBodyLabel}</span>
+                                                                {#if statusCode}
+                                                                    <span class="flex shrink-0 items-center justify-center {statusColor} text-white text-[11px] font-bold font-mono px-1 py-0.5 rounded text-center uppercase leading-none">
+                                                                        <span class="translate-y-[0.5px]">{statusCode}</span>
+                                                                    </span>
+                                                                {/if}
+                                                            </div>
+                                                            <button
+                                                                class="p-1 rounded hover:bg-bgcolor transition-colors {copiedKey === `${log.id}-response` ? 'text-green-400' : 'text-textcolor2 hover:text-textcolor'}"
+                                                                onclick={(e) => { e.stopPropagation(); copyToClipboard(log.response, `${log.id}-response`) }}
+                                                            >
+                                                                {#if copiedKey === `${log.id}-response`}<CheckIcon size={12} />{:else}<CopyIcon size={12} />{/if}
+                                                            </button>
+                                                        </div>
+                                                        <pre class="request-log-code hljs max-h-80">{@html highlightJson(log.response)}</pre>
+                                                    </div>
+                                                {/if}
+                                            </div>
+                                        </div>
+                                    {/if}
                                         </div>
                                     </div>
-                                {/if}
-                                    </div>
                                 </div>
-                            </div>
-                        {/each}
-                    </div>
-                {/if}
+                            {/each}
+                        </div>
+                    {/if}
+                </div>
             </div>
         </div>
-    </div>
+        {#snippet failed()}
+            <div class="hidden" aria-hidden="true"></div>
+        {/snippet}
+    </svelte:boundary>
 {/if}
 
 <style>
