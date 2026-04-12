@@ -7,7 +7,6 @@
     import { MessageSquareIcon, PlusIcon } from "@lucide/svelte";
 
     interface Props {
-        gridMode?: boolean;
         endGrid?: () => void;
     }
 
@@ -15,7 +14,7 @@
 
     let lowerSearch = $derived($MobileSearch.toLocaleLowerCase());
 
-    let {gridMode = false, endGrid = () => {}}: Props = $props();
+    let {endGrid = () => {}}: Props = $props();
 
     function makeAgoText(time:number){
         if(time === 0){
@@ -86,10 +85,8 @@
     {/each}
 </div>
 
-{#if gridMode}
-    <button class="p-4 rounded-full absolute bottom-2 right-2 bg-borderc" onclick={() => {
-        addCharacter()
-    }}>
-        <PlusIcon size={24} />
-    </button>
-{/if}
+<button class="p-4 rounded-full absolute bottom-2 right-2 bg-borderc" onclick={() => {
+    addCharacter()
+}}>
+    <PlusIcon size={24} />
+</button>

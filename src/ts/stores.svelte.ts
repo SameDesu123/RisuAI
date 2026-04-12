@@ -157,6 +157,10 @@ export const loadoutModalStore = $state({
     open: false
 })
 
+export const irisStore = $state({
+    open: false
+})
+
 //Set might be more ideal, however since Svelte doesn't support reactive Sets, using array for now
 export const hotReloading = $state<string[]>([])
 

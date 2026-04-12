@@ -518,8 +518,12 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
                 resText += '\n{{redacted_thinking}}\n'
             }
         }
-    
-    
+
+        if(thinking){
+            resText += "</Thoughts>\n\n"
+        }
+
+
         if(arg.extractJson && db.jsonSchemaEnabled){
             return {
                 type: 'success',
@@ -922,6 +926,12 @@ async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:strin
                         await sleep(1)
                     }
                 }
+                if(thinking){
+                    text += "</Thoughts>\n\n"
+                    controller.enqueue({
+                        "0": text
+                    })
+                }
                 controller.close()
             },
             cancel(){
@@ -1077,6 +1087,9 @@ async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:strin
         }
     }
 
+    if(thinking){
+        resText += "</Thoughts>\n\n"
+    }
 
     arg.additionalOutput ??= ""
     if(arg.extractJson && db.jsonSchemaEnabled){

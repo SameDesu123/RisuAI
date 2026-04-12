@@ -829,6 +829,16 @@ export async function loadV2Plugin(plugins: RisuPlugin[]) {
         let version = plugin.version || 2
 
         const createRealScript = (data:string): string => {
+            // Some bundled legacy plugins reference Rollup's CJS default-export helper without shipping it.
+            const commonJsCompatPrelude = `
+                        var getDefaultExportFromCjs = typeof getDefaultExportFromCjs === 'function'
+                            ? getDefaultExportFromCjs
+                            : function (mod) {
+                                return mod && mod.__esModule && Object.prototype.hasOwnProperty.call(mod, 'default')
+                                    ? mod.default
+                                    : mod;
+                            };
+                    `
             const tt = (window as unknown as Window & {
                 trustedTypes?: {
                     createPolicy: (name: string, rules: { createScript: (input: string) => string }) => { createScript: (input: string) => string }
@@ -856,6 +866,7 @@ export async function loadV2Plugin(plugins: RisuPlugin[]) {
                         const setArg = globalThis.__pluginApis__.setArg
                         const saveAsset = globalThis.__pluginApis__.saveAsset
                         const readImage = globalThis.__pluginApis__.readImage
+                        ${commonJsCompatPrelude}
                         ${version === '2.1' ? `
                             const safeGlobalThis = globalThis.__pluginApis__.getSafeGlobalThis()
                             const Risuai = globalThis.__pluginApis__

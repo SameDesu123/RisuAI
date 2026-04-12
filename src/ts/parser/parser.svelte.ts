@@ -794,17 +794,20 @@ const metaCodes = [
     '\u180E', //mongolian vowel separator
 ]
 
-export function addMetadataToElement(data:string, modelShortName:string){
-    if(!aiWatermarkingLawApplies()){
-        return data
-    }
+const encodedMetadataCache = new Map<string, string>()
 
-    let metadata = '{' + [
+function encodeMetadata(modelShortName:string){
+    const metadata = '{' + [
         'risuai',
         modelShortName.toLocaleLowerCase().replace(/[^a-z]/g, ''),
     ].join('|') + '}'
-    let encodedMetaCode = ''
 
+    const cached = encodedMetadataCache.get(metadata)
+    if(cached !== undefined){
+        return cached
+    }
+
+    let encodedMetaCode = ''
     for(let i=0;i<metadata.length;i++){
         let byte = (metadata.charCodeAt(i) - 97).toString(6).padStart(2,'0')
         for(let j=0;j<byte.length;j++){
@@ -837,6 +840,16 @@ export function addMetadataToElement(data:string, modelShortName:string){
         }
     }
 
+    encodedMetadataCache.set(metadata, encodedMetaCode)
+    return encodedMetaCode
+}
+
+export function addMetadataToElement(data:string, modelShortName:string){
+    if(!aiWatermarkingLawApplies()){
+        return data
+    }
+
+    const encodedMetaCode = encodeMetadata(modelShortName)
     let d =  data.replace(/\<p\>/g, (v) => {
         return '<p>' + encodedMetaCode
     })

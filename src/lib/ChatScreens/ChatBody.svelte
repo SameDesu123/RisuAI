@@ -164,21 +164,22 @@
     }
 
     const checkImg = () => {
-
-        if(!DBState.db.newImageHandlingBeta){
+        if(!DBState.db.newImageHandlingBeta || !bodyRoot){
             return
         }
-        const imgs = bodyRoot?.querySelectorAll('img:not([src^="data:"]):not([src^="http:"]):not([src^="https:"]):not([src^="blob:"]):not([src^="file:"]):not([src^="tauri:"]):not([noimage])') as NodeListOf<HTMLImageElement>
+        const imgs = bodyRoot.querySelectorAll('img:not([src^="data:"]):not([src^="http:"]):not([src^="https:"]):not([src^="blob:"]):not([src^="file:"]):not([src^="tauri:"]):not([noimage])') as NodeListOf<HTMLImageElement>
         
-        if (imgs && imgs.length > 0) {
-            // Hoist asset computation outside the image loop
-            const assets = getModuleAssets().concat(getCurrentCharacter().additionalAssets ?? [])
-            const styl = getCurrentCharacter().prebuiltAssetStyle
-            const assetMap = new Map(assets.map(asset => [asset[0].toLocaleLowerCase(), asset[1]]))
-            const dista = assets.map(asset => ({
-                name: asset[0].toLocaleLowerCase(),
-                path: asset[1]
-            }))
+        if (imgs.length > 0) {
+            const currentCharacter = getCurrentCharacter()
+            const styl = currentCharacter.prebuiltAssetStyle
+            const assets = getModuleAssets().concat(currentCharacter.additionalAssets ?? [])
+            const normalizedAssets = assets.map((asset) => {
+                return {
+                    name: asset[0].toLocaleLowerCase(),
+                    path: asset[1]
+                }
+            })
+            const exactAssets = new Map(normalizedAssets.map((asset) => [asset.name, asset.path]))
 
             imgs.forEach(async (img) => {
                 const name = img.getAttribute('src')?.toLocaleLowerCase() || ''
@@ -191,11 +192,11 @@
                     return
                 }
                 
-                const foundPath = assetMap.get(name)
-                if(foundPath){
+                const foundAsset = exactAssets.get(name)
+                if(foundAsset){
                     img.classList.add('root-loaded-image')
                     img.classList.add('root-loaded-image-' + styl)
-                    img.src = await getFileSrc(foundPath)
+                    img.src = await getFileSrc(foundAsset)
                     return
                 }
 
@@ -203,12 +204,11 @@
                     img.setAttribute('noimage', 'true')
                     return
                 }
-
                 const prefixLoc = name.lastIndexOf('.')
                 const prefix = prefixLoc > 0 ? name.substring(0, prefixLoc) : ''
                 let currentDistance = 1000
                 let currentFound = ''
-                for(const asset of dista){
+                for(const asset of normalizedAssets){
                     if(!asset.name.startsWith(prefix)){
                         continue
                     }

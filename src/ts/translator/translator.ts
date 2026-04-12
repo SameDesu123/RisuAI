@@ -1,6 +1,11 @@
 import { get } from "svelte/store"
 import { parseChatML } from "../parser/chatML";
 import { getDatabase, type character, type customscript, type groupChat } from "../storage/database.svelte"
+import {
+    defaultTranslatorPrompt,
+    getCurrentTranslatorPresetFromState,
+    type TranslatorPreset,
+} from "./presets";
 import { globalFetch } from "../globalApi.svelte"
 import { isTauri, isNodeServer } from "src/ts/platform"
 import { alertError } from "../alert"
@@ -28,6 +33,10 @@ export const LLMCacheStorage = localforage.createInstance({
 })
 
 let waitTrans = 0
+
+export function getCurrentTranslatorPreset(): TranslatorPreset {
+    return getCurrentTranslatorPresetFromState(getDatabase())
+}
 
 export async function translate(text:string, reverse:boolean) {
     let db = getDatabase()
@@ -518,7 +527,8 @@ async function translateLLM(text:string, arg:{to:string, from:string, regenerate
     }
 
     let formated:OpenAIChat[] = []
-    let prompt = db.translatorPrompt || `You are a translator. translate the following html or text into {{slot}}. do not output anything other than the translation.`
+    const preset = getCurrentTranslatorPreset()
+    let prompt = preset.prompt || defaultTranslatorPrompt
     let parsedPrompt = parseChatML(prompt.replaceAll('{{slot::from}}', arg.from).replaceAll('{{slot}}', arg.to).replaceAll('{{solt::content}}', text).replaceAll('{{slot::content}}', text).replaceAll('{{slot::tnote}}', translatorNote))
     if(parsedPrompt){
         formated = parsedPrompt
@@ -541,7 +551,7 @@ async function translateLLM(text:string, arg:{to:string, from:string, regenerate
         bias: {},
         useStreaming: false,
         noMultiGen: true,
-        maxTokens: db.translatorMaxResponse,
+        maxTokens: preset.maxResponse,
     }, 'translate')
 
     if(rq.type === 'fail'){
