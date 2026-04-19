@@ -13,6 +13,7 @@ import { extractJSON, getOpenAIJSONSchema } from "../../templates/jsonSchema"
 import { applyChatTemplate } from "../../templates/chatTemplate"
 import { supportsInlayImage } from "../../files/inlays"
 import { callTool, decodeToolCall, encodeToolCall } from "../../mcp/mcp"
+import { parseAdditionalParamJsonValue } from '../additionalParams'
 import type { RequestDataArgumentExtended, requestDataResponse, StreamResponseChunk } from '../request'
 import { applyParameters, setObjectValue } from '../shared'
 
@@ -600,9 +601,10 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
             }
             else if(value.startsWith('json::')){
                 value = value.replace('json::', '')
-                try {
-                    body[key] = JSON.parse(value)                            
-                } catch (error) {}
+                const parsedValue = parseAdditionalParamJsonValue(value)
+                if(parsedValue !== undefined){
+                    body[key] = parsedValue
+                }
             }
             else if((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))){
                 body = setObjectValue(body, key, value.slice(1, -1))
@@ -1205,9 +1207,10 @@ export async function requestOpenAIResponseAPI(arg:RequestDataArgumentExtended):
             }
             else if(value.startsWith('json::')){
                 value = value.replace('json::', '')
-                try {
-                    body[key] = JSON.parse(value)                            
-                } catch (error) {}
+                const parsedValue = parseAdditionalParamJsonValue(value)
+                if(parsedValue !== undefined){
+                    body[key] = parsedValue
+                }
             }
             else if((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))){
                 body = setObjectValue(body, key, value.slice(1, -1))
