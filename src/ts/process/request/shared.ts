@@ -30,6 +30,90 @@ export function setObjectValue<T>(obj: T, key: string, value: any): T {
     return obj
 }
 
+export function getAdditionalRequestParams(aiModel: string): [string, string][] {
+    const db = getDatabase()
+
+    if (aiModel === 'reverse_proxy') {
+        return [...(db.additionalParams ?? [])]
+    }
+
+    if (!aiModel.startsWith('xcustom:::')) {
+        return []
+    }
+
+    const params = db.customModels.find((model) => model.id === aiModel)?.params
+    if (!params) {
+        return []
+    }
+
+    const additionalParams: [string, string][] = []
+    for (const line of params.split('\n')) {
+        const split = line.split('=')
+        if (split.length >= 2) {
+            additionalParams.push([split[0], split.slice(1).join('=')])
+        }
+    }
+
+    return additionalParams
+}
+
+export function applyAdditionalRequestParams(
+    body: Record<string, any>,
+    headers: Record<string, string>,
+    additionalParams: [string, string][]
+): Record<string, any> {
+    for (let i = 0; i < additionalParams.length; i++) {
+        let key = additionalParams[i][0]
+        let value = additionalParams[i][1]
+
+        if (!key || !value) {
+            continue
+        }
+
+        if (value === '{{none}}') {
+            if (key.startsWith('header::')) {
+                key = key.replace('header::', '')
+                delete headers[key]
+            }
+            else {
+                delete body[key]
+            }
+            continue
+        }
+
+        if (key.startsWith('header::')) {
+            key = key.replace('header::', '')
+            headers[key] = value
+        }
+        else if (value.startsWith('json::')) {
+            value = value.replace('json::', '')
+            try {
+                body[key] = JSON.parse(value)
+            } catch (error) {}
+        }
+        else if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+            body = setObjectValue(body, key, value.slice(1, -1))
+        }
+        else if (value === 'true' || value === 'false') {
+            body = setObjectValue(body, key, value === 'true')
+        }
+        else if (value === 'null') {
+            body = setObjectValue(body, key, null)
+        }
+        else {
+            const num = Number(value)
+            if (isNaN(num)) {
+                body = setObjectValue(body, key, value)
+            }
+            else {
+                body = setObjectValue(body, key, num)
+            }
+        }
+    }
+
+    return body
+}
+
 export function applyParameters(
     data: Record<string, any>,
     parameters: LLMParameter[],

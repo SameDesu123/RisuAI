@@ -11,7 +11,7 @@ import type { MultiModal } from "../index.svelte"
 import { extractJSON } from "../templates/jsonSchema"
 import { callTool, decodeToolCall, encodeToolCall } from "../mcp/mcp"
 import type { RequestDataArgumentExtended, requestDataResponse, StreamResponseChunk } from './request'
-import { applyParameters } from './shared'
+import { applyAdditionalRequestParams, applyParameters, getAdditionalRequestParams } from './shared'
 
 interface Claude3TextBlock {
     type: 'text',
@@ -383,6 +383,7 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
         delete body.system
     }
 
+    const additionalParams = getAdditionalRequestParams(aiModel)
     const bedrock = arg.modelInfo.format === LLMFormat.AWSBedrockClaude
 
     if(bedrock && aiModel !== 'reverse_proxy'){
@@ -431,16 +432,21 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
             delete params.top_p
         }
 
+        const requestHeaders: Record<string, string> = {
+            ["Host"]: host,
+            ["Content-Type"]: "application/json",
+            ["accept"]: "application/json",
+        }
+
+        params = applyAdditionalRequestParams(params, requestHeaders, additionalParams)
+        delete params.stream
+
         const rq = new HttpRequest({
             method: "POST",
             protocol: "https:",
             hostname: host,
             path: `/model/${awsModel}/invoke${stream ? "-with-response-stream" : ""}`,
-            headers: {
-              ["Host"]: host,
-              ["Content-Type"]: "application/json",
-              ["accept"]: "application/json",
-            },
+            headers: requestHeaders,
             body: JSON.stringify(params),
         });
         
@@ -575,6 +581,9 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
         })
 
     }
+
+    body = applyAdditionalRequestParams(body, headers, additionalParams)
+    body.stream = useStreaming ?? false
 
     if(arg.previewBody){
         return {
