@@ -24,10 +24,8 @@ export async function processMultiCommand(command:string) {
         }
     }
     splited.push(command.slice(lastIndex))
-    console.log(splited)
     for(let i = 0; i<splited.length; i++){
         const result = await processCommand(splited[i].trim(), pipe)
-        console.log(pipe)
         if(result === false){
             return false
         }
@@ -180,14 +178,12 @@ async function processCommand(command:string, pipe:string):Promise<false | strin
             return ''
         }
         case 'setvar':{
-            console.log(namedArg, arg)
             const db = getDatabase()
             const selectedChar = get(selectedCharID)
             const char = db.characters[selectedChar]
             const chat = char.chats[char.chatPage]
             chat.scriptstate = chat.scriptstate ?? {}
             chat.scriptstate['$' + namedArg['key']] = arg
-            console.log(chat.scriptstate)
 
             char.chats[char.chatPage] = chat
             db.characters[selectedChar] = char
@@ -218,7 +214,6 @@ async function processCommand(command:string, pipe:string):Promise<false | strin
         }
         case 'test_lorebook':{
             const p = await loadLoreBookV3Prompt()
-            console.log(p)
             alertNormal(p.actives.map((e)=>e.prompt).join('§'))
             return JSON.stringify(p)
         }

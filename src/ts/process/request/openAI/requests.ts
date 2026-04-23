@@ -231,7 +231,6 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
         })
     }
 
-    console.log(formatedChat)
     if(arg.modelInfo.format === LLMFormat.Mistral){
         requestModel = aiModel
 
@@ -754,13 +753,11 @@ export async function requestHTTPOpenAI(
         const msg:OpenAIChatFull = (dat.choices[0].message)
         let result = msg.content ?? ''
         if(arg.modelInfo.flags.includes(LLMFlags.deepSeekThinkingOutput)){
-            console.log("Checking for reasoning content")
             let reasoningContent = ""
             result = result.replace(/(.*)\<\/think\>/gms, (m, p1) => {
                 reasoningContent = p1
                 return ""
             })
-            console.log(`Reasoning Content: ${reasoningContent}`)
             if(reasoningContent){
                 reasoningContent = reasoningContent.replace(/\<think\>/gms, '')
                 result = `<Thoughts>\n${reasoningContent}\n</Thoughts>\n${result}`
@@ -962,7 +959,6 @@ export async function requestOpenAILegacyInstruct(arg:RequestDataArgumentExtende
             m.content = m.content.trim();
         }
 
-        console.log(m.role +":"+m.content);
         switch (m.role) {
             case 'user': author = 'User'; break;
             case 'assistant': author = 'Assistant'; break;
@@ -1255,7 +1251,6 @@ function getTranStream(arg:RequestDataArgumentExtended):TransformStream<Uint8Arr
                                         const extracted = extractJSON(readed[key], arg.extractJson)
                                         JSONreaded[key] = extracted
                                     }
-                                    console.log(JSONreaded)
                                     control.enqueue(JSONreaded)
                                 }
                                 else if(reasoningContent){
@@ -1347,7 +1342,6 @@ function getTranStream(arg:RequestDataArgumentExtended):TransformStream<Uint8Arr
                         const extracted = extractJSON(readed[key], arg.extractJson)
                         JSONreaded[key] = extracted
                     }
-                    console.log(JSONreaded)
                     control.enqueue(JSONreaded)
                 }
                 else if(reasoningContent){

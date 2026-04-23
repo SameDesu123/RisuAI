@@ -99,7 +99,6 @@
     function changeValue(event) {
         const rect = slider.getBoundingClientRect();
         const x = event.clientX - rect.left;
-        console.log(x, rect.width);
         let newValue = ((x / rect.width) * (max - min)) + min;
         newValue = Math.round(newValue / step) * step;
         value = Math.min(Math.max(newValue, min), max);

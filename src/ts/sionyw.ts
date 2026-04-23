@@ -298,7 +298,6 @@ async function loginToSionywSPAVersion(){
             refreshToken = exchanged.refresh_token!
             tokenExpiry = Date.now() + (exchanged.expires_in! * 1000) - 60000 // Refresh 1 minute before expiry
             tokenInitalized = true
-            console.log("Sionyw login successful")
         }
     }
     window.addEventListener('message', msgEventCallback)
@@ -308,6 +307,5 @@ export async function testSionywLogin(){
     const s = await fetchProtectedResource('/hub/account/load', {
         method: "GET"
     })
-
-    console.log(await s.text())
+    await s.text()
 }

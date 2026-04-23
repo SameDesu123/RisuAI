@@ -70,7 +70,6 @@ export function stringlizeChatOba(formated:OpenAIChat[], characterName:string, s
             name = ""
         }
         if(db.ooba.formating.useName){
-            console.log(name)
             resultString.push(prefix + name + form.content)
         }
         else{
@@ -93,7 +92,6 @@ export function stringlizeChatOba(formated:OpenAIChat[], characterName:string, s
             }
         }
     }
-    console.log(resultString)
     return resultString.join(seperator).trim()
 }
 
@@ -214,7 +212,6 @@ export function stringlizeAINChat(formated:OpenAIChat[], char:string, continued:
     const db = getDatabase()
 
     for(const form of formated){
-        console.log(form)
         if(form.memo && form.memo.startsWith("newChat") || form.content === "[Start a new chat]"){
             resultString.push("[新しいチャットの始まり]")
             continue
@@ -300,7 +297,6 @@ export function unstringlizeAIN(data:string,formated:OpenAIChat[], char:string =
     for(const n of chunksResult.extChunk){
         if(data.endsWith(n)){
             data = data.substring(0, data.length - n.length)
-            console.log('trimed')
         }
     }
 

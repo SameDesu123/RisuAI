@@ -147,7 +147,6 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
                         throw new Error('Invalid return')
                     }
                     arg.formated = got
-                    console.log('Trigger time', performance.now() - perf)
                 }
             }
             catch(e){
@@ -181,7 +180,6 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
             if(da.type === 'success' && db.banCharacterset?.length > 0){
                 let failed = false
                 for(const set of db.banCharacterset){
-                    console.log(set)
                     const checkRegex = new RegExp(`\\p{Script=${set}}`, 'gu')
     
                     if(checkRegex.test(da.result)){
@@ -1113,8 +1111,6 @@ async function requestCohere(arg:RequestDataArgumentExtended):Promise<requestDat
             body.message = `system: ${preamble}`
         }
     }
-
-    console.log(body)
 
     if(arg.previewBody){
         return {

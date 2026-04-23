@@ -349,7 +349,6 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
         },
         tools: {
             functionDeclarations: arg?.tools?.map((tool, i) => {
-                console.log(tool.name, i)
                 return {
                     name: tool.name,
                     description: tool.description,
@@ -422,8 +421,6 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
 
     const PROJECT_ID = db.google.projectId
     const REGION = db.vertexRegion
-    console.log(arg.modelInfo);
-
     const isVertexGlobalOnlyModel = (modelId: string) => {
         // As of 2025-12, Gemini 3 preview models are only available on the global endpoint.
         return /^gemini-3-.*-preview$/.test(modelId)
@@ -537,7 +534,6 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
     if(db.jsonSchemaEnabled || arg.schema){
         body.generation_config.response_mime_type = "application/json"
         body.generation_config.response_schema = getGeneralJSONSchema(arg.schema, ['$schema','additionalProperties'])
-        console.log(body.generation_config.response_schema)
     }    
     
     let url = ''
@@ -1028,7 +1024,6 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
         }
     }
 
-    console.log(result)
     return {
         type: 'success',
         result: result
