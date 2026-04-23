@@ -2812,7 +2812,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
         ReloadGUIPointer.set(get(ReloadGUIPointer) + 1)
     }
 
-    if (shouldSetTriggerId && mode !== 'manual') {
+    if (shouldSetTriggerId) {
         CurrentTriggerIdStore.set(previousTriggerId)
     }
     

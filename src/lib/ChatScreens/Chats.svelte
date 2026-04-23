@@ -65,6 +65,19 @@
         const charImage = getCharImage(currentCharacter.image, 'css')
         const userImage = getCharImage(userIcon, 'css')
         const simpleChar = createSimpleCharacter(currentCharacter);
+        const characterSignature = currentCharacter.type === 'group'
+            ? `group:${currentCharacter.name}:${currentCharacter.image ?? ''}`
+            : JSON.stringify({
+                name: currentCharacter.name,
+                image: currentCharacter.image ?? '',
+                chaId: currentCharacter.chaId,
+                customscript: currentCharacter.customscript,
+                additionalAssets: currentCharacter.additionalAssets,
+                virtualscript: currentCharacter.virtualscript,
+                emotionImages: currentCharacter.emotionImages,
+                triggerscript: currentCharacter.triggerscript,
+            });
+        const userSignature = `${currentUsername}:${userIcon}:${userIconPortrait ?? false}`;
         let loadStart = messages.length - 1
         let loadEnd = messages.length - loadPages
 
@@ -80,7 +93,14 @@
             const message = messages[i];
             const messageLargePortrait = message.role === 'user' ? (userIconPortrait ?? false) : ((currentCharacter as character).largePortrait ?? false);
             const reloadPointer = reloadPointerMap[i] ?? 0;
-            let hashd = message.data + (message.chatId ?? '') + i.toString() + messageLargePortrait.toString() + message.disabled?.toString() + reloadPointer.toString();
+            let hashd = message.data
+                + (message.chatId ?? '')
+                + i.toString()
+                + messageLargePortrait.toString()
+                + message.disabled?.toString()
+                + reloadPointer.toString()
+                + characterSignature
+                + userSignature;
             const currentHash = hashCode(hashd);
             currentHashes.add(currentHash);
             if(!hashes.has(currentHash)){

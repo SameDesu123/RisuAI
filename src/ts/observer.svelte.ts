@@ -2,8 +2,15 @@ import { sleep } from "./util";
 import { globalFetch } from "./globalApi.svelte";
 
 let bgmElement:HTMLAudioElement|null = null;
+const observedDomNodes = new WeakSet<HTMLElement>();
+let domObserverStarted = false;
 
 function nodeObserve(node:HTMLElement){
+    if(observedDomNodes.has(node)){
+        return
+    }
+    observedDomNodes.add(node)
+
     const hlLang = node.getAttribute('x-hl-lang');
     const ctrlName = node.getAttribute('risu-ctrl');
 
@@ -74,22 +81,39 @@ function nodeObserve(node:HTMLElement){
     }
 }
 
-export async function startObserveDom(){
-    //For codeblock we are using MutationObserver since it doesn't appear well
+function observeNodeTree(node: HTMLElement){
+    nodeObserve(node)
+    node.querySelectorAll<HTMLElement>('[x-hl-lang], [risu-ctrl]').forEach(nodeObserve)
+}
+
+export function startObserveDom(){
+    if(domObserverStarted){
+        return
+    }
+    domObserverStarted = true
+
+    // Observe both new nodes and late-added attributes on existing nodes.
     const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
+            if(mutation.type === 'attributes' && mutation.target instanceof HTMLElement){
+                observeNodeTree(mutation.target)
+                return
+            }
+
             mutation.addedNodes.forEach((node) => {
                 if(node instanceof HTMLElement){
-                    nodeObserve(node);
+                    observeNodeTree(node)
                 }
             })
         })
     })
-
-    while(true){
-        document.querySelectorAll('[x-hl-lang], [risu-ctrl]').forEach(nodeObserve);
-        await sleep(100);
-    }
+    observeNodeTree(document.body)
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['x-hl-lang', 'risu-ctrl']
+    })
 }
 
 
