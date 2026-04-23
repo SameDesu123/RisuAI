@@ -1,30 +1,30 @@
 <script lang="ts">
     import { AccessibilityIcon, ActivityIcon, PackageIcon, BotIcon, BoxIcon, CodeIcon, ContactIcon, LanguagesIcon, MonitorIcon, Sailboat, UserIcon, CircleXIcon, KeyboardIcon, SparkleIcon } from "@lucide/svelte";
     import { language } from "src/lang";
-    import DisplaySettings from "./Pages/DisplaySettings.svelte";
-    import UserSettings from "./Pages/UserSettings.svelte";
-    import BotSettings from "./Pages/BotSettings.svelte";
-    import OtherBotSettings from "./Pages/OtherBotSettings.svelte";
-    import PluginSettings from "./Pages/PluginSettings.svelte";
-    import FilesSettings from "./Pages/FilesSettings.svelte";
-    import AdvancedSettings from "./Pages/AdvancedSettings.svelte";
     import { additionalSettingsMenu, easyPanelStore, MobileGUI, SettingsMenuIndex, settingsOpen } from "src/ts/stores.svelte";
     import { DBState } from "src/ts/stores.svelte";
-    import Communities from "./Pages/Communities.svelte";
-    import GlobalLoreBookSettings from "./Pages/GlobalLoreBookSettings.svelte";
     import Lorepreset from "./lorepreset.svelte";
-    import GlobalRegex from "./Pages/GlobalRegex.svelte";
-    import LanguageSettings from "./Pages/LanguageSettings.svelte";
-    import AccessibilitySettings from "./Pages/AccessibilitySettings.svelte";
-    import PersonaSettings from "./Pages/PersonaSettings.svelte";
-    import PromptSettings from "./Pages/PromptSettings.svelte";
-    import ThanksPage from "./Pages/ThanksPage.svelte";
-    import ModuleSettings from "./Pages/Module/ModuleSettings.svelte";
   import { isLite } from "src/ts/lite";
-    import HotkeySettings from "./Pages/HotkeySettings.svelte";
     import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
 
     let openLoreList = $state(false)
+    const loadUserSettings = () => import("./Pages/UserSettings.svelte").then(m => m.default)
+    const loadBotSettings = () => import("./Pages/BotSettings.svelte").then(m => m.default)
+    const loadOtherBotSettings = () => import("./Pages/OtherBotSettings.svelte").then(m => m.default)
+    const loadDisplaySettings = () => import("./Pages/DisplaySettings.svelte").then(m => m.default)
+    const loadPluginSettings = () => import("./Pages/PluginSettings.svelte").then(m => m.default)
+    const loadFilesSettings = () => import("./Pages/FilesSettings.svelte").then(m => m.default)
+    const loadAdvancedSettings = () => import("./Pages/AdvancedSettings.svelte").then(m => m.default)
+    const loadCommunities = () => import("./Pages/Communities.svelte").then(m => m.default)
+    const loadGlobalLoreBookSettings = () => import("./Pages/GlobalLoreBookSettings.svelte").then(m => m.default)
+    const loadGlobalRegex = () => import("./Pages/GlobalRegex.svelte").then(m => m.default)
+    const loadLanguageSettings = () => import("./Pages/LanguageSettings.svelte").then(m => m.default)
+    const loadAccessibilitySettings = () => import("./Pages/AccessibilitySettings.svelte").then(m => m.default)
+    const loadPersonaSettings = () => import("./Pages/PersonaSettings.svelte").then(m => m.default)
+    const loadPromptSettings = () => import("./Pages/PromptSettings.svelte").then(m => m.default)
+    const loadModuleSettings = () => import("./Pages/Module/ModuleSettings.svelte").then(m => m.default)
+    const loadHotkeySettings = () => import("./Pages/HotkeySettings.svelte").then(m => m.default)
+    const loadThanksPage = () => import("./Pages/ThanksPage.svelte").then(m => m.default)
     if(window.innerWidth >= 900 && $SettingsMenuIndex === -1 && !$MobileGUI){
         $SettingsMenuIndex = 1
     }
@@ -194,43 +194,77 @@
             {#key $SettingsMenuIndex}
                 <div class="grow py-6 px-4 bg-bgcolor flex flex-col text-textcolor overflow-y-auto relative rs-setting-cont-4 min-w-0">
                     {#if $SettingsMenuIndex === 0}
-                        <UserSettings />
+                        {#await loadUserSettings() then UserSettings}
+                            <UserSettings />
+                        {/await}
                     {:else if $SettingsMenuIndex === 1}
-                        <BotSettings goPromptTemplate={() => {
-                            $SettingsMenuIndex = 13
-                        }} />
+                        {#await loadBotSettings() then BotSettings}
+                            <BotSettings goPromptTemplate={() => {
+                                $SettingsMenuIndex = 13
+                            }} />
+                        {/await}
                     {:else if $SettingsMenuIndex === 2}
-                        <OtherBotSettings />
+                        {#await loadOtherBotSettings() then OtherBotSettings}
+                            <OtherBotSettings />
+                        {/await}
                     {:else if $SettingsMenuIndex === 3}
-                        <DisplaySettings />
+                        {#await loadDisplaySettings() then DisplaySettings}
+                            <DisplaySettings />
+                        {/await}
                     {:else if $SettingsMenuIndex === 4}
-                        <PluginSettings />
+                        {#await loadPluginSettings() then PluginSettings}
+                            <PluginSettings />
+                        {/await}
                     {:else if $SettingsMenuIndex === 5}
-                        <FilesSettings />
+                        {#await loadFilesSettings() then FilesSettings}
+                            <FilesSettings />
+                        {/await}
                     {:else if $SettingsMenuIndex === 6}
-                        <AdvancedSettings />
+                        {#await loadAdvancedSettings() then AdvancedSettings}
+                            <AdvancedSettings />
+                        {/await}
                     {:else if $SettingsMenuIndex === 7}
-                        <Communities />
+                        {#await loadCommunities() then Communities}
+                            <Communities />
+                        {/await}
                     {:else if $SettingsMenuIndex === 8}
-                        <GlobalLoreBookSettings bind:openLoreList />
+                        {#await loadGlobalLoreBookSettings() then GlobalLoreBookSettings}
+                            <GlobalLoreBookSettings bind:openLoreList />
+                        {/await}
                     {:else if $SettingsMenuIndex === 9}
-                        <GlobalRegex/>
+                        {#await loadGlobalRegex() then GlobalRegex}
+                            <GlobalRegex />
+                        {/await}
                     {:else if $SettingsMenuIndex === 10}
-                        <LanguageSettings/>
+                        {#await loadLanguageSettings() then LanguageSettings}
+                            <LanguageSettings />
+                        {/await}
                     {:else if $SettingsMenuIndex === 11}
-                        <AccessibilitySettings/>
+                        {#await loadAccessibilitySettings() then AccessibilitySettings}
+                            <AccessibilitySettings />
+                        {/await}
                     {:else if $SettingsMenuIndex === 12}
-                        <PersonaSettings/>
+                        {#await loadPersonaSettings() then PersonaSettings}
+                            <PersonaSettings />
+                        {/await}
                     {:else if $SettingsMenuIndex === 14}
-                        <ModuleSettings/>
+                        {#await loadModuleSettings() then ModuleSettings}
+                            <ModuleSettings />
+                        {/await}
                     {:else if $SettingsMenuIndex === 13}
-                        <PromptSettings onGoBack={() => {
-                            $SettingsMenuIndex = 1
-                        }}/>
+                        {#await loadPromptSettings() then PromptSettings}
+                            <PromptSettings onGoBack={() => {
+                                $SettingsMenuIndex = 1
+                            }}/>
+                        {/await}
                     {:else if $SettingsMenuIndex === 15 && window.innerWidth >= 768}
-                        <HotkeySettings/>
+                        {#await loadHotkeySettings() then HotkeySettings}
+                            <HotkeySettings />
+                        {/await}
                     {:else if $SettingsMenuIndex === 77}
-                        <ThanksPage/>
+                        {#await loadThanksPage() then ThanksPage}
+                            <ThanksPage />
+                        {/await}
                     {/if}
             </div>
             {/key}

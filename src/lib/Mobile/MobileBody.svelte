@@ -1,17 +1,17 @@
 <script lang="ts">
     import { MobileGUIStack, MobileSideBar, selectedCharID } from "src/ts/stores.svelte";
-    import Settings from "../Setting/Settings.svelte";
     import RealmMain from "../UI/Realm/RealmMain.svelte";
     import MobileCharacters from "./MobileCharacters.svelte";
     import ChatScreen from "../ChatScreens/ChatScreen.svelte";
-    import CharConfig from "../SideBars/CharConfig.svelte";
     import { WrenchIcon } from "@lucide/svelte";
     import { language } from "src/lang";
     import SideChatList from "../SideBars/SideChatList.svelte";
-    import DevTool from "../SideBars/DevTool.svelte";
     import { isLite } from "src/ts/lite";
     
     import { DBState } from 'src/ts/stores.svelte';
+    const loadSettings = () => import("../Setting/Settings.svelte").then(m => m.default)
+    const loadCharConfig = () => import("../SideBars/CharConfig.svelte").then(m => m.default)
+    const loadDevTool = () => import("../SideBars/DevTool.svelte").then(m => m.default)
 </script>
 
 {#if $MobileSideBar > 0 && !$isLite}
@@ -39,9 +39,13 @@
             {#if $MobileSideBar === 1}
                 <SideChatList bind:chara={DBState.db.characters[$selectedCharID]} />
             {:else if $MobileSideBar === 2}
-                <CharConfig />
+                {#await loadCharConfig() then CharConfig}
+                    <CharConfig />
+                {/await}
             {:else if $MobileSideBar === 3}
-                <DevTool />
+                {#await loadDevTool() then DevTool}
+                    <DevTool />
+                {/await}
             {/if}
         </div>
     {:else if $selectedCharID !== -1}
@@ -51,6 +55,8 @@
     {:else if $MobileGUIStack === 1}
         <MobileCharacters />
     {:else if $MobileGUIStack === 2}
-        <Settings />
+        {#await loadSettings() then Settings}
+            <Settings />
+        {/await}
     {/if}
 </div>

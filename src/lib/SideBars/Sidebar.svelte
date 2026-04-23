@@ -36,7 +36,6 @@
     changeChar,
     getCharImage,
   } from "../../ts/characters";
-    import CharConfig from "./CharConfig.svelte";
     import { language } from "../../lang";
     import isEqual from "lodash/isEqual";
     import SidebarAvatar from "./SidebarAvatar.svelte";
@@ -48,9 +47,10 @@
     import SideChatList from "./SideChatList.svelte";
     import { ConnectionIsHost, ConnectionOpenStore, RoomIdStore } from "src/ts/sync/multiuser";
   import { sideBarSize } from "src/ts/gui/guisize";
-  import DevTool from "./DevTool.svelte";
     import QuickSettingsGui from "../Others/QuickSettingsGUI.svelte";
     import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
+  const loadCharConfig = () => import("./CharConfig.svelte").then(m => m.default)
+  const loadDevTool = () => import("./DevTool.svelte").then(m => m.default)
   let sideBarMode = $state(0);
   let editMode = $state(false);
   let menuMode = $state(0);
@@ -898,9 +898,13 @@
       {#if QuickSettings.open}
         <QuickSettingsGui />
       {:else if devTool}
-        <DevTool />
+        {#await loadDevTool() then DevTool}
+          <DevTool />
+        {/await}
       {:else if $botMakerMode}
-        <CharConfig />
+        {#await loadCharConfig() then CharConfig}
+          <CharConfig />
+        {/await}
       {:else}
         <SideChatList bind:chara={ DBState.db.characters[$selectedCharID]} />
       {/if}
