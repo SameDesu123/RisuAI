@@ -34,6 +34,8 @@ import { getModuleAssets, getModuleToggles } from "./modules";
 import { readImage } from "../globalApi.svelte";
 import { abortChat, chatProcessStage, doingChat } from "./chatState";
 
+export { abortChat, chatProcessStage, doingChat } from "./chatState";
+
 export interface OpenAIChat{
     role: 'system'|'user'|'assistant'|'function'
     content: string
