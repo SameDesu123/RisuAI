@@ -5,7 +5,7 @@ import { alertStore, DBState, loadoutModalStore, MobileGUIStack, MobileSideBar, 
 import { language } from "src/lang"
 import { updateTextThemeAndCSS } from "./gui/colorscheme"
 import { defaultHotkeys } from "./defaulthotkeys"
-import { doingChat, previewBody, sendChat } from "./process/index.svelte"
+import { doingChat } from "./process/chatState"
 
 export function initHotkey(){
     document.addEventListener('keydown', async (ev) => {
@@ -131,13 +131,14 @@ export function initHotkey(){
                     alertWait("Loading...")
                     ev.preventDefault()
                     ev.stopPropagation()
+                    const { getPreviewBody, sendChat } = await import("./process/index.svelte")
                     await sendChat(-1, {
                         previewPrompt: true
                     })
 
                     let md = ''
                     md += '### Prompt\n'
-                    md += '```json\n' + JSON.stringify(JSON.parse(previewBody), null, 2).replaceAll('```', '\\`\\`\\`') + '\n```\n'
+                    md += '```json\n' + JSON.stringify(JSON.parse(getPreviewBody()), null, 2).replaceAll('```', '\\`\\`\\`') + '\n```\n'
                     doingChat.set(false)
                     alertMd(md)
                     return

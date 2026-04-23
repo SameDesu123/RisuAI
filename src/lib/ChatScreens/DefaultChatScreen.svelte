@@ -8,7 +8,7 @@
     import { type Message } from "../../ts/storage/database.svelte";
     import { DBState } from 'src/ts/stores.svelte';
     import { getCharImage } from "../../ts/characters";
-    import { chatProcessStage, doingChat, sendChat } from "../../ts/process/index.svelte";
+    import { chatProcessStage, doingChat } from "../../ts/process/chatState";
     import { sleep } from "../../ts/util";
     import { language } from "../../lang";
     import { isExpTranslator, translate } from "../../ts/translator/translator";
@@ -24,7 +24,6 @@
     import { v4 } from 'uuid';
     import { PreUnreroll, Prereroll } from 'src/ts/process/prereroll';
     import { processMultiCommand } from 'src/ts/process/command';
-    import { postChatFile } from 'src/ts/process/files/multisend';
     import { getInlayAsset } from 'src/ts/process/files/inlays';
     import { ConnectionOpenStore } from 'src/ts/sync/multiuser';
     import { coldStorageHeader, preLoadChat } from 'src/ts/process/coldstorage.svelte';
@@ -33,6 +32,8 @@
     import PluginDefinedIcon from '../Others/PluginDefinedIcon.svelte';
 
     const loadPlaygroundMenu = () => import('../Playground/PlaygroundMenu.svelte').then(m => m.default);
+    const loadChatProcess = () => import('../../ts/process/index.svelte');
+    const loadPostChatFile = () => import('src/ts/process/files/multisend').then(m => m.postChatFile);
     
     interface Props {
         openModuleList?: boolean;
@@ -307,6 +308,7 @@
         messageInput = ''
         abortController = new AbortController()
         try {
+            const { sendChat } = await loadChatProcess()
             await sendChat(-1, {
                 signal:abortController.signal,
                 continue:continued
@@ -630,6 +632,7 @@
                                     reader.onload = async (e) => {
                                         const buf = e.target?.result as ArrayBuffer
                                         const uint8 = new Uint8Array(buf)
+                                        const postChatFile = await loadPostChatFile()
                                         const results = await postChatFile({
                                             name: file.name,
                                             data: uint8
@@ -989,6 +992,7 @@
                     </div>
 
                     <div class="flex items-center cursor-pointer hover:text-green-500 transition-colors" onclick={async () => {
+                        const postChatFile = await loadPostChatFile()
                         const results = await postChatFile(messageInput)
                         if(!results) return
                         for(const res of results){

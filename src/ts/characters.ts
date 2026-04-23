@@ -10,7 +10,7 @@ import { AppendableBuffer, changeChatTo, checkCharOrder, downloadFile, getFileSr
 import { updateInlayScreen } from "./process/inlayScreen";
 import { parseMarkdownSafe } from "./parser/parser.svelte";
 import { translateHTML } from "./translator/translator";
-import { doingChat } from "./process/index.svelte";
+import { doingChat } from "./process/chatState";
 import { importCharacter } from "./characterCards";
 import { PngChunk } from "./pngChunk";
 import { getColdStorageItem } from "./process/coldstorage.svelte";

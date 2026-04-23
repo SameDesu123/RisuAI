@@ -1,4 +1,4 @@
-import { get, writable } from "svelte/store";
+import { get } from "svelte/store";
 import { type character, type MessageGenerationInfo, type Chat, type MessagePresetInfo, changeToPreset, setCurrentChat, type Message } from "../storage/database.svelte";
 import { DBState } from '../stores.svelte';
 import { CharEmotion, selectedCharID } from "../stores.svelte";
@@ -32,6 +32,7 @@ import { getModelInfo, LLMFlags } from "../model/modellist";
 import { hypaMemoryV3 } from "./memory/hypav3";
 import { getModuleAssets, getModuleToggles } from "./modules";
 import { readImage } from "../globalApi.svelte";
+import { abortChat, chatProcessStage, doingChat } from "./chatState";
 
 export interface OpenAIChat{
     role: 'system'|'user'|'assistant'|'function'
@@ -57,12 +58,13 @@ export interface requestTokenPart{
     tokens:number
 }
 
-export const doingChat = writable(false)
-export const chatProcessStage = writable(0)
-export const abortChat = writable(false)
 export let requestTokenParts:{[key:string]:requestTokenPart[]} = {}
 export let previewFormated:OpenAIChat[] = []
 export let previewBody:string = ''
+
+export function getPreviewBody(){
+    return previewBody
+}
 
 export async function sendChat(chatProcessIndex = -1,arg:{
     chatAdditonalTokens?:number,
