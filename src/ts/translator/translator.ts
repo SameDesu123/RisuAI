@@ -19,9 +19,58 @@ import { processScriptFull } from "../process/scripts"
 import localforage from "localforage"
 import sendSound from '../../etc/send.mp3'
 
-let cache={
-    origin: [''],
-    trans: ['']
+const MAX_TRANSLATION_CACHE = 500
+let translationCacheConfigKey = ''
+let originToTranslated = new Map<string, string>()
+let translatedToOrigin = new Map<string, string>()
+
+function getTranslationCacheKey(){
+    const db = getDatabase()
+    return JSON.stringify({
+        translatorType: db.translatorType,
+        translator: db.translator,
+        aiModel: db.aiModel,
+    })
+}
+
+function resetTranslationCache(){
+    originToTranslated = new Map()
+    translatedToOrigin = new Map()
+}
+
+function ensureTranslationCacheConfig(){
+    const nextKey = getTranslationCacheKey()
+    if(nextKey !== translationCacheConfigKey){
+        translationCacheConfigKey = nextKey
+        resetTranslationCache()
+    }
+}
+
+function cacheTranslation(origin:string, translated:string){
+    originToTranslated.set(origin, translated)
+    translatedToOrigin.set(translated, origin)
+
+    if(originToTranslated.size > MAX_TRANSLATION_CACHE){
+        const oldestOrigin = originToTranslated.keys().next().value
+        if(oldestOrigin){
+            const oldestTranslated = originToTranslated.get(oldestOrigin)
+            originToTranslated.delete(oldestOrigin)
+            if(oldestTranslated){
+                translatedToOrigin.delete(oldestTranslated)
+            }
+        }
+    }
+
+    if(translatedToOrigin.size > MAX_TRANSLATION_CACHE){
+        const oldestTranslated = translatedToOrigin.keys().next().value
+        if(oldestTranslated){
+            const oldestOrigin = translatedToOrigin.get(oldestTranslated)
+            translatedToOrigin.delete(oldestTranslated)
+            if(oldestOrigin){
+                originToTranslated.delete(oldestOrigin)
+            }
+        }
+    }
 }
 
 let bergamotTranslate: (text: string, from: string, to: string, html?: boolean) => Promise<string>|null = null
@@ -37,17 +86,18 @@ export function getCurrentTranslatorPreset(): TranslatorPreset {
 }
 
 export async function translate(text:string, reverse:boolean) {
+    ensureTranslationCacheConfig()
     let db = getDatabase()
     if(!reverse){
-        const ind = cache.origin.indexOf(text)
-        if(ind !== -1){
-            return cache.trans[ind]
+        const cached = originToTranslated.get(text)
+        if(cached !== undefined){
+            return cached
         }
     }
     else{
-        const ind = cache.trans.indexOf(text)
-        if(ind !== -1){
-            return cache.origin[ind]
+        const cached = translatedToOrigin.get(text)
+        if(cached !== undefined){
+            return cached
         }
     }
 
@@ -109,9 +159,7 @@ export async function runTranslator(text:string, reverse:boolean, from:string,ta
 
     const result = fullResult.join("\n").trim()
 
-    cache.origin.push(reverse ? result : text)
-        
-    cache.trans.push(reverse ? text : result)
+    cacheTranslation(reverse ? result : text, reverse ? text : result)
 
 
     return result

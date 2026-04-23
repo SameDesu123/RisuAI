@@ -102,6 +102,14 @@ let fileCache: {
     res: []
 }
 
+function clearCachedFileEntry(loc:string){
+    const ind = fileCache.origin.indexOf(loc)
+    if(ind !== -1){
+        fileCache.origin.splice(ind, 1)
+        fileCache.res.splice(ind, 1)
+    }
+}
+
 let pathCache: { [key: string]: string } = {}
 let checkedPaths: string[] = []
 
@@ -252,8 +260,17 @@ export async function saveAsset(data: Uint8Array, customId: string = '', fileNam
     }
     else {
         let form = `assets/${id}.${fileExtension}`
+        clearCachedFileEntry(form)
         const replacer = await forageStorage.setItem(form, data)
+        if(usingSw){
+            const encoded = Buffer.from(form, 'utf-8').toString('hex')
+            await fetch("/sw/register/" + encoded, {
+                method: "POST",
+                body: data as any
+            }).catch(() => undefined)
+        }
         if (replacer) {
+            clearCachedFileEntry(replacer)
             return replacer
         }
         return form

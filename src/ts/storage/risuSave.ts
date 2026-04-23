@@ -135,6 +135,7 @@ export class RisuSaveEncoder {
             skipRemoteSavingOnCharacters = true
         } = arg;
         this.compression = compression;
+        checkedRemoteExistence.clear()
         let obj:Record<any,any> = {}
         let keys = Object.keys(data)
         for(const key of keys){
@@ -244,6 +245,7 @@ export class RisuSaveEncoder {
             for(const chaId of toSave.character){
                 if(!savedId.has(chaId)){
                     delete this.blocks[chaId];
+                    await risuSaveCacheForage.removeItem(`risuSaveBlock_${chaId}`)
                 }
             }
         }

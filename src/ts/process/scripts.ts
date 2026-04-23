@@ -94,6 +94,7 @@ function getScriptCache(hash:string){
 
 export function resetScriptCache(){
     processScriptCache = new Map()
+    bestMatchCache = new Map()
 }
 
 export async function processScriptFull(char:character|groupChat|simpleCharacterArgument, data:string, mode:ScriptMode, chatID = -1, cbsConditions:CbsConditions = {}){

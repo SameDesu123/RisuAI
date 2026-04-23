@@ -188,6 +188,7 @@ let tokenizersType:tokenizerType = null
 let lastTikModel = 'cl100k_base'
 
 let googleCloudTokenizedCache = new Map<string, number>()
+const MAX_GOOGLE_CLOUD_TOKENIZED_CACHE = 1000
 
 async function tokenizeGoogleCloud(text:string) {
     const db = getDatabase()
@@ -219,6 +220,12 @@ async function tokenizeGoogleCloud(text:string) {
 
     const json = await res.json()
     googleCloudTokenizedCache.set(cacheKey, json.totalTokens as number)
+    if(googleCloudTokenizedCache.size > MAX_GOOGLE_CLOUD_TOKENIZED_CACHE){
+        const oldestKey = googleCloudTokenizedCache.keys().next().value
+        if(oldestKey){
+            googleCloudTokenizedCache.delete(oldestKey)
+        }
+    }
     const count = json.totalTokens as number
 
     return new Uint32Array(count)

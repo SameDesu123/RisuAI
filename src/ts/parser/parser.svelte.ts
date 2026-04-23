@@ -429,6 +429,7 @@ function getEmoSrc(emoArr: string[][], emoPaths: AssetPaths) {
 }
 
 const fileSrcCache = new Map<string, string>()
+const MAX_BLOB_URL_CACHE = 200
 
 async function getFileSrcCached(path:string){
     let cached = fileSrcCache.get(path)
@@ -451,6 +452,7 @@ let emoAssetsCache: AssetPaths | null = null
 export function resetAssetsCache(charAssets: string[][], emoAssets: string[][], moduleAssets: string[][]) {
     const assetPaths: AssetPaths = {}
     const charEmoPaths: AssetPaths = {}
+    fileSrcCache.clear()
 
     getAssetSrc(charAssets, assetPaths)
     getAssetSrc(moduleAssets, assetPaths)
@@ -663,6 +665,20 @@ function trimmer(str:string){
 
 const blobUrlCache = new Map<string, string>()
 
+function cacheBlobUrl(id:string, url:string){
+    blobUrlCache.set(id, url)
+    if(blobUrlCache.size > MAX_BLOB_URL_CACHE){
+        const oldestKey = blobUrlCache.keys().next().value
+        if(oldestKey){
+            const oldestUrl = blobUrlCache.get(oldestKey)
+            if(oldestUrl){
+                URL.revokeObjectURL(oldestUrl)
+            }
+            blobUrlCache.delete(oldestKey)
+        }
+    }
+}
+
 async function parseInlayAssets(data:string){
     const inlayMatch = data.match(/{{(inlay|inlayed|inlayeddata)::(.+?)}}/g)
     if(inlayMatch){
@@ -676,7 +692,7 @@ async function parseInlayAssets(data:string){
             let url = blobUrlCache.get(id)
             if(!url && asset?.data){
                 url = URL.createObjectURL(asset.data)
-                blobUrlCache.set(id, url)
+                cacheBlobUrl(id, url)
             } 
             switch(asset?.type){
                 case 'image':
