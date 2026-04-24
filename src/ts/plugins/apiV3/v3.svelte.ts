@@ -17,11 +17,9 @@ import { getLLMCache, searchLLMCache } from "src/ts/translator/translator";
 import { hasher } from "src/ts/parser/parser.svelte";
 import localforage from "localforage";
 import { LLMFlags, LLMFormat, LLMProvider, LLMTokenizer, type LLMModel } from "src/ts/model/types";
-import { sendChat as processSendChat } from "src/ts/process/index.svelte";
 import { doingChat } from "src/ts/process/chatState";
 import { getModelInfo } from "src/ts/model/modellist";
 import type { ModelModeExtended } from "src/ts/process/request/shared";
-import { requestChatDataMain } from "src/ts/process/request/request";
 
 /*
     V3 API for RisuAI Plugins
@@ -1146,6 +1144,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             messages: OpenAIChat[]
             staticModel?: string
         }) => {
+            const { requestChatDataMain } = await import("src/ts/process/request/request")
             return requestChatDataMain({
                 formated: options.messages,
                 bias: {},
@@ -1193,6 +1192,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                 throw new Error("Sending chat with plugin-based model is currently blocked");    
             }
 
+            const { sendChat: processSendChat } = await import("src/ts/process/index.svelte")
             await processSendChat(-1, {});
 
             return true;

@@ -49,8 +49,13 @@
   import { sideBarSize } from "src/ts/gui/guisize";
     import QuickSettingsGui from "../Others/QuickSettingsGUI.svelte";
     import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
-  const loadCharConfig = () => import("./CharConfig.svelte").then(m => m.default)
-  const loadDevTool = () => import("./DevTool.svelte").then(m => m.default)
+  function lazyComponent<T>(loader: () => Promise<T>) {
+    let promise: Promise<T> | undefined
+    return () => promise ??= loader()
+  }
+
+  const loadCharConfig = lazyComponent(() => import("./CharConfig.svelte").then(m => m.default))
+  const loadDevTool = lazyComponent(() => import("./DevTool.svelte").then(m => m.default))
   let sideBarMode = $state(0);
   let editMode = $state(false);
   let menuMode = $state(0);

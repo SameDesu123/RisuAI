@@ -1,6 +1,5 @@
 import { get } from "svelte/store"
 import { getDatabase, type character } from "../storage/database.svelte"
-import { requestChatData } from "./request/request"
 import { alertError } from "../alert"
 import { fetchNative, globalFetch, readImage } from "../globalApi.svelte"
 import { CharEmotion } from "../stores.svelte"
@@ -32,6 +31,7 @@ export async function stableDiff(currentChar:character,prompt:string){
         },
     ]
 
+    const { requestChatData } = await import("./request/request")
     const rq = await requestChatData({
         formated: promptbody,
         currentChar: currentChar,

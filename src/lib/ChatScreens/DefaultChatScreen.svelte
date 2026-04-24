@@ -31,9 +31,14 @@
     import Button from '../UI/GUI/Button.svelte';
     import PluginDefinedIcon from '../Others/PluginDefinedIcon.svelte';
 
-    const loadPlaygroundMenu = () => import('../Playground/PlaygroundMenu.svelte').then(m => m.default);
-    const loadChatProcess = () => import('../../ts/process/index.svelte');
-    const loadPostChatFile = () => import('src/ts/process/files/multisend').then(m => m.postChatFile);
+    function lazyValue<T>(loader: () => Promise<T>) {
+        let promise: Promise<T> | undefined
+        return () => promise ??= loader()
+    }
+
+    const loadPlaygroundMenu = lazyValue(() => import('../Playground/PlaygroundMenu.svelte').then(m => m.default));
+    const loadChatProcess = lazyValue(() => import('../../ts/process/index.svelte'));
+    const loadPostChatFile = lazyValue(() => import('src/ts/process/files/multisend').then(m => m.postChatFile));
     
     interface Props {
         openModuleList?: boolean;

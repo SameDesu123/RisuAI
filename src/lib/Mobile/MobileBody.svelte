@@ -9,9 +9,14 @@
     import { isLite } from "src/ts/lite";
     
     import { DBState } from 'src/ts/stores.svelte';
-    const loadSettings = () => import("../Setting/Settings.svelte").then(m => m.default)
-    const loadCharConfig = () => import("../SideBars/CharConfig.svelte").then(m => m.default)
-    const loadDevTool = () => import("../SideBars/DevTool.svelte").then(m => m.default)
+    function lazyComponent<T>(loader: () => Promise<T>) {
+        let promise: Promise<T> | undefined
+        return () => promise ??= loader()
+    }
+
+    const loadSettings = lazyComponent(() => import("../Setting/Settings.svelte").then(m => m.default))
+    const loadCharConfig = lazyComponent(() => import("../SideBars/CharConfig.svelte").then(m => m.default))
+    const loadDevTool = lazyComponent(() => import("../SideBars/DevTool.svelte").then(m => m.default))
 </script>
 
 {#if $MobileSideBar > 0 && !$isLite}

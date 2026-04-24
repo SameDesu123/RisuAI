@@ -4,7 +4,6 @@ import { selectedCharID } from "../stores.svelte";
 import { alertInput, alertMd, alertNormal, alertSelect } from "../alert";
 import { sayTTS } from "./tts";
 import { risuChatParser } from "../parser/parser.svelte";
-import { sendChat } from "./index.svelte";
 import { loadLoreBookV3Prompt } from "./lorebook.svelte";
 import { runTrigger } from "./triggers";
 
@@ -165,6 +164,7 @@ async function processCommand(command:string, pipe:string):Promise<false | strin
                 clearMode = true
                 splited.shift()
             }
+            const { sendChat } = await import("./index.svelte")
             for(const e of splited){
                 if(clearMode){
                     currentChat.message = []

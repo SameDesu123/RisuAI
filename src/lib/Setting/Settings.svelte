@@ -8,23 +8,28 @@
     import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
 
     let openLoreList = $state(false)
-    const loadUserSettings = () => import("./Pages/UserSettings.svelte").then(m => m.default)
-    const loadBotSettings = () => import("./Pages/BotSettings.svelte").then(m => m.default)
-    const loadOtherBotSettings = () => import("./Pages/OtherBotSettings.svelte").then(m => m.default)
-    const loadDisplaySettings = () => import("./Pages/DisplaySettings.svelte").then(m => m.default)
-    const loadPluginSettings = () => import("./Pages/PluginSettings.svelte").then(m => m.default)
-    const loadFilesSettings = () => import("./Pages/FilesSettings.svelte").then(m => m.default)
-    const loadAdvancedSettings = () => import("./Pages/AdvancedSettings.svelte").then(m => m.default)
-    const loadCommunities = () => import("./Pages/Communities.svelte").then(m => m.default)
-    const loadGlobalLoreBookSettings = () => import("./Pages/GlobalLoreBookSettings.svelte").then(m => m.default)
-    const loadGlobalRegex = () => import("./Pages/GlobalRegex.svelte").then(m => m.default)
-    const loadLanguageSettings = () => import("./Pages/LanguageSettings.svelte").then(m => m.default)
-    const loadAccessibilitySettings = () => import("./Pages/AccessibilitySettings.svelte").then(m => m.default)
-    const loadPersonaSettings = () => import("./Pages/PersonaSettings.svelte").then(m => m.default)
-    const loadPromptSettings = () => import("./Pages/PromptSettings.svelte").then(m => m.default)
-    const loadModuleSettings = () => import("./Pages/Module/ModuleSettings.svelte").then(m => m.default)
-    const loadHotkeySettings = () => import("./Pages/HotkeySettings.svelte").then(m => m.default)
-    const loadThanksPage = () => import("./Pages/ThanksPage.svelte").then(m => m.default)
+    function lazyComponent<T>(loader: () => Promise<T>) {
+        let promise: Promise<T> | undefined
+        return () => promise ??= loader()
+    }
+
+    const loadUserSettings = lazyComponent(() => import("./Pages/UserSettings.svelte").then(m => m.default))
+    const loadBotSettings = lazyComponent(() => import("./Pages/BotSettings.svelte").then(m => m.default))
+    const loadOtherBotSettings = lazyComponent(() => import("./Pages/OtherBotSettings.svelte").then(m => m.default))
+    const loadDisplaySettings = lazyComponent(() => import("./Pages/DisplaySettings.svelte").then(m => m.default))
+    const loadPluginSettings = lazyComponent(() => import("./Pages/PluginSettings.svelte").then(m => m.default))
+    const loadFilesSettings = lazyComponent(() => import("./Pages/FilesSettings.svelte").then(m => m.default))
+    const loadAdvancedSettings = lazyComponent(() => import("./Pages/AdvancedSettings.svelte").then(m => m.default))
+    const loadCommunities = lazyComponent(() => import("./Pages/Communities.svelte").then(m => m.default))
+    const loadGlobalLoreBookSettings = lazyComponent(() => import("./Pages/GlobalLoreBookSettings.svelte").then(m => m.default))
+    const loadGlobalRegex = lazyComponent(() => import("./Pages/GlobalRegex.svelte").then(m => m.default))
+    const loadLanguageSettings = lazyComponent(() => import("./Pages/LanguageSettings.svelte").then(m => m.default))
+    const loadAccessibilitySettings = lazyComponent(() => import("./Pages/AccessibilitySettings.svelte").then(m => m.default))
+    const loadPersonaSettings = lazyComponent(() => import("./Pages/PersonaSettings.svelte").then(m => m.default))
+    const loadPromptSettings = lazyComponent(() => import("./Pages/PromptSettings.svelte").then(m => m.default))
+    const loadModuleSettings = lazyComponent(() => import("./Pages/Module/ModuleSettings.svelte").then(m => m.default))
+    const loadHotkeySettings = lazyComponent(() => import("./Pages/HotkeySettings.svelte").then(m => m.default))
+    const loadThanksPage = lazyComponent(() => import("./Pages/ThanksPage.svelte").then(m => m.default))
     if(window.innerWidth >= 900 && $SettingsMenuIndex === -1 && !$MobileGUI){
         $SettingsMenuIndex = 1
     }

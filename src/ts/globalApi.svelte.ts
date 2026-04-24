@@ -1705,7 +1705,6 @@ export async function fetchNative(url: string, arg: {
 }): Promise<Response> {
 
     const useInterceptor = !!arg.interceptor
-    console.log(arg.body, 'body')
     if (arg.body === undefined && (arg.method === 'POST' || arg.method === 'PUT')) {
         throw new Error('Body is required for POST and PUT requests')
     }

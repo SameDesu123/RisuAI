@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { requestChatData } from "src/ts/process/request/request";
     import { doingChat } from "../../ts/process/chatState";
     import type { OpenAIChat } from "../../ts/process/index.svelte";
     import { setDatabase, type character, type Message, type groupChat, type Database } from "../../ts/storage/database.svelte";
@@ -82,6 +81,7 @@
             progress = true
             progressChatPage = chatPage
             abortController = new AbortController()
+            const { requestChatData } = await import("src/ts/process/request/request")
             requestChatData({
                 formated: promptbody,
                 bias: {},

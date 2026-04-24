@@ -25,7 +25,6 @@
     import { checkCharOrder } from './ts/globalApi.svelte';
     import { ArrowUpIcon, GlobeIcon, PlusIcon } from '@lucide/svelte';
     import { hypaV3ModalOpen, hypaV3ProgressStore } from "./ts/stores.svelte";
-    import HypaV3Modal from './lib/Others/HypaV3Modal.svelte';
     import HypaV3Progress from './lib/Others/HypaV3Progress.svelte';
     import PluginAlertModal from './lib/Others/PluginAlertModal.svelte';
     import PopupList from './lib/UI/PopupList.svelte';
@@ -33,7 +32,6 @@
     import sendSound from './etc/send.mp3'
     import PopupEditor from './lib/Others/PopupEditor.svelte';
     import LoadoutModal from './lib/Others/LoadoutModal.svelte';
-    import IrisModal from './lib/Others/IrisModal.svelte';
     import Legal from './lib/Others/Legal.svelte';
     import CustomSidebarConfig from './lib/Others/CustomSidebarConfig.svelte';
 
@@ -44,6 +42,13 @@
     let aprilFools = $state(new Date().getMonth() === 3 && new Date().getDate() === 1)
     let aprilFoolsPage = $state(0)
     let keepingSessionAlive = $state(false)
+    function lazyComponent<T>(loader: () => Promise<T>) {
+        let promise: Promise<T> | undefined
+        return () => promise ??= loader()
+    }
+
+    const loadHypaV3Modal = lazyComponent(() => import('./lib/Others/HypaV3Modal.svelte').then(m => m.default))
+    const loadIrisModal = lazyComponent(() => import('./lib/Others/IrisModal.svelte').then(m => m.default))
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -232,7 +237,9 @@
         <BookmarkList />
     {/if}
     {#if $hypaV3ModalOpen}
-        <HypaV3Modal />
+        {#await loadHypaV3Modal() then HypaV3Modal}
+            <HypaV3Modal />
+        {/await}
     {/if}
     <SavePopupIconComp />
     {#if $hypaV3ProgressStore.open}
@@ -252,7 +259,9 @@
         <LoadoutModal />
     {/if}
     {#if irisStore.open}
-        <IrisModal />
+        {#await loadIrisModal() then IrisModal}
+            <IrisModal />
+        {/await}
     {/if}
     {#if customSideBarConfigDialogStore.open}
         <CustomSidebarConfig />

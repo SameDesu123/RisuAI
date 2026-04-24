@@ -1,7 +1,7 @@
 import { getDatabase, setDatabase } from 'src/ts/storage/database.svelte';
 import { DBState, selectedCharID } from 'src/ts/stores.svelte';
 import { get } from 'svelte/store';
-import { doingChat, sendChat } from '../index.svelte';
+import { doingChat } from '../chatState';
 import { downloadFile } from 'src/ts/globalApi.svelte';
 import { isTauri } from "src/ts/platform"
 import { HypaProcesser } from '../memory/hypamemory';
@@ -23,8 +23,8 @@ async function sendPofile(arg:sendFileArg){
     let currentChar = DBState.db.characters[get(selectedCharID)]
     let currentChat = currentChar.chats[currentChar.chatPage]
     const lines = arg.file.split('\n')
+    const { sendChat } = await import('../index.svelte')
     for(let i=0;i<lines.length;i++){
-        console.log(i)
         const line = lines[i]
         if(line === ''){
             if(msgId === ''){
@@ -122,7 +122,6 @@ async function sendPDFFile(arg:sendFileArg) {
             texts.push(item.str)
         }
     }
-    console.log(texts)
     const hypa = new HypaProcesser()
     hypa.addText(texts)
     const result = await hypa.similaritySearch(arg.query)
@@ -133,7 +132,6 @@ async function sendPDFFile(arg:sendFileArg) {
             break
         }
     }
-    console.log(message)
     return Buffer.from(`<File>\n${message}\n</File>\n`).toString('base64')
 }
 
@@ -151,7 +149,6 @@ async function sendTxtFile(arg:sendFileArg) {
             break
         }
     }
-    console.log(message)
     return Buffer.from(`<File>\n${message}\n</File>\n`).toString('base64')
 }
 
@@ -173,7 +170,6 @@ async function sendXMLFile(arg:sendFileArg) {
             break
         }
     }
-    console.log(message)
     return Buffer.from(`<File>\n${message}\n</File>\n`).toString('base64')    
 }
 
@@ -233,7 +229,6 @@ export async function postChatFile(query:string|{
 
     for(const file of files){
         const extention = file.name.split('.').at(-1)
-        console.log(extention)
 
         switch(extention){
             case 'po':{

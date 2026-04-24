@@ -9,7 +9,6 @@ import {
 import { globalFetch } from "../globalApi.svelte"
 import { isTauri, isNodeServer } from "src/ts/platform"
 import { alertError } from "../alert"
-import { requestChatData } from "../process/request/request"
 import { doingChat } from "../process/chatState"
 import type { OpenAIChat } from "../process/index.svelte"
 import { applyMarkdownToNode, type simpleCharacterArgument } from "../parser/parser.svelte"
@@ -355,7 +354,6 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
         return applyEdittransRegex(await bergamotTranslate(html, from, to, true), charArg, alwaysExistChar)
     }
     const dom = new DOMParser().parseFromString(html, 'text/html');
-    console.log(html)
 
     let promises: Promise<void>[] = [];
     let translationChunks: {
@@ -392,8 +390,6 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
 
         const split = translated.split('■')
 
-        console.log(split.length, currentChunk.chunks.length)
-
         if(split.length !== currentChunk.chunks.length){
             //try translating one by one
             for(let i = 0; i < currentChunk.chunks.length; i++){
@@ -404,7 +400,6 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
         }
         
         for(let i = 0; i < split.length; i++){
-            console.log(split[i])
             currentChunk.resolvers[i](split[i])
         }
 
@@ -568,7 +563,6 @@ async function translateLLM(text:string, arg:{to:string, from:string, regenerate
     const charIndex = get(selectedCharID)
     const currentChar = db.characters[charIndex]
     let translatorNote = ""
-    console.log(arg.translatorNote)
     if(arg.translatorNote){
         translatorNote = arg.translatorNote
     }
@@ -577,7 +571,6 @@ async function translateLLM(text:string, arg:{to:string, from:string, regenerate
     } else {
         translatorNote = ""
     }
-    console.log(translatorNote)
 
     let formated:OpenAIChat[] = []
     const preset = getCurrentTranslatorPreset()
@@ -599,6 +592,7 @@ async function translateLLM(text:string, arg:{to:string, from:string, regenerate
             }
         ]
     }
+    const { requestChatData } = await import("../process/request/request")
     const rq = await requestChatData({
         formated,
         bias: {},

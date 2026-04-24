@@ -10,7 +10,6 @@ import { parseKeyValue, sleep } from "../util";
 import { alertError, alertInput, alertNormal, alertSelect } from "../alert";
 import type { OpenAIChat } from "./index.svelte";
 import { HypaProcesser } from "./memory/hypamemory";
-import { requestChatData } from "./request/request";
 import { generateAIImage } from "./stableDiff";
 import { writeInlayImage } from "./files/inlays";
 import { runScripted } from "./scriptings";
@@ -1475,6 +1474,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     if(!promptbody){
                         promptbody = [{role:'user', content:effectValue}]
                     }
+                    const { requestChatData } = await import("./request/request")
                     const result = await requestChatData({
                         formated: promptbody,
                         bias: {},
@@ -1902,6 +1902,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     if(!promptbody){
                         promptbody = [{role:'user', content:value}]
                     }
+                    const { requestChatData } = await import("./request/request")
                     let result = await requestChatData({
                         formated: promptbody,
                         bias: {},
