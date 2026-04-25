@@ -812,12 +812,61 @@ function forcePluginOpenAIStreamingNativeBody(body: string, headers: { [key: str
     }
 }
 
+function extractOpenAIText(value: unknown): string {
+    if (typeof value === 'string') {
+        return value
+    }
+    if (Array.isArray(value)) {
+        return value.map(extractOpenAIText).join('')
+    }
+    if (!value || typeof value !== 'object') {
+        return ''
+    }
+
+    const record = value as Record<string, unknown>
+    if (typeof record.text === 'string') {
+        return record.text
+    }
+    if (typeof record.output_text === 'string') {
+        return record.output_text
+    }
+    if (typeof record.content === 'string' || Array.isArray(record.content)) {
+        return extractOpenAIText(record.content)
+    }
+    if (typeof record.delta === 'string') {
+        return record.delta
+    }
+    if (record.delta && typeof record.delta === 'object') {
+        return extractOpenAIText(record.delta)
+    }
+    return ''
+}
+
+function extractOpenAIResponseOutputText(response: unknown): string {
+    if (!response || typeof response !== 'object') {
+        return ''
+    }
+    const output = (response as Record<string, unknown>).output
+    if (!Array.isArray(output)) {
+        return ''
+    }
+
+    return output.map((item) => {
+        if (!item || typeof item !== 'object') {
+            return ''
+        }
+        return extractOpenAIText((item as Record<string, unknown>).content)
+    }).join('')
+}
+
 function buildOpenAINonStreamingResponseFromSse(sseText: string): Record<string, unknown> | null {
     const texts = new Map<number, string>()
     const finishReasons = new Map<number, unknown>()
     let firstChunk: Record<string, any> | null = null
     let lastChunk: Record<string, any> | null = null
     let sawChoice = false
+    let sawText = false
+    let responseApiText = ''
 
     for (const line of sseText.split(/\r?\n/)) {
         const trimmed = line.trim()
@@ -844,6 +893,25 @@ function buildOpenAINonStreamingResponseFromSse(sseText: string): Record<string,
             lastChunk.usage = parsed.usage
         }
 
+        if (typeof parsed.delta === 'string' && typeof parsed.type === 'string' && parsed.type.includes('output_text')) {
+            responseApiText += parsed.delta
+            sawText = true
+        }
+        else if (parsed.type === 'response.content_part.added' || parsed.type === 'response.content_part.delta') {
+            const contentPartText = extractOpenAIText(parsed.part ?? parsed.delta)
+            if (contentPartText) {
+                responseApiText += contentPartText
+                sawText = true
+            }
+        }
+        else if (parsed.response) {
+            const completedText = extractOpenAIResponseOutputText(parsed.response)
+            if (completedText) {
+                responseApiText = completedText
+                sawText = true
+            }
+        }
+
         if (!Array.isArray(parsed.choices)) {
             continue
         }
@@ -851,9 +919,10 @@ function buildOpenAINonStreamingResponseFromSse(sseText: string): Record<string,
         for (let i = 0; i < parsed.choices.length; i++) {
             const choice = parsed.choices[i]
             const index = typeof choice?.index === 'number' ? choice.index : i
-            const content = choice?.delta?.content ?? choice?.text ?? choice?.message?.content
-            if (typeof content === 'string') {
+            const content = extractOpenAIText(choice?.delta?.content ?? choice?.delta?.text ?? choice?.text ?? choice?.message?.content)
+            if (content) {
                 texts.set(index, (texts.get(index) ?? '') + content)
+                sawText = true
             }
             if (choice?.finish_reason !== undefined && choice.finish_reason !== null) {
                 finishReasons.set(index, choice.finish_reason)
@@ -862,7 +931,15 @@ function buildOpenAINonStreamingResponseFromSse(sseText: string): Record<string,
         }
     }
 
-    if (!sawChoice) {
+    if (!sawChoice && !responseApiText) {
+        return null
+    }
+
+    if (texts.size === 0 && responseApiText) {
+        texts.set(0, responseApiText)
+    }
+
+    if (!sawText) {
         return null
     }
 
