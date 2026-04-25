@@ -634,6 +634,7 @@ export function setDatabase(data:Database){
     data.rememberToolUsage ??= true
     data.simplifiedToolUse ??= false
     data.streamGeminiThoughts ??= false
+    data.forcePluginFetchStreaming ??= false
     data.settingsCloseButtonSize ??= 24
     data.hideAllImages ??= false
     data.ImagenModel ??= 'imagen-4.0-generate-001'
@@ -1161,6 +1162,7 @@ export interface Database{
     newImageHandlingBeta?: boolean
     showFirstMessagePages:boolean
     streamGeminiThoughts:boolean
+    forcePluginFetchStreaming?: boolean
     verbosity:number
     dynamicOutput?:DynamicOutput
     hubServerType?:string
