@@ -723,6 +723,8 @@ export interface GlobalFetchArgs {
     interceptor?: string;
     requestTimeoutMs?: number;
     networkRoute?: 'auto' | 'local_network';
+    pluginFetch?: boolean;
+    pluginFetchStreaming?: boolean;
 }
 
 /**
@@ -738,6 +740,177 @@ interface GlobalFetchResult {
     data: any;
     headers: { [key: string]: string };
     status: number;
+}
+
+type OpenAICompatibleBody = {
+    messages?: unknown;
+    stream?: boolean;
+    [key: string]: unknown;
+}
+
+function isOpenAICompatibleStreamingBody(body: unknown): body is OpenAICompatibleBody {
+    return !!body && typeof body === 'object' && !Array.isArray(body) && Array.isArray((body as OpenAICompatibleBody).messages)
+}
+
+function tryParseJsonBody(body: unknown): unknown {
+    if (typeof body !== 'string') {
+        return body
+    }
+    try {
+        return JSON.parse(body)
+    } catch {
+        return body
+    }
+}
+
+function forcePluginOpenAIStreamingArg(arg: GlobalFetchArgs): GlobalFetchArgs {
+    const db = getDatabase()
+    if (!db.forcePluginFetchStreaming || !arg.pluginFetch || (arg.method ?? 'POST') !== 'POST') {
+        return arg
+    }
+
+    const parsedBody = tryParseJsonBody(arg.body)
+    if (!isOpenAICompatibleStreamingBody(parsedBody)) {
+        return arg
+    }
+
+    return {
+        ...arg,
+        body: {
+            ...parsedBody,
+            stream: true
+        },
+        headers: {
+            ...arg.headers,
+            Accept: 'text/event-stream'
+        },
+        pluginFetchStreaming: true
+    }
+}
+
+function forcePluginOpenAIStreamingNativeBody(body: string, headers: { [key: string]: string }, method: string | undefined): { body: string, headers: { [key: string]: string }, streaming: boolean } {
+    const db = getDatabase()
+    if (!db.forcePluginFetchStreaming || (method ?? 'POST') !== 'POST') {
+        return { body, headers, streaming: false }
+    }
+
+    const parsedBody = tryParseJsonBody(body)
+    if (!isOpenAICompatibleStreamingBody(parsedBody)) {
+        return { body, headers, streaming: false }
+    }
+
+    return {
+        body: JSON.stringify({
+            ...parsedBody,
+            stream: true
+        }),
+        headers: {
+            ...headers,
+            Accept: 'text/event-stream'
+        },
+        streaming: true
+    }
+}
+
+function buildOpenAINonStreamingResponseFromSse(sseText: string): Record<string, unknown> | null {
+    const texts = new Map<number, string>()
+    const finishReasons = new Map<number, unknown>()
+    let firstChunk: Record<string, any> | null = null
+    let lastChunk: Record<string, any> | null = null
+    let sawChoice = false
+
+    for (const line of sseText.split(/\r?\n/)) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('data:')) {
+            continue
+        }
+
+        const data = trimmed.slice(5).trim()
+        if (!data || data === '[DONE]') {
+            continue
+        }
+
+        let parsed: Record<string, any>
+        try {
+            parsed = JSON.parse(data)
+        } catch {
+            return null
+        }
+
+        firstChunk ??= parsed
+        lastChunk = parsed
+
+        if (parsed.usage) {
+            lastChunk.usage = parsed.usage
+        }
+
+        if (!Array.isArray(parsed.choices)) {
+            continue
+        }
+
+        for (let i = 0; i < parsed.choices.length; i++) {
+            const choice = parsed.choices[i]
+            const index = typeof choice?.index === 'number' ? choice.index : i
+            const content = choice?.delta?.content ?? choice?.text ?? choice?.message?.content
+            if (typeof content === 'string') {
+                texts.set(index, (texts.get(index) ?? '') + content)
+            }
+            if (choice?.finish_reason !== undefined && choice.finish_reason !== null) {
+                finishReasons.set(index, choice.finish_reason)
+            }
+            sawChoice = true
+        }
+    }
+
+    if (!sawChoice) {
+        return null
+    }
+
+    const indexes = texts.size > 0 ? Array.from(texts.keys()) : [0]
+    return {
+        id: lastChunk?.id ?? firstChunk?.id,
+        object: 'chat.completion',
+        created: lastChunk?.created ?? firstChunk?.created ?? Math.floor(Date.now() / 1000),
+        model: lastChunk?.model ?? firstChunk?.model,
+        choices: indexes.map((index) => {
+            const content = texts.get(index) ?? ''
+            return {
+                index,
+                message: {
+                    role: 'assistant',
+                    content
+                },
+                text: content,
+                finish_reason: finishReasons.get(index) ?? 'stop'
+            }
+        }),
+        ...(lastChunk?.usage && { usage: lastChunk.usage })
+    }
+}
+
+async function adaptPluginOpenAIStreamingResponse(response: Response, enabled?: boolean): Promise<Response | null> {
+    if (!enabled || !response.headers.get('Content-Type')?.includes('text/event-stream')) {
+        return null
+    }
+
+    try {
+        const json = buildOpenAINonStreamingResponseFromSse(await response.clone().text())
+        if (!json) {
+            console.warn('Failed to adapt plugin streaming response: unsupported OpenAI-compatible SSE payload.')
+            return null
+        }
+
+        const headers = new Headers(response.headers)
+        headers.set('Content-Type', 'application/json')
+        return new Response(JSON.stringify(json), {
+            status: response.status,
+            statusText: response.statusText,
+            headers
+        })
+    } catch (error) {
+        console.warn('Failed to adapt plugin streaming response:', error)
+        return null
+    }
 }
 
 /**
@@ -811,6 +984,8 @@ export async function globalFetch(url: string, arg: GlobalFetchArgs = {}): Promi
                 }
             }
         }
+
+        arg = forcePluginOpenAIStreamingArg(arg)
 
         const timeoutSignal = buildTimeoutSignal(arg.abortSignal, arg.requestTimeoutMs)
         const requestArg = timeoutSignal.signal === arg.abortSignal
@@ -894,7 +1069,8 @@ function addFetchLogInGlobalFetch(response: any, success: boolean, url: string, 
 async function fetchWithPlainFetch(url: string, arg: GlobalFetchArgs): Promise<GlobalFetchResult> {
     try {
         const headers = { 'Content-Type': 'application/json', ...arg.headers };
-        const response = await fetch(new URL(url), { body: JSON.stringify(arg.body), headers, method: arg.method ?? "POST", signal: arg.abortSignal });
+        let response = await fetch(new URL(url), { body: JSON.stringify(arg.body), headers, method: arg.method ?? "POST", signal: arg.abortSignal });
+        response = await adaptPluginOpenAIStreamingResponse(response, arg.pluginFetchStreaming) ?? response
         const data = arg.rawResponse ? new Uint8Array(await response.arrayBuffer()) : await response.json();
         const ok = response.ok && response.status >= 200 && response.status < 300;
         addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
@@ -914,7 +1090,8 @@ async function fetchWithPlainFetch(url: string, arg: GlobalFetchArgs): Promise<G
 async function fetchWithUSFetch(url: string, arg: GlobalFetchArgs): Promise<GlobalFetchResult> {
     try {
         const headers = { 'Content-Type': 'application/json', ...arg.headers };
-        const response = await userScriptFetch(url, { body: JSON.stringify(arg.body), headers, method: arg.method ?? "POST", signal: arg.abortSignal });
+        let response = await userScriptFetch(url, { body: JSON.stringify(arg.body), headers, method: arg.method ?? "POST", signal: arg.abortSignal });
+        response = await adaptPluginOpenAIStreamingResponse(response, arg.pluginFetchStreaming) ?? response
         const data = arg.rawResponse ? new Uint8Array(await response.arrayBuffer()) : await response.json();
         const ok = response.ok && response.status >= 200 && response.status < 300;
         addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
@@ -934,7 +1111,8 @@ async function fetchWithUSFetch(url: string, arg: GlobalFetchArgs): Promise<Glob
 async function fetchWithTauri(url: string, arg: GlobalFetchArgs): Promise<GlobalFetchResult> {
     try {
         const headers = { 'Content-Type': 'application/json', ...arg.headers };
-        const response = await TauriHTTPFetch(new URL(url), { body: JSON.stringify(arg.body), headers, method: arg.method ?? "POST", signal: arg.abortSignal });
+        let response = await TauriHTTPFetch(new URL(url), { body: JSON.stringify(arg.body), headers, method: arg.method ?? "POST", signal: arg.abortSignal });
+        response = await adaptPluginOpenAIStreamingResponse(response, arg.pluginFetchStreaming) ?? response
         const data = arg.rawResponse ? new Uint8Array(await response.arrayBuffer()) : await response.json();
         const ok = response.status >= 200 && response.status < 300;
         addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
@@ -970,7 +1148,8 @@ async function fetchWithProxy(url: string, arg: GlobalFetchArgs): Promise<Global
 
         const body = arg.body instanceof URLSearchParams ? arg.body.toString() : JSON.stringify(arg.body);
 
-        const response = await fetch(furl, { body, headers, method: arg.method ?? "POST", signal: arg.abortSignal });
+        let response = await fetch(furl, { body, headers, method: arg.method ?? "POST", signal: arg.abortSignal });
+        response = await adaptPluginOpenAIStreamingResponse(response, arg.pluginFetchStreaming) ?? response
         const isSuccess = response.ok && response.status >= 200 && response.status < 300;
 
         if (arg.rawResponse) {
@@ -1793,6 +1972,8 @@ export async function fetchNative(url: string, arg: {
     interceptor?: string
     requestTimeoutMs?: number
     networkRoute?: 'auto' | 'local_network'
+    pluginFetch?: boolean
+    pluginFetchStreaming?: boolean
 }): Promise<Response> {
 
     const useInterceptor = !!arg.interceptor
@@ -1821,13 +2002,37 @@ export async function fetchNative(url: string, arg: {
                 }
             }
         }
+        if (arg.pluginFetch) {
+            const forced = forcePluginOpenAIStreamingNativeBody(body, headers, arg.method)
+            body = forced.body
+            headers = forced.headers
+            arg.pluginFetchStreaming = forced.streaming
+        }
         realBody = new TextEncoder().encode(body)
     }
     else if (arg.body instanceof Uint8Array) {
-        realBody = arg.body
+        let body = arg.body
+        if (arg.pluginFetch) {
+            const forced = forcePluginOpenAIStreamingNativeBody(new TextDecoder().decode(body), headers, arg.method)
+            if (forced.streaming) {
+                body = new TextEncoder().encode(forced.body)
+                headers = forced.headers
+                arg.pluginFetchStreaming = true
+            }
+        }
+        realBody = body
     }
     else if (arg.body instanceof ArrayBuffer) {
-        realBody = new Uint8Array(arg.body)
+        let body = new Uint8Array(arg.body)
+        if (arg.pluginFetch) {
+            const forced = forcePluginOpenAIStreamingNativeBody(new TextDecoder().decode(body), headers, arg.method)
+            if (forced.streaming) {
+                body = new TextEncoder().encode(forced.body)
+                headers = forced.headers
+                arg.pluginFetchStreaming = true
+            }
+        }
+        realBody = body
     }
     else {
         throw new Error('Invalid body type')
@@ -1851,7 +2056,7 @@ export async function fetchNative(url: string, arg: {
     const requestSignal = timeoutSignal.signal
     let fetchLogIndex = addFetchLog({
         body: new TextDecoder().decode(realBody),
-        headers: arg.headers,
+        headers,
         response: 'Streamed Fetch',
         success: true,
         url: url,
@@ -1860,12 +2065,13 @@ export async function fetchNative(url: string, arg: {
     })
     try {
         if (window.userScriptFetch && !throughProxy) {
-            return await window.userScriptFetch(url, {
+            const response = await window.userScriptFetch(url, {
             body: realBody as any,
             headers: headers,
             method: arg.method,
             signal: requestSignal
         })
+            return await adaptPluginOpenAIStreamingResponse(response, arg.pluginFetchStreaming) ?? response
         }
         else if (isTauri) {
         fetchIndex++
@@ -1956,10 +2162,11 @@ export async function fetchNative(url: string, arg: {
             throw new Error(error)
         }
 
-        return new Response(readableStream, {
+        const response = new Response(readableStream, {
             headers: new Headers(resHeaders),
             status: status
         })
+        return await adaptPluginOpenAIStreamingResponse(response, arg.pluginFetchStreaming) ?? response
 
 
     }
@@ -1972,7 +2179,7 @@ export async function fetchNative(url: string, arg: {
 
         if (useProxyJobWs) {
             try {
-                return await fetchViaProxyJobWs(url, {
+                const response = await fetchViaProxyJobWs(url, {
                     body: realBody,
                     headers,
                     method: arg.method,
@@ -1981,6 +2188,7 @@ export async function fetchNative(url: string, arg: {
                     chatId: arg.chatId,
                     fetchLogIndex
                 });
+                return await adaptPluginOpenAIStreamingResponse(response, arg.pluginFetchStreaming) ?? response
             } catch (wsErr) {
                 console.warn('[ProxyJobWS] fallback to /proxy2 due to error:', wsErr);
             }
@@ -2008,10 +2216,11 @@ export async function fetchNative(url: string, arg: {
             signal: requestSignal
         })
 
-        return new Response(r.body ? pipeFetchLog(fetchLogIndex, r.body as ReadableStream<Uint8Array>) : null, {
+        const response = new Response(r.body ? pipeFetchLog(fetchLogIndex, r.body as ReadableStream<Uint8Array>) : null, {
             headers: r.headers,
             status: r.status
         })
+        return await adaptPluginOpenAIStreamingResponse(response, arg.pluginFetchStreaming) ?? response
     }
     else {
         const r = await fetch(url, {
@@ -2020,10 +2229,11 @@ export async function fetchNative(url: string, arg: {
             method: arg.method,
             signal: requestSignal,
         })
-        return new Response(r.body ? pipeFetchLog(fetchLogIndex, r.body as ReadableStream<Uint8Array>) : null, {
+        const response = new Response(r.body ? pipeFetchLog(fetchLogIndex, r.body as ReadableStream<Uint8Array>) : null, {
             headers: r.headers,
             status: r.status
         })
+        return await adaptPluginOpenAIStreamingResponse(response, arg.pluginFetchStreaming) ?? response
     }
     } finally {
         timeoutSignal.cleanup()

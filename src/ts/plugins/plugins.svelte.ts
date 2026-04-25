@@ -503,8 +503,14 @@ export const allowedDbKeys = [
 
 export const getV2PluginAPIs = () => {
     return {
-        risuFetch: globalFetch,
-        nativeFetch: fetchNative,
+        risuFetch: (url: string, options: any = {}) => globalFetch(url, {
+            ...options,
+            pluginFetch: true
+        }),
+        nativeFetch: (url: string, options: any = {}) => fetchNative(url, {
+            ...options,
+            pluginFetch: true
+        }),
         getArg: (arg: string) => {
             const db = getDatabase()
             const [name, realArg] = arg.split('::')
