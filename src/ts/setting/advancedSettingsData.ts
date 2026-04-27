@@ -193,6 +193,31 @@ export const advancedSettingsItems: SettingItem[] = [
     { id: 'adv.auxModelUnderModelSettings', type: 'check', labelKey: 'auxModelUnderModelSettings', bindKey: 'auxModelUnderModelSettings', classes: 'mt-4' },
     { id: 'adv.devMode', type: 'check', labelKey: 'pluginDevelopMode', bindKey: 'pluginDevelopMode', classes: 'mt-4' },
     { id: 'adv.forcePluginFetchStreaming', type: 'check', labelKey: 'forcePluginFetchStreaming', bindKey: 'forcePluginFetchStreaming', helpKey: 'forcePluginFetchStreaming', classes: 'mt-4' },
+    {
+        id: 'adv.streamingDisplayOptimization',
+        type: 'check',
+        labelKey: 'streamingDisplayOptimization',
+        bindKey: 'streamingDisplayOptimization',
+        helpKey: 'streamingDisplayOptimization',
+        showExperimental: true,
+        classes: 'mt-4'
+    },
+    {
+        id: 'adv.streamingDisplayOptimizationLevel',
+        type: 'segmented',
+        labelKey: 'streamingDisplayOptimizationLevel',
+        bindKey: 'streamingDisplayOptimizationLevel',
+        condition: (ctx) => ctx.db.streamingDisplayOptimization,
+        containerClasses: 'pl-7',
+        options: {
+            segmentOptions: [
+                { value: 'veryLow', labelKey: 'veryLow' },
+                { value: 'low', labelKey: 'low' },
+                { value: 'medium', labelKey: 'medium' },
+                { value: 'high', labelKey: 'high' }
+            ]
+        }
+    },
 
     // More Experimental (Condition: useExperimental)
     {

@@ -4,7 +4,7 @@
     import SegmentedControl from 'src/lib/UI/GUI/SegmentedControl.svelte';
     import Help from 'src/lib/Others/Help.svelte';
     import { language } from 'src/lang';
-    import { DBState } from 'src/ts/stores.svelte';
+    import { untrack } from 'svelte';
 
     interface Props {
         item: SettingItem;
@@ -12,6 +12,7 @@
     }
 
     let { item, ctx }: Props = $props();
+    let localValue: any = $state(untrack(() => getSettingValue(item, ctx)));
 
     // Transform options: filter by condition + resolve labelKey translations
     let processedOptions = $derived((item.options?.segmentOptions ?? [])
@@ -28,13 +29,28 @@
             setSettingValue(item, processedOptions[processedOptions.length - 1].value, ctx);
         }
     });
+
+    $effect(() => {
+        localValue = getSettingValue(item, ctx);
+    });
+
+    $effect(() => {
+        const val = localValue;
+        untrack(() => {
+            if (val !== getSettingValue(item, ctx)) {
+                setSettingValue(item, val, ctx);
+            }
+        });
+    });
 </script>
 
-<span class="text-textcolor {item.classes ?? ''}">
-    {getLabel(item)}
-    {#if item.helpKey}<Help key={item.helpKey as any}/>{/if}
-</span>
-<SegmentedControl
-    bind:value={(DBState.db as any)[item.bindKey]}
-    options={processedOptions}
-/>
+<div class={item.containerClasses ?? ''}>
+    <span class="text-textcolor {item.classes ?? ''}">
+        {getLabel(item)}
+        {#if item.helpKey}<Help key={item.helpKey as any}/>{/if}
+    </span>
+    <SegmentedControl
+        bind:value={localValue}
+        options={processedOptions}
+    />
+</div>

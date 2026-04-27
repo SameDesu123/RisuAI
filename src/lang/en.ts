@@ -129,6 +129,7 @@ export const languageEnglish = {
         forceProxyAsOpenAI: "If enabled, it will force to use OpenAI format when using reverse proxy.",
         forcePlainFetch: "If enabled, it will use browser fetch api instead of native http request. this can cause CORS errors.",
         forcePluginFetchStreaming: "If enabled, OpenAI-compatible fetch requests made by plugins are streamed in the background, then returned to the plugin as a normal non-streaming response.",
+        streamingDisplayOptimization: "If enabled, streamed chat text is processed and redrawn at a limited frame rate instead of every received chunk. This can reduce mobile overhead when regex scripts or markdown rendering are expensive.",
         autoFillRequestURL: "If enabled, it will autofill request url to match the current model.",
         localNetworkModeDesc:
             "Routes private/LAN model URLs through the local runtime path instead of browser direct fetch.\n\n" +
@@ -1573,6 +1574,12 @@ export const languageEnglish = {
     trimStartNewChat: "Trim 'Start New Chat' Messages",
     pluginDevelopMode: "Plugin Develop Mode",
     forcePluginFetchStreaming: "Force Plugin Fetch Streaming",
+    streamingDisplayOptimization: "Streaming Display Optimization",
+    streamingDisplayOptimizationLevel: "Optimization Strength",
+    veryLow: "Very Low",
+    low: "Low",
+    medium: "Medium",
+    high: "High",
     fetchLogConsent: "Plugin {} is requesting to fetch logs, which may expose sensitive information. Do you want to allow this?", 
     getFullDatabaseConsent: "Plugin {} is requesting to access the full database, which may expose sensitive information. Do you want to allow this?",
     mainDomAccessConsent: "Plugin {} is requesting to access the main Document, which may expose sensitive information. Do you want to allow this?",

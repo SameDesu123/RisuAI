@@ -635,6 +635,8 @@ export function setDatabase(data:Database){
     data.simplifiedToolUse ??= false
     data.streamGeminiThoughts ??= false
     data.forcePluginFetchStreaming ??= false
+    data.streamingDisplayOptimization ??= false
+    data.streamingDisplayOptimizationLevel ??= 'medium'
     data.settingsCloseButtonSize ??= 24
     data.hideAllImages ??= false
     data.ImagenModel ??= 'imagen-4.0-generate-001'
@@ -1163,6 +1165,8 @@ export interface Database{
     showFirstMessagePages:boolean
     streamGeminiThoughts:boolean
     forcePluginFetchStreaming?: boolean
+    streamingDisplayOptimization?: boolean
+    streamingDisplayOptimizationLevel?: 'veryLow' | 'low' | 'medium' | 'high'
     verbosity:number
     dynamicOutput?:DynamicOutput
     hubServerType?:string
