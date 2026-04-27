@@ -64,6 +64,13 @@ export let requestTokenParts:{[key:string]:requestTokenPart[]} = {}
 export let previewFormated:OpenAIChat[] = []
 export let previewBody:string = ''
 
+const streamingDisplayOptimizationIntervals = {
+    veryLow: 33,
+    low: 66,
+    medium: 100,
+    high: 200,
+} as const
+
 export async function sendChat(chatProcessIndex = -1,arg:{
     chatAdditonalTokens?:number,
     signal?:AbortSignal,
@@ -1536,6 +1543,109 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             streamAborted = true
             void reader.cancel().catch(() => {})
         }
+        const useStreamingDisplayOptimization = DBState.db.streamingDisplayOptimization === true
+        const streamingDisplayOptimizationLevel = DBState.db.streamingDisplayOptimizationLevel ?? 'medium'
+        const streamingDisplayOptimizationInterval = streamingDisplayOptimizationIntervals[streamingDisplayOptimizationLevel] ?? streamingDisplayOptimizationIntervals.medium
+        let pendingStreamingResult:string | null = null
+        let streamingFlushTimeout:ReturnType<typeof setTimeout> | null = null
+        let streamingFlushRaf:number | null = null
+        let streamingFlushInProgress = false
+        let streamingFlushRequestedAfterCurrent = false
+        let lastStreamingFlushAt = 0
+
+        const nowMs = () => globalThis.performance?.now?.() ?? Date.now()
+
+        const clearScheduledStreamingFlush = () => {
+            if(streamingFlushTimeout !== null){
+                clearTimeout(streamingFlushTimeout)
+                streamingFlushTimeout = null
+            }
+            if(streamingFlushRaf !== null && typeof globalThis.cancelAnimationFrame === 'function'){
+                globalThis.cancelAnimationFrame(streamingFlushRaf)
+                streamingFlushRaf = null
+            }
+        }
+
+        const applyStreamingResult = async (streamingResult:string, trimIncomplete:boolean) => {
+            let displayResult = streamingResult
+            if(trimIncomplete && DBState.db.removeIncompleteResponse){
+                displayResult = trimUntilPunctuation(displayResult)
+            }
+            const result2 = await processScriptFull(nowChatroom, reformatContent(prefix + displayResult), 'editoutput', msgIndex)
+            DBState.db.characters[selectedChar].chats[selectedChat].message[msgIndex].data = result2.data
+            emoChanged = result2.emoChanged
+            DBState.db.characters[selectedChar].reloadKeys += 1
+        }
+
+        const flushStreamingResult = async (force = false, trimIncomplete = true):Promise<void> => {
+            if(!useStreamingDisplayOptimization){
+                return
+            }
+            if(streamingFlushInProgress){
+                streamingFlushRequestedAfterCurrent = true
+                if(force){
+                    while(streamingFlushInProgress){
+                        await new Promise((resolve) => setTimeout(resolve, 0))
+                    }
+                    await flushStreamingResult(true, trimIncomplete)
+                }
+                return
+            }
+            if(pendingStreamingResult === null){
+                return
+            }
+            streamingFlushInProgress = true
+            try{
+                const nextResult = pendingStreamingResult
+                pendingStreamingResult = null
+                await applyStreamingResult(nextResult, trimIncomplete)
+                lastStreamingFlushAt = nowMs()
+            }
+            finally{
+                streamingFlushInProgress = false
+            }
+
+            if(pendingStreamingResult !== null){
+                const shouldFlushNow = force || streamingFlushRequestedAfterCurrent
+                streamingFlushRequestedAfterCurrent = false
+                if(shouldFlushNow && force){
+                    await flushStreamingResult(true, trimIncomplete)
+                }
+                else if(shouldFlushNow){
+                    scheduleStreamingFlush()
+                }
+            }
+        }
+
+        function scheduleStreamingFlush(){
+            if(!useStreamingDisplayOptimization || pendingStreamingResult === null){
+                return
+            }
+            if(streamingFlushInProgress){
+                streamingFlushRequestedAfterCurrent = true
+                return
+            }
+            if(streamingFlushTimeout !== null || streamingFlushRaf !== null){
+                return
+            }
+
+            const elapsed = nowMs() - lastStreamingFlushAt
+            const delay = Math.max(0, streamingDisplayOptimizationInterval - elapsed)
+            streamingFlushTimeout = setTimeout(() => {
+                streamingFlushTimeout = null
+                const runFlush = () => {
+                    streamingFlushRaf = null
+                    void flushStreamingResult(false, true)
+                }
+                if(typeof globalThis.requestAnimationFrame === 'function'){
+                    streamingFlushRaf = globalThis.requestAnimationFrame(runFlush)
+                }
+                else{
+                    runFlush()
+                }
+            }, delay)
+        }
+
         abortSignal.addEventListener('abort', abortReader, { once: true })
         try {
             while(streamAborted === false){
@@ -1557,13 +1667,13 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     if(!result){
                         result = ''
                     }
-                    if(DBState.db.removeIncompleteResponse){
-                        result = trimUntilPunctuation(result)
+                    if(useStreamingDisplayOptimization){
+                        pendingStreamingResult = result
+                        scheduleStreamingFlush()
                     }
-                    let result2 = await processScriptFull(nowChatroom, reformatContent(prefix + result), 'editoutput', msgIndex)
-                    DBState.db.characters[selectedChar].chats[selectedChat].message[msgIndex].data = result2.data
-                    emoChanged = result2.emoChanged
-                    DBState.db.characters[selectedChar].reloadKeys += 1
+                    else{
+                        await applyStreamingResult(result, true)
+                    }
                 }
                 if(readed.done){
                     break
@@ -1572,6 +1682,10 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
         finally {
             abortSignal.removeEventListener('abort', abortReader)
+            if(useStreamingDisplayOptimization){
+                clearScheduledStreamingFlush()
+                await flushStreamingResult(true, true)
+            }
             DBState.db.characters[selectedChar].chats[selectedChat].isStreaming = false
             DBState.db.characters[selectedChar].reloadKeys += 1
             void reader.cancel().catch(() => {})
