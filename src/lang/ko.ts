@@ -932,6 +932,7 @@ export const languageKorean = {
     "low": "낮음",
     "medium": "보통",
     "high": "높음",
+    "veryHigh": "매우 높음",
     "autoFillRequestURL": "요청 URL 자동 채우기",
     "newOAIHandle": "새로운 OpenAI 방식 적용",
     "inlayImage": "인레이 이미지",

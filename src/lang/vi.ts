@@ -910,6 +910,7 @@ export const languageVietnamese = {
     "low": "Thấp",
     "medium": "Trung bình",
     "high": "Cao",
+    "veryHigh": "Rất cao",
     "autoFillRequestURL": "Tự động điền URL yêu cầu",
     "newOAIHandle": "Xử lý OpenAI mới",
     "inlayImage": "Tính năng hình ảnh Inlay",

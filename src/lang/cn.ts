@@ -910,6 +910,7 @@ export const languageChinese = {
     "low": "低",
     "medium": "中",
     "high": "高",
+    "veryHigh": "非常高",
     "autoFillRequestURL": "自动填入请求 URL",
     "newOAIHandle": "新的 OpenAI 处理方式",
     "inlayImage": "内嵌图片功能",

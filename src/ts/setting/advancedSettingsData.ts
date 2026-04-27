@@ -214,7 +214,8 @@ export const advancedSettingsItems: SettingItem[] = [
                 { value: 'veryLow', labelKey: 'veryLow' },
                 { value: 'low', labelKey: 'low' },
                 { value: 'medium', labelKey: 'medium' },
-                { value: 'high', labelKey: 'high' }
+                { value: 'high', labelKey: 'high' },
+                { value: 'veryHigh', labelKey: 'veryHigh' }
             ]
         }
     },

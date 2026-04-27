@@ -912,6 +912,7 @@ export const languageChineseTraditional = {
     "low": "低",
     "medium": "中",
     "high": "高",
+    "veryHigh": "非常高",
     "autoFillRequestURL": "自動填入請求 URL",
     "newOAIHandle": "新的 OpenAI 處理方式",
     "inlayImage": "內嵌圖片功能",

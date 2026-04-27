@@ -910,6 +910,7 @@ export const languageSpanish = {
     "low": "Baja",
     "medium": "Media",
     "high": "Alta",
+    "veryHigh": "Muy alta",
     "autoFillRequestURL": "Autocompletar URL de Solicitud",
     "newOAIHandle": "Nuevo Manejo de OpenAI",
     "inlayImage": "Característica de Incrustación de Imágenes",

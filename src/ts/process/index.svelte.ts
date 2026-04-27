@@ -69,6 +69,7 @@ const streamingDisplayOptimizationIntervals = {
     low: 66,
     medium: 100,
     high: 200,
+    veryHigh: 500,
 } as const
 
 export async function sendChat(chatProcessIndex = -1,arg:{

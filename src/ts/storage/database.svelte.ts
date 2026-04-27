@@ -1166,7 +1166,7 @@ export interface Database{
     streamGeminiThoughts:boolean
     forcePluginFetchStreaming?: boolean
     streamingDisplayOptimization?: boolean
-    streamingDisplayOptimizationLevel?: 'veryLow' | 'low' | 'medium' | 'high'
+    streamingDisplayOptimizationLevel?: 'veryLow' | 'low' | 'medium' | 'high' | 'veryHigh'
     verbosity:number
     dynamicOutput?:DynamicOutput
     hubServerType?:string
