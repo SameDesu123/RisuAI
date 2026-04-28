@@ -1544,7 +1544,8 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             streamAborted = true
             void reader.cancel().catch(() => {})
         }
-        const useStreamingDisplayOptimization = DBState.db.streamingDisplayOptimization === true
+        const largeChatPerformanceMode = DBState.db.largeChatPerformanceMode ?? 'off'
+        const useStreamingDisplayOptimization = DBState.db.streamingDisplayOptimization === true || largeChatPerformanceMode !== 'off'
         const streamingDisplayOptimizationLevel = DBState.db.streamingDisplayOptimizationLevel ?? 'medium'
         const streamingDisplayOptimizationInterval = streamingDisplayOptimizationIntervals[streamingDisplayOptimizationLevel] ?? streamingDisplayOptimizationIntervals.medium
         let pendingStreamingResult:string | null = null
