@@ -508,7 +508,8 @@ const unloadV3Plugin = async (pluginName: string) => {
         ])
     }
     try {
-        instance?.host?.terminate();        
+        instance?.host?.terminate();
+        instance?.iframe?.remove();
     } catch (error) {
         console.error(`Error terminating plugin ${pluginName}:`, error);
     }
@@ -1299,6 +1300,7 @@ type V3PluginInstance = {
     name: string;
     host: SandboxHost | WorkerSandboxHost;
     runtime: ResolvedPluginRuntimeMode;
+    iframe: HTMLIFrameElement;
 }
 
 const v3PluginInstances: V3PluginInstance[] = [];
@@ -1347,7 +1349,8 @@ export async function executePluginV3(plugin:RisuPlugin){
     v3PluginInstances.push({
         name: plugin.name,
         host,
-        runtime: runtime.mode
+        runtime: runtime.mode,
+        iframe
     });
     console.log(`[RisuAI Plugin: ${plugin.name}] Loaded API V3 plugin. Runtime: ${runtime.mode}${runtime.reason ? ` (${runtime.reason})` : ''}`);
 }
