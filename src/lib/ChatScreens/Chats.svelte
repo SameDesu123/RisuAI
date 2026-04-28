@@ -6,6 +6,7 @@
     import { createSimpleCharacter, DBState, selectedCharID, ReloadChatPointer } from 'src/ts/stores.svelte';
     import { chatFoldedStateMessageIndex } from 'src/ts/globalApi.svelte';
     import { get } from 'svelte/store';
+    import { doingChat } from 'src/ts/process/index.svelte';
     
     const getCurrentChatRoomId = () => {
         const charId = get(selectedCharID);
@@ -82,6 +83,7 @@
             const reloadPointer = reloadPointerMap[i] ?? 0;
             const performanceMode = DBState.db.largeChatPerformanceMode ?? 'off';
             const activeStreamingMessage = performanceMode !== 'off'
+                && $doingChat
                 && currentCharacter.chats?.[currentCharacter.chatPage]?.isStreaming
                 && i === messages.length - 1
                 && message.role === 'char';

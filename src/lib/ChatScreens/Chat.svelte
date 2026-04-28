@@ -4,6 +4,7 @@
     import { ColorSchemeTypeStore } from "src/ts/gui/colorscheme"
     import { longpress } from "src/ts/gui/longtouch"
     import { getModelInfo } from "src/ts/model/modellist"
+    import { doingChat } from "src/ts/process/index.svelte"
     import { runLuaButtonTrigger } from 'src/ts/process/scriptings'
     import { risuChatParser } from "src/ts/process/scripts"
     import { runTrigger } from 'src/ts/process/triggers'
@@ -179,6 +180,7 @@
         const performanceMode = DBState.db.largeChatPerformanceMode ?? 'off'
         const chat = DBState.db.characters?.[selIdState.selId]?.chats?.[DBState.db.characters?.[selIdState.selId]?.chatPage]
         return performanceMode !== 'off'
+            && $doingChat
             && chat?.isStreaming
             && idx === (chat?.message?.length ?? 0) - 1
             && role === 'char'

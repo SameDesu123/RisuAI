@@ -27,6 +27,7 @@
 
 <script lang="ts">
     import isEqual from "lodash/isEqual"
+    import { doingChat } from "src/ts/process/index.svelte"
     import { DBState, selectedCharID } from 'src/ts/stores.svelte'
     import { sleep } from "src/ts/util"
     import { alertError } from "../../ts/alert"
@@ -117,6 +118,7 @@
         const char = DBState.db.characters?.[charId]
         const chat = char?.chats?.[char.chatPage]
         return (DBState.db.largeChatPerformanceMode ?? 'off') === 'strong'
+            && $doingChat
             && chat?.isStreaming
             && idx === (chat?.message?.length ?? 0) - 1
             && role === 'char'
