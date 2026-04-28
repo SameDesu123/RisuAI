@@ -637,6 +637,7 @@ export function setDatabase(data:Database){
     data.forcePluginFetchStreaming ??= false
     data.streamingDisplayOptimization ??= false
     data.streamingDisplayOptimizationLevel ??= 'medium'
+    data.largeChatPerformanceMode ??= 'off'
     data.settingsCloseButtonSize ??= 24
     data.hideAllImages ??= false
     data.ImagenModel ??= 'imagen-4.0-generate-001'
@@ -1167,6 +1168,7 @@ export interface Database{
     forcePluginFetchStreaming?: boolean
     streamingDisplayOptimization?: boolean
     streamingDisplayOptimizationLevel?: 'veryLow' | 'low' | 'medium' | 'high' | 'veryHigh'
+    largeChatPerformanceMode?: 'off' | 'balanced' | 'strong'
     verbosity:number
     dynamicOutput?:DynamicOutput
     hubServerType?:string

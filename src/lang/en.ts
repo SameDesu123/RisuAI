@@ -130,6 +130,8 @@ export const languageEnglish = {
         forcePlainFetch: "If enabled, it will use browser fetch api instead of native http request. this can cause CORS errors.",
         forcePluginFetchStreaming: "If enabled, OpenAI-compatible fetch requests made by plugins are streamed in the background, then returned to the plugin as a normal non-streaming response.",
         streamingDisplayOptimization: "If enabled, streamed chat text is processed and redrawn at a limited frame rate instead of every received chunk. This can reduce mobile overhead when regex scripts or markdown rendering are expensive.",
+        largeChatPerformanceMode:
+            "Experimental display optimization for very long chats. Balanced batches streaming UI updates; Strong also shows the active streaming message as raw text until completion. Off keeps the existing behavior and hot-path logs unchanged.",
         autoFillRequestURL: "If enabled, it will autofill request url to match the current model.",
         localNetworkModeDesc:
             "Routes private/LAN model URLs through the local runtime path instead of browser direct fetch.\n\n" +
@@ -1576,6 +1578,10 @@ export const languageEnglish = {
     forcePluginFetchStreaming: "Force Plugin Fetch Streaming",
     streamingDisplayOptimization: "Streaming Display Optimization",
     streamingDisplayOptimizationLevel: "Optimization Strength",
+    largeChatPerformanceMode: "Large Chat Performance Mode",
+    largeChatPerformanceOff: "Off",
+    largeChatPerformanceBalanced: "Balanced",
+    largeChatPerformanceStrong: "Strong",
     veryLow: "Very Low",
     low: "Low",
     medium: "Medium",
