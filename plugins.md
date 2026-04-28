@@ -52,6 +52,7 @@ Every plugin starts with metadata comments and a main script:
 //@name My Awesome Plugin
 //@display-name My Awesome Plugin
 //@api 3.0
+//@runtime auto
 //@arg api_key string Your API key
 //@arg max_retries int Maximum retry attempts
 //@link https://github.com/yourname/plugin Documentation
@@ -89,6 +90,13 @@ It must be placed at the very top of your plugin script.
   ```
 
 #### Optional Metadata
+
+- **`//@runtime`** - v3 runtime preference: `auto`, `worker`, or `iframe`
+  ```javascript
+  //@runtime auto
+  ```
+
+  `auto` is the default. Risuai runs worker-compatible plugins in a Dedicated Worker to reduce UI stalls, and falls back to iframe when direct DOM/window access is detected. Use `iframe` if your plugin intentionally builds UI with the plugin document, or `worker` for CPU-heavy trigger, replacer, or provider plugins.
 
 - **`//@display-name`** - User-friendly display name
   ```javascript

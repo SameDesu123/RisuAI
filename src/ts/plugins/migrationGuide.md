@@ -130,20 +130,20 @@ API 3.0 introduces significant changes to enhance security and stability. It is 
 
 ### Key Changes
 
-- Works in sandboxed iframe, preventing access to the main document context.
+- Runs worker-compatible plugins in a Dedicated Worker by default, with iframe fallback for plugins that need direct DOM/window access.
 - Uses structured cloning for data exchange between the plugin and main application, ensuring data integrity and security.
 - Data is not shared between plugins, each plugin has its own isolated context, unless APIs like safeLocalStorage or pluginStorage are used.
 - More restricted APIs, with focus on security. some APIs from 2.1 are removed or modified.
 - All APIs are asynchronous, returning Promises.
 - API is in `risuai` object in the global scope.
 - DOM access to the main document is available only through `getRootDocument()` method, and returns a safeDocument object, which is imcompatible with standard Document object.
-- Plugins can access there own DOM inside there iframe though standard Document object. the iframe is hidden by default, but can be made visible using `showContainer()` method.
+- Plugins that declare `//@runtime iframe` or use direct DOM/window APIs can access their own DOM inside their iframe through the standard Document object. The iframe is hidden by default, but can be made visible using `showContainer()` method.
 
 ### APIs
 
 #### Core API Object
 
-All API v3 methods are accessed through the `risuai` global object. The API uses a sandboxed iframe environment to ensure security isolation.
+All API v3 methods are accessed through the `risuai` global object. The API uses a sandboxed worker or iframe environment to ensure security isolation. `//@runtime auto` is the default; use `//@runtime iframe` for plugin-document UI and `//@runtime worker` for CPU-heavy trigger, replacer, or provider plugins.
 
 #### Legacy APIs from v2.1 (Maintained for Compatibility)
 
@@ -477,7 +477,7 @@ const oldKeys = risuai._getOldKeys()
 
 API v3.0 implements multiple security layers:
 
-1. **Iframe Isolation**: Plugins run in sandboxed iframes, preventing direct access to the main application context
+1. **Runtime Isolation**: Plugins run in sandboxed worker or iframe runtimes, preventing direct access to the main application context
 2. **SafeElement Wrapper**: All DOM access goes through SafeElement, which restricts dangerous operations
 3. **Attribute Restrictions**: Only `x-` prefixed custom attributes can be manipulated directly
 4. **HTML Sanitization**: All HTML content is sanitized with DOMPurify before insertion

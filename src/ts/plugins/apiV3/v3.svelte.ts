@@ -607,8 +607,13 @@ const workerUnsafePatterns = [
     /\bwindow\.addEventListener\b/,
     /\bwindow\.removeEventListener\b/,
     /\bwindow\.postMessage\b/,
+    /\bwindow\.innerWidth\b/,
+    /\bwindow\.innerHeight\b/,
+    /\bwindow\.location\b/,
+    /\bwindow\.navigator\b/,
     /\bHTMLElement\b/,
     /\bMutationObserver\b/,
+    /\bResizeObserver\b/,
     /\bshowContainer\s*\(/,
     /\bgetRootDocument\s*\(/,
 ]

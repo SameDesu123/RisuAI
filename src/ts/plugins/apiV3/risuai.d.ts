@@ -7,10 +7,16 @@
  * 
  * @important **ALL METHODS RETURN PROMISES**
  *
- * Due to the iframe-based sandboxing architecture, ALL method calls go through
+ * Due to the sandboxed runtime architecture, ALL method calls go through
  * postMessage communication, which makes them asynchronous. Even methods that
  * appear synchronous in the implementation (like log(), showContainer(), etc.)
- * return Promises when called from the plugin iframe.
+ * return Promises when called from the plugin runtime.
+ *
+ * v3 plugins run in `auto` runtime mode by default. Risuai will use a worker
+ * runtime for worker-compatible plugins and fall back to an iframe runtime for
+ * plugins that need direct DOM/window access. Add `//@runtime iframe` if your
+ * plugin intentionally builds UI with the plugin document, or `//@runtime worker`
+ * if it should be forced into the worker runtime.
  * 
  * for DOM, we recommend using iframe-based UI which uses standard document API
  * instead of accessing the main document directly via getRootDocument(),
@@ -67,11 +73,19 @@
  *   ```
  *   Should be placed near the top, ideally below `//@name` and `//@api`
  *
+ * - **`//@runtime`** - Optional v3 runtime preference: `auto`, `worker`, or `iframe`
+ *   ```javascript
+ *   //@runtime auto
+ *   ```
+ *   `auto` is the default. Use `iframe` for plugins that directly use the
+ *   plugin DOM/window, and `worker` for CPU-heavy trigger/replacer/provider plugins.
+ *
  * @example
  * ```typescript
  * //@name MyPlugin
  * //@display-name My Awesome Plugin
  * //@api 3.0
+ * //@runtime auto
  * //@version 1.0.0
  * //@arg api_key string Your API key
  * //@link https://github.com/user/plugin Documentation
