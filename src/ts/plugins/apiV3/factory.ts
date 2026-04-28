@@ -34,8 +34,20 @@ interface AbortSignalRef {
     aborted: boolean;
 }
 
+type PluginRuntimeKind = 'iframe' | 'worker';
 
-const GUEST_BRIDGE_SCRIPT = `
+type PluginRuntimeTiming = {
+    runtime: PluginRuntimeKind;
+    direction: 'host' | 'callback';
+    method: string;
+    duration: number;
+}
+
+type PluginRuntimeHostOptions = {
+    onTiming?: (timing: PluginRuntimeTiming) => void;
+}
+
+const makeGuestBridgeScript = (runtime: PluginRuntimeKind) => `
 await (async function() {
     const pendingRequests = new Map();
     const callbackRegistry = new Map();
@@ -135,8 +147,15 @@ await (async function() {
         return transferables;
     }
 
+    const runtimeGlobal = globalThis;
+    const runtimeTarget = ${runtime === 'iframe' ? 'window' : 'self'};
+    const sendTarget = ${runtime === 'iframe' ? 'window.parent' : 'self'};
+
     function send(payload, transferables = []) {
-        window.parent.postMessage(payload, '*', transferables);
+        ${runtime === 'iframe'
+            ? "sendTarget.postMessage(payload, '*', transferables);"
+            : "sendTarget.postMessage(payload, transferables);"
+        }
     }
 
     function sendRequest(type, payload) {
@@ -158,7 +177,7 @@ await (async function() {
     
     
     
-    window.addEventListener('message', async (event) => {
+    runtimeTarget.addEventListener('message', async (event) => {
         const data = event.data;
         if (!data) return;
 
@@ -228,7 +247,7 @@ await (async function() {
 
     const propertyCache = new Map();
 
-    window.risuai = new Proxy({}, {
+    runtimeGlobal.risuai = new Proxy({}, {
         get: (target, prop) => {
             if (propertyCache.has(prop)) {
                 return propertyCache.get(prop);
@@ -236,11 +255,14 @@ await (async function() {
             return (...args) => sendRequest('CALL_ROOT', { method: prop, args: args });
         }
     });
-    window.Risuai = window.risuai;
+    runtimeGlobal.Risuai = runtimeGlobal.risuai;
+    if (!runtimeGlobal.window) {
+        runtimeGlobal.window = runtimeGlobal;
+    }
 
     try {
         // Initialize cached properties
-        const propsToInit = await window.risuai._getPropertiesForInitialization();
+        const propsToInit = await runtimeGlobal.risuai._getPropertiesForInitialization();
         console.log('Initializing risuai properties:', JSON.stringify(propsToInit.list));
         for (let i = 0; i < propsToInit.list.length; i++) {
             const key = propsToInit.list[i];
@@ -249,7 +271,7 @@ await (async function() {
         }
 
         // Initialize aliases
-        const aliases = await window.risuai._getAliases();
+        const aliases = await runtimeGlobal.risuai._getAliases();
         const aliasKeys = Object.keys(aliases);
         for (let i = 0; i < aliasKeys.length; i++) {
             const aliasKey = aliasKeys[i];
@@ -277,22 +299,24 @@ await (async function() {
         console.error('Failed to initialize risuai properties:', e);
     }
 
-    window.initOldApiGlobal = () => {
+    runtimeGlobal.initOldApiGlobal = () => {
         const keys = risuai._getOldKeys()
         for(const key of keys){
-            window[key] = risuai[key];
+            runtimeGlobal[key] = risuai[key];
         }
     }
 
-    Object.freeze(window.postMessage);
+    Object.freeze(runtimeGlobal.postMessage);
 })();
 `;
 
-export class SandboxHost {
-    private iframe: HTMLIFrameElement;
+const GUEST_BRIDGE_SCRIPT = makeGuestBridgeScript('iframe');
+const WORKER_BRIDGE_SCRIPT = makeGuestBridgeScript('worker');
+
+abstract class PluginRuntimeHost {
     private apiFactory: any;
-    private nonce = crypto.randomUUID();
-    private csp = `connect-src 'none'; script-src 'nonce-${this.nonce}' 'wasm-unsafe-eval'; frame-src 'none'; object-src 'none'; style-src * 'unsafe-inline'; default-src 'none'; img-src * data: blob:; font-src * data: blob:; media-src * data: blob:; base-uri 'none';`;
+    private runtime: PluginRuntimeKind;
+    private options: PluginRuntimeHostOptions;
 
     private instanceRegistry = new Map<string, any>();
     private abortControllers = new Map<string, AbortController>();
@@ -300,37 +324,13 @@ export class SandboxHost {
 
     private pendingCallbacks = new Map<string, { resolve: Function, reject: Function }>();
 
-    constructor(apiFactory: any) {
+    constructor(apiFactory: any, runtime: PluginRuntimeKind, options: PluginRuntimeHostOptions = {}) {
         this.apiFactory = apiFactory;
+        this.runtime = runtime;
+        this.options = options;
     }
 
-    public executeInIframe(code: string): Promise<any> {
-        return new Promise((resolve, reject) => {
-            const reqId = 'exec_' + Math.random().toString(36).substring(2);
-
-            const handler = (event: MessageEvent) => {
-                if (event.source !== this.iframe.contentWindow) return;
-                const data = event.data;
-
-                if (data.type === 'EXEC_RESULT' && data.reqId === reqId) {
-                    window.removeEventListener('message', handler);
-                    if (data.error) {
-                        reject(new Error(data.error));
-                    } else {
-                        resolve(data.result);
-                    }
-                }
-            };
-
-            window.addEventListener('message', handler);
-
-            this.iframe.contentWindow?.postMessage({
-                type: 'EXECUTE_CODE',
-                reqId,
-                code
-            }, '*');
-        });
-    }
+    protected abstract postMessage(message: any, transferables?: Transferable[]): void;
 
     private collectTransferables(obj: any, transferables: Transferable[] = []): Transferable[] {
         if (!obj || typeof obj !== 'object') return transferables;
@@ -410,9 +410,19 @@ export class SandboxHost {
                 if (cached) return cached;
 
                 const wrapper = async (...innerArgs: any[]) => {
+                    const started = performance.now();
                     return new Promise((resolve, reject) => {
                         const reqId = 'cb_req_' + Math.random().toString(36).substring(2);
-                        this.pendingCallbacks.set(reqId, { resolve, reject });
+                        this.pendingCallbacks.set(reqId, {
+                            resolve: (value: any) => {
+                                this.reportTiming('callback', cbRef.id, started);
+                                resolve(value);
+                            },
+                            reject: (error: any) => {
+                                this.reportTiming('callback', cbRef.id, started);
+                                reject(error);
+                            }
+                        });
 
                         // AbortSignal cannot be structured-cloned for postMessage.
                         // Convert to a serializable ref and forward abort events
@@ -427,14 +437,14 @@ export class SandboxHost {
                                 };
                                 if (!arg.aborted) {
                                     arg.addEventListener('abort', () => {
-                                        try {
-                                            this.iframe.contentWindow?.postMessage({
-                                                type: 'ABORT_SIGNAL',
-                                                abortId
-                                            } as RpcMessage, '*');
-                                        } catch (_) { /* iframe already removed */ }
-                                    }, { once: true });
-                                }
+                                    try {
+                                        this.postMessage({
+                                            type: 'ABORT_SIGNAL',
+                                            abortId
+                                        } as RpcMessage);
+                                    } catch (_) { /* iframe already removed */ }
+                                }, { once: true });
+                            }
                                 return ref;
                             }
                             return arg;
@@ -447,7 +457,7 @@ export class SandboxHost {
                             args: sanitizedArgs
                         };
                         const transferables = this.collectTransferables(message);
-                        this.iframe.contentWindow?.postMessage(message, '*', transferables);
+                        this.postMessage(message, transferables);
                     });
                 };
                 this.callbackWrapperCache.set(cbRef.id, wrapper);
@@ -480,6 +490,139 @@ export class SandboxHost {
         });
     }
 
+    protected async handleMessageData(data: RpcMessage) {
+        if (data.type === 'CALLBACK_RETURN') {
+            const req = this.pendingCallbacks.get(data.reqId!);
+            if (req) {
+                if (data.error) req.reject(new Error(data.error));
+                else req.resolve(data.result);
+                this.pendingCallbacks.delete(data.reqId!);
+            }
+            return;
+        }
+
+        if (data.type === 'ABORT_SIGNAL') {
+            const controller = this.abortControllers.get(data.abortId!);
+            if (controller) {
+                controller.abort();
+                this.abortControllers.delete(data.abortId!);
+            }
+            return;
+        }
+
+
+        if (data.type === 'RELEASE_INSTANCE') {
+            this.instanceRegistry.delete(data.id!);
+            return;
+        }
+
+
+        if (data.type === 'CALL_ROOT' || data.type === 'CALL_INSTANCE') {
+            const response: RpcMessage = { type: 'RESPONSE', reqId: data.reqId };
+            const usedAbortIds: string[] = [];
+            const started = performance.now();
+            const methodName = data.type === 'CALL_ROOT' ? data.method! : `${data.id}.${data.method}`;
+
+            try {
+
+                const args = this.deserializeArgs(data.args || [], usedAbortIds);
+                let result: any;
+
+
+                if (data.type === 'CALL_ROOT') {
+                    const fn = this.apiFactory[data.method!];
+                    if (typeof fn !== 'function') throw new Error(`API method ${data.method} not found`);
+                    result = await fn(...args);
+                } else {
+                    const instance = this.instanceRegistry.get(data.id!);
+                    if (!instance) throw new Error("Instance not found or released");
+                    if (typeof instance[data.method!] !== 'function') throw new Error(`Method ${data.method} missing on instance`);
+                    result = await instance[data.method!](...args);
+                }
+
+
+                response.result = this.serialize(result);
+
+            } catch (err: any) {
+                response.error = err.message || "Host execution error";
+            } finally {
+                this.reportTiming('host', methodName, started);
+                for (const id of usedAbortIds) this.abortControllers.delete(id);
+            }
+
+            const transferables = this.collectTransferables(response);
+            try {
+                this.postMessage(response, transferables);                    
+            } catch (error) {
+                this.postMessage({
+                    type: 'RESPONSE',
+                    reqId: data.reqId,
+                    error: `Failed to post message to ${this.runtime}: ` + (error as Error).message
+                });
+                console.error(`Failed to post message to ${this.runtime}:`, error);
+            }
+        }
+    }
+
+    protected clearRegistries() {
+        this.instanceRegistry.clear();
+        this.pendingCallbacks.clear();
+        this.abortControllers.clear();
+        this.callbackWrapperCache.clear();
+    }
+
+    private reportTiming(direction: PluginRuntimeTiming['direction'], method: string, started: number) {
+        this.options.onTiming?.({
+            runtime: this.runtime,
+            direction,
+            method,
+            duration: performance.now() - started
+        });
+    }
+}
+
+export class SandboxHost extends PluginRuntimeHost {
+    private iframe: HTMLIFrameElement;
+    private nonce = crypto.randomUUID();
+    private csp = `connect-src 'none'; script-src 'nonce-${this.nonce}' 'wasm-unsafe-eval'; frame-src 'none'; object-src 'none'; style-src * 'unsafe-inline'; default-src 'none'; img-src * data: blob:; font-src * data: blob:; media-src * data: blob:; base-uri 'none';`;
+    private cleanupMessageHandler?: () => void;
+
+    constructor(apiFactory: any, options: PluginRuntimeHostOptions = {}) {
+        super(apiFactory, 'iframe', options);
+    }
+
+    public executeInIframe(code: string): Promise<any> {
+        return new Promise((resolve, reject) => {
+            const reqId = 'exec_' + Math.random().toString(36).substring(2);
+
+            const handler = (event: MessageEvent) => {
+                if (event.source !== this.iframe.contentWindow) return;
+                const data = event.data;
+
+                if (data.type === 'EXEC_RESULT' && data.reqId === reqId) {
+                    window.removeEventListener('message', handler);
+                    if (data.error) {
+                        reject(new Error(data.error));
+                    } else {
+                        resolve(data.result);
+                    }
+                }
+            };
+
+            window.addEventListener('message', handler);
+
+            this.iframe.contentWindow?.postMessage({
+                type: 'EXECUTE_CODE',
+                reqId,
+                code
+            }, '*');
+        });
+    }
+
+    protected postMessage(message: any, transferables: Transferable[] = []) {
+        this.iframe.contentWindow?.postMessage(message, '*', transferables);
+    }
+
     public run(container: HTMLElement|HTMLIFrameElement, userCode: string) {
         if(container instanceof HTMLIFrameElement) {
             this.iframe = container;
@@ -503,82 +646,11 @@ export class SandboxHost {
 
         const messageHandler = async (event: MessageEvent) => {
             if (event.source !== this.iframe.contentWindow) return;
-            const data = event.data as RpcMessage;
-
-
-            if (data.type === 'CALLBACK_RETURN') {
-                const req = this.pendingCallbacks.get(data.reqId!);
-                if (req) {
-                    if (data.error) req.reject(new Error(data.error));
-                    else req.resolve(data.result);
-                    this.pendingCallbacks.delete(data.reqId!);
-                }
-                return;
-            }
-
-            if (data.type === 'ABORT_SIGNAL') {
-                const controller = this.abortControllers.get(data.abortId!);
-                if (controller) {
-                    controller.abort();
-                    this.abortControllers.delete(data.abortId!);
-                }
-                return;
-            }
-
-
-            if (data.type === 'RELEASE_INSTANCE') {
-                this.instanceRegistry.delete(data.id!);
-                return;
-            }
-
-
-            if (data.type === 'CALL_ROOT' || data.type === 'CALL_INSTANCE') {
-                const response: RpcMessage = { type: 'RESPONSE', reqId: data.reqId };
-                const usedAbortIds: string[] = [];
-
-                try {
-
-                    const args = this.deserializeArgs(data.args || [], usedAbortIds);
-                    let result: any;
-
-
-                    if (data.type === 'CALL_ROOT') {
-                        const fn = this.apiFactory[data.method!];
-                        if (typeof fn !== 'function') throw new Error(`API method ${data.method} not found`);
-                        result = await fn(...args);
-                    } else {
-                        const instance = this.instanceRegistry.get(data.id!);
-                        if (!instance) throw new Error("Instance not found or released");
-                        if (typeof instance[data.method!] !== 'function') throw new Error(`Method ${data.method} missing on instance`);
-                        result = await instance[data.method!](...args);
-                    }
-
-
-                    response.result = this.serialize(result);
-
-                } catch (err: any) {
-                    response.error = err.message || "Host execution error";
-                } finally {
-                    for (const id of usedAbortIds) this.abortControllers.delete(id);
-                }
-
-                const transferables = this.collectTransferables(response);
-                console.log("Original request:", data);
-                console.log('Original response:', response, transferables);
-                try {
-                    this.iframe.contentWindow?.postMessage(response, '*', transferables);                    
-                } catch (error) {
-                    this.iframe.contentWindow?.postMessage({
-                        type: 'RESPONSE',
-                        reqId: data.reqId,
-                        error: 'Failed to post message to iframe: ' + (error as Error).message
-                    }, '*');
-                    console.error('Failed to post message to iframe:', error);
-                }
-            }
+            await this.handleMessageData(event.data as RpcMessage);
         };
 
         window.addEventListener('message', messageHandler);
+        this.cleanupMessageHandler = () => window.removeEventListener('message', messageHandler);
 
 
         const html = `
@@ -611,22 +683,79 @@ export class SandboxHost {
         this.iframe.srcdoc = html;
 
         return () => {
-            window.removeEventListener('message', messageHandler);
+            this.cleanupMessageHandler?.();
             this.iframe.remove();
-            this.instanceRegistry.clear();
-            this.pendingCallbacks.clear();
-            this.abortControllers.clear();
-            this.callbackWrapperCache.clear();
+            this.clearRegistries();
         };
     }
 
     public terminate() {
+        this.cleanupMessageHandler?.();
         if (this.iframe) {
             this.iframe.remove();
         }
-        this.instanceRegistry.clear();
-        this.pendingCallbacks.clear();
-        this.abortControllers.clear();
-        this.callbackWrapperCache.clear();
+        this.clearRegistries();
+    }
+}
+
+export class WorkerSandboxHost extends PluginRuntimeHost {
+    private worker: Worker;
+    private objectUrl: string;
+
+    constructor(apiFactory: any, options: PluginRuntimeHostOptions = {}) {
+        super(apiFactory, 'worker', options);
+    }
+
+    protected postMessage(message: any, transferables: Transferable[] = []) {
+        this.worker?.postMessage(message, transferables);
+    }
+
+    public run(userCode: string) {
+        const workerScript = `
+            ${WORKER_BRIDGE_SCRIPT}
+
+            (async () => {
+                ${userCode}
+            })()
+        `;
+        const blob = new Blob([workerScript], { type: 'text/javascript' });
+        this.objectUrl = URL.createObjectURL(blob);
+        this.worker = new Worker(this.objectUrl, { type: 'module' });
+        this.worker.addEventListener('message', async (event) => {
+            await this.handleMessageData(event.data as RpcMessage);
+        });
+    }
+
+    public executeInIframe(code: string): Promise<any> {
+        return new Promise((resolve, reject) => {
+            const reqId = 'exec_' + Math.random().toString(36).substring(2);
+            const handler = (event: MessageEvent) => {
+                const data = event.data;
+
+                if (data.type === 'EXEC_RESULT' && data.reqId === reqId) {
+                    this.worker.removeEventListener('message', handler);
+                    if (data.error) {
+                        reject(new Error(data.error));
+                    } else {
+                        resolve(data.result);
+                    }
+                }
+            };
+
+            this.worker.addEventListener('message', handler);
+            this.worker.postMessage({
+                type: 'EXECUTE_CODE',
+                reqId,
+                code
+            });
+        });
+    }
+
+    public terminate() {
+        this.worker?.terminate();
+        if (this.objectUrl) {
+            URL.revokeObjectURL(this.objectUrl);
+        }
+        this.clearRegistries();
     }
 }

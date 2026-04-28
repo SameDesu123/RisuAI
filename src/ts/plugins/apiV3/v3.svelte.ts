@@ -1,5 +1,5 @@
 import { allowedDbKeys, customProviderStore, getV2PluginAPIs, handlePluginInstallViaPlugin, pluginV2, type PluginV2ProviderArgument, type PluginV2ProviderOptions, type RisuPlugin } from "../plugins.svelte";
-import { SandboxHost } from "./factory";
+import { SandboxHost, WorkerSandboxHost } from "./factory";
 import { getDatabase } from "src/ts/storage/database.svelte";
 import { SafeLocalPluginStorage, tagWhitelist } from "../pluginSafeClass";
 import DOMPurify from 'dompurify';
@@ -597,6 +597,54 @@ const authorizationHeaders = new Set([
     'authorization',
     'proxy-authorization',
 ])
+
+type PluginRuntimeMode = 'auto' | 'worker' | 'iframe';
+type ResolvedPluginRuntimeMode = 'worker' | 'iframe';
+
+const workerUnsafePatterns = [
+    /\bdocument\b/,
+    /\bwindow\.document\b/,
+    /\bwindow\.addEventListener\b/,
+    /\bwindow\.removeEventListener\b/,
+    /\bwindow\.postMessage\b/,
+    /\bHTMLElement\b/,
+    /\bMutationObserver\b/,
+    /\bshowContainer\s*\(/,
+    /\bgetRootDocument\s*\(/,
+]
+
+const getDeclaredRuntimeMode = (plugin: RisuPlugin): PluginRuntimeMode => {
+    if(plugin.runtime === 'worker' || plugin.runtime === 'iframe'){
+        return plugin.runtime;
+    }
+    const runtimeLine = plugin.script.split('\n').find(line => line.startsWith('//@runtime'));
+    const runtime = runtimeLine?.trim().split(' ')[1];
+    if(runtime === 'worker' || runtime === 'iframe' || runtime === 'auto'){
+        return runtime;
+    }
+    return 'auto';
+}
+
+const resolvePluginRuntimeMode = (plugin: RisuPlugin): { mode: ResolvedPluginRuntimeMode, reason?: string } => {
+    const declared = getDeclaredRuntimeMode(plugin);
+    if(declared === 'iframe'){
+        return { mode: 'iframe', reason: 'declared iframe runtime' };
+    }
+    if(declared === 'worker'){
+        return { mode: 'worker', reason: 'declared worker runtime' };
+    }
+    const unsafePattern = workerUnsafePatterns.find(pattern => pattern.test(plugin.script));
+    if(unsafePattern){
+        return { mode: 'iframe', reason: `auto fallback: ${unsafePattern.source}` };
+    }
+    return { mode: 'worker', reason: 'auto worker-compatible' };
+}
+
+const logPluginRuntimeDebug = (pluginName: string, message: string) => {
+    if(DBState.db.pluginDevelopMode){
+        console.log(`[RisuAI Plugin: ${pluginName}] ${message}`);
+    }
+}
 
 const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
 
@@ -1244,7 +1292,8 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
 
 type V3PluginInstance = {
     name: string;
-    host: SandboxHost;
+    host: SandboxHost | WorkerSandboxHost;
+    runtime: ResolvedPluginRuntimeMode;
 }
 
 const v3PluginInstances: V3PluginInstance[] = [];
@@ -1265,16 +1314,37 @@ export async function executePluginV3(plugin:RisuPlugin){
         return;
     }
 
+    const runtime = resolvePluginRuntimeMode(plugin);
     const iframe = document.createElement('iframe');
     iframe.style.display = "none";
     document.body.appendChild(iframe);
-    const host = new SandboxHost(makeRisuaiAPIV3(iframe, plugin));
+
+    const runtimeOptions = {
+        onTiming: (timing: { runtime: string, direction: string, method: string, duration: number }) => {
+            if(timing.duration > 16){
+                logPluginRuntimeDebug(
+                    plugin.name,
+                    `${timing.runtime} ${timing.direction} ${timing.method} took ${timing.duration.toFixed(1)}ms`
+                );
+            }
+        }
+    }
+
+    let host: SandboxHost | WorkerSandboxHost;
+    if(runtime.mode === 'worker'){
+        host = new WorkerSandboxHost(makeRisuaiAPIV3(iframe, plugin), runtimeOptions);
+        host.run(plugin.script);
+    }
+    else{
+        host = new SandboxHost(makeRisuaiAPIV3(iframe, plugin), runtimeOptions);
+        host.run(iframe, plugin.script);
+    }
     v3PluginInstances.push({
         name: plugin.name,
-        host
+        host,
+        runtime: runtime.mode
     });
-    host.run(iframe, plugin.script);
-    console.log(`[RisuAI Plugin: ${plugin.name}] Loaded API V3 plugin.`);
+    console.log(`[RisuAI Plugin: ${plugin.name}] Loaded API V3 plugin. Runtime: ${runtime.mode}${runtime.reason ? ` (${runtime.reason})` : ''}`);
 }
 
 export function getV3PluginInstance(name: string) {

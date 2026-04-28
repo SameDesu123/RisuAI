@@ -27,6 +27,7 @@ interface ProviderPlugin {
     updateURL?: string
     enabled?: boolean
     allowedIPC?: string[]
+    runtime?: 'auto' | 'worker' | 'iframe'
 }
 interface ProviderPluginCustomLink {
     link: string
@@ -181,6 +182,7 @@ export async function importPlugin(code:string|null = null, argu:{
         let versionOfPlugin: string = '' //This is the version of the plugin itself, not the API version
         let apiVersion = '2.0'
         let ipcList: string[] = []
+        let runtime: 'auto' | 'worker' | 'iframe' = 'auto'
         for (const line of splitedJs) {
             if (line.startsWith('//@name')) {
                 const provied = line.slice(7)
@@ -314,6 +316,15 @@ export async function importPlugin(code:string|null = null, argu:{
 
                 ipcList.push(...allowedIPCList)
             }
+
+            if(line.startsWith('//@runtime')){
+                const provided = line.trim().split(' ')[1]
+                if(provided !== 'auto' && provided !== 'worker' && provided !== 'iframe'){
+                    showError('plugin runtime must be auto, worker, or iframe.')
+                    return
+                }
+                runtime = provided
+            }
         }
 
         if (name.length === 0) {
@@ -383,6 +394,7 @@ export async function importPlugin(code:string|null = null, argu:{
             versionOfPlugin: versionOfPlugin,
             updateURL: updateURL,
             allowedIPC: ipcList,
+            runtime,
             enabled: true
         }
 
