@@ -32,10 +32,39 @@ export const LLMCacheStorage = localforage.createInstance({
     name: "LLMTranslateCache"
 })
 
+let llmCacheMigrated = false
+let llmCacheMigrationPromise: Promise<void>|null = null
 let waitTrans = 0
 
 export function getCurrentTranslatorPreset(): TranslatorPreset {
     return getCurrentTranslatorPresetFromState(getDatabase())
+}
+
+function getTranslationCacheStore(): Record<string, string> {
+    const db = getDatabase()
+    db.translationCache ??= {}
+    return db.translationCache
+}
+
+export async function ensureLLMCacheMigrated(): Promise<void> {
+    if(llmCacheMigrated){
+        return
+    }
+    if(!llmCacheMigrationPromise){
+        llmCacheMigrationPromise = (async () => {
+            const dbCache = getTranslationCacheStore()
+            await LLMCacheStorage.iterate<string, void>((value, key) => {
+                if(typeof value === 'string' && dbCache[key] === undefined){
+                    dbCache[key] = value
+                }
+            })
+            await LLMCacheStorage.clear()
+            llmCacheMigrated = true
+        })().finally(() => {
+            llmCacheMigrationPromise = null
+        })
+    }
+    await llmCacheMigrationPromise
 }
 
 export async function translate(text:string, reverse:boolean) {
@@ -501,9 +530,9 @@ function needSuperChunkedTranslate(){
 
 async function translateLLM(text:string, arg:{to:string, from:string, regenerate?:boolean,translatorNote?:string}):Promise<string>{
     if(!arg.regenerate){
-        const cacheMatch = await LLMCacheStorage.getItem(text)
-        if(cacheMatch){
-            return cacheMatch as string
+        const cacheMatch = await getLLMCache(text)
+        if(cacheMatch !== null){
+            return cacheMatch
         }
     }
     const styleDecodeRegex = /\<risu-style\>(.+?)\<\/risu-style\>/gms
@@ -565,42 +594,49 @@ async function translateLLM(text:string, arg:{to:string, from:string, regenerate
     const result = rq.result.replace(/<style-data style-index="(\d+)" ?\/?>/g, (match, p1) => {
         return styleDecodes[parseInt(p1)] ?? ''
     }).replace(/<\/style-data>/g, '')
-    await LLMCacheStorage.setItem(text, result)
+    await setLLMCache(text, result)
     return result
 }
 
 export async function getLLMCache(text:string):Promise<string | null>{
-    return await LLMCacheStorage.getItem(text)
+    await ensureLLMCacheMigrated()
+    const cache = getTranslationCacheStore()
+    if(Object.prototype.hasOwnProperty.call(cache, text)){
+        return cache[text]
+    }
+    return null
 }
 
 export async function searchLLMCache(partialKey:string):Promise<{key: string, value: string}[]>{
+    await ensureLLMCacheMigrated()
     const results:{key: string, value: string}[] = []
-    await LLMCacheStorage.iterate<string, void>((value, key) => {
+    const cache = getTranslationCacheStore()
+    for(const [key, value] of Object.entries(cache)){
         if(key.includes(partialKey)){
             results.push({key, value})
         }
-    })
+    }
     return results
 }
 
 export async function setLLMCache(key:string, value:string):Promise<void>{
-    await LLMCacheStorage.setItem(key, value)
+    await ensureLLMCacheMigrated()
+    getTranslationCacheStore()[key] = value
 }
 
 export async function exportLLMCacheAsJSON():Promise<Record<string, string>>{
-    const result:Record<string, string> = {}
-    await LLMCacheStorage.iterate<string, void>((value, key) => {
-        result[key] = value
-    })
-    return result
+    await ensureLLMCacheMigrated()
+    return {...getTranslationCacheStore()}
 }
 
 export async function importLLMCacheFromJSON(data:Record<string, string>):Promise<{count: number, failed: number}>{
+    await ensureLLMCacheMigrated()
     let count = 0
     let failed = 0
+    const cache = getTranslationCacheStore()
     for(const [key, value] of Object.entries(data)){
         try{
-            await LLMCacheStorage.setItem(key, value)
+            cache[key] = value
             count++
         }catch{
             failed++
@@ -610,7 +646,12 @@ export async function importLLMCacheFromJSON(data:Record<string, string>):Promis
 }
 
 export async function clearLLMCache():Promise<void>{
+    if(llmCacheMigrationPromise){
+        await llmCacheMigrationPromise
+    }
+    getDatabase().translationCache = {}
     await LLMCacheStorage.clear()
+    llmCacheMigrated = true
 }
 
 

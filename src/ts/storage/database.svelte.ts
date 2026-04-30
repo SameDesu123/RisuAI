@@ -638,6 +638,7 @@ export function setDatabase(data:Database){
     data.streamingDisplayOptimization ??= false
     data.streamingDisplayOptimizationLevel ??= 'medium'
     data.largeChatPerformanceMode ??= 'off'
+    data.translationCache ??= {}
     data.settingsCloseButtonSize ??= 24
     data.hideAllImages ??= false
     data.ImagenModel ??= 'imagen-4.0-generate-001'
@@ -954,6 +955,7 @@ export interface Database{
     translatorMaxResponse:number
     translatorPresets: TranslatorPreset[]
     translatorPresetId: number
+    translationCache: Record<string, string>
     top_p: number,
     google: {
         accessToken: string

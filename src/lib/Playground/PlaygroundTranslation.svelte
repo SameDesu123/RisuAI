@@ -2,7 +2,7 @@
 <script lang="ts">
     import { language } from "src/lang";
     import TextAreaInput from "../UI/GUI/TextAreaInput.svelte";
-    import { LLMCacheStorage, runTranslator } from "src/ts/translator/translator";
+    import { clearLLMCache, runTranslator } from "src/ts/translator/translator";
     import Button from "../UI/GUI/Button.svelte";
     import SelectInput from "../UI/GUI/SelectInput.svelte";
     import { getLanguageCodes } from "src/ts/globalApi.svelte";
@@ -153,7 +153,7 @@
     {/if}
 </Button>
 <Button className="mt-4" onclick={() => {
-    LLMCacheStorage.clear()
+    clearLLMCache()
 }}>
     Clear Cache
 </Button>
