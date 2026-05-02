@@ -290,9 +290,9 @@ NODE_OPTIONS="--max-old-space-size=6144" pnpm run build
 
 - **File**: `server/node/server.cjs`
 - **Root Cause**: upstream에서 추가된 `authenticatedRouteLimiter`(90req/min)와 `authRouteLimiter`(90req/min)가 `/api/read`, `/api/write`, `/api/list`, `/api/test_auth`, `/proxy` 등에 적용되어, 블록 기반 diff save/load 시 대량의 API 요청이 rate limit에 걸려 초기 로딩 실패.
-- **Fix**: `authenticatedRouteLimiter`와 `authRouteLimiter`를 완전히 제거. `loginRouteLimiter`(10req/30s)만 로그인 brute-force 방지 목적으로 유지. 이미 `checkAuth`로 인증 보호가 되어 있으므로 rate limit 불필요.
+- **Fix**: `authenticatedRouteLimiter`를 20000req/min으로 확장하고 `authRouteLimiter`도 2000req/min으로 완화. `loginRouteLimiter`(10req/30s)는 로그인 brute-force 방지 목적으로 유지.
   - `validate: { trustProxy: false, xForwardedForHeader: false }` 옵션으로 `X-Forwarded-For` ValidationError 방지
-- **Conflict Reapply Guide**: upstream `server.cjs`에서 rate limiter가 추가될 때 `/api/read`, `/api/write`, `/api/list`, `/api/test_auth`, `/proxy*` 라우트에는 적용하지 말 것. `loginRouteLimiter`만 `/api/login`에 유지.
+- **Conflict Reapply Guide**: upstream `server.cjs`에서 rate limiter가 추가될 때 `/api/read`, `/api/write`, `/api/list` 같은 저장 라우트는 대량 저장 요청을 막지 않도록 `authenticatedRouteLimiter`를 20000req/min 수준으로 유지할 것. `loginRouteLimiter`는 `/api/login`에 유지.
 
 ### 21. fix(server): fix nodeCrypto and knownPublicKeysHashes.includes errors from upstream merge
 
