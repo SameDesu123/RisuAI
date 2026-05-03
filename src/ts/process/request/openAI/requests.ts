@@ -15,7 +15,7 @@ import { supportsInlayImage } from "../../files/inlays"
 import { callTool, decodeToolCall, encodeToolCall } from "../../mcp/mcp"
 import { parseAdditionalParamJsonValue } from '../additionalParams'
 import type { RequestDataArgumentExtended, requestDataResponse, StreamResponseChunk } from '../request'
-import { applyAdditionalParameters, applyParameters, getAdditionalParameters } from '../shared'
+import { applyAdditionalParameters, applyParameters, getAdditionalParameters, setObjectValue } from '../shared'
 
 import type { Contents, OpenAIChatExtra, OpenAIChatFull, ResponseInputItem, ResponseItem, ResponseOutputItem, ToolCall } from './types'
 
