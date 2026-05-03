@@ -21,6 +21,17 @@ import { sendChat as processSendChat, doingChat } from "src/ts/process/index.sve
 import { getModelInfo } from "src/ts/model/modellist";
 import type { ModelModeExtended } from "src/ts/process/request/shared";
 import { requestChatDataMain } from "src/ts/process/request/request";
+import {
+    registerTTSPreprocessor,
+    unregisterTTSPreprocessor,
+    registerTTSPostprocessor,
+    unregisterTTSPostprocessor,
+    type BeforeTTSContext,
+    type BeforeTTSResult,
+    type AfterTTSContext,
+    type AfterTTSResult,
+    type TTSHookFn,
+} from "src/ts/process/ttsHooks";
 
 /*
     V3 API for RisuAI Plugins
@@ -727,6 +738,18 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             }
             customV3ProviderMetaStore.push(modelData);
         },
+        addTTSPreprocessor: async (
+            func: TTSHookFn<BeforeTTSContext, BeforeTTSResult>,
+        ) => {
+            registerTTSPreprocessor(func);
+            addPluginUnloadCallback(plugin.name, () => unregisterTTSPreprocessor(func));
+        },
+        addTTSPostprocessor: async (
+            func: TTSHookFn<AfterTTSContext, AfterTTSResult>,
+        ) => {
+            registerTTSPostprocessor(func);
+            addPluginUnloadCallback(plugin.name, () => unregisterTTSPostprocessor(func));
+        },
         addRisuScriptHandler: oldApis.addRisuScriptHandler,
         removeRisuScriptHandler: oldApis.removeRisuScriptHandler,
         addRisuReplacer: async (name:string,func:Function) => {
@@ -1204,14 +1227,21 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             mode: ModelModeExtended
             messages: OpenAIChat[]
             staticModel?: string
+            allowPlugins?: boolean
         }) => {
             return requestChatDataMain({
                 formated: options.messages,
                 bias: {},
                 staticModel: options.staticModel,
 
-                //Executing plugin provider is block because it can be used for loopholes for ipc right now.
-                blockPlugins: true
+                // Calls into plugin-provided models are blocked by default to
+                // guard against accidental IPC loops between provider plugins.
+                // Plugin authors who need to reach the user's plugin-supplied
+                // main or auxiliary model (e.g. a TTS preprocessor that
+                // rewrites text with the configured otherAx model) can opt in
+                // explicitly with `allowPlugins: true`, accepting responsibility
+                // for avoiding provider-to-provider call loops.
+                blockPlugins: !options.allowPlugins,
             }, options.mode)
         },
         sendChat: async (message: string) => {
@@ -1226,6 +1256,11 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
 
             if(get(doingChat)){
                 throw new Error("A chat is already in progress");
+            }
+
+            if(getModelInfo(DBState.db.aiModel).id.startsWith('pluginmodel:::')){
+                // Executing plugin provider is block because it can be used for loopholes for ipc right now.
+                throw new Error("Sending chat with plugin-based model is currently blocked");
             }
 
             const charId = get(selectedCharID);
@@ -1247,12 +1282,13 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                 });
             }
 
-            if(getModelInfo(DBState.db.aiModel).id.startsWith('pluginmodel:::')){
-                // Executing plugin provider is block because it can be used for loopholes for ipc right now.
-                throw new Error("Sending chat with plugin-based model is currently blocked");    
+            try {
+                await processSendChat(-1, {});
+            } finally {
+                // Plugin API path does not pass through the UI unlock logic,
+                // so release doingChat here on both success and failure.
+                doingChat.set(false);
             }
-
-            await processSendChat(-1, {});
 
             return true;
         },
@@ -1269,7 +1305,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                 return;
             }
 
-            if(!receiverPlugin.allowedIPC?.includes(pluginName)){
+            if(!receiverPlugin.allowedIPC?.includes(currentPluginName)){
                 console.warn(`[RisuAI Plugin: ${currentPluginName}] Attempted to send message to plugin '${pluginName}' but receiver plugin does not allow IPC communication from this plugin. declare //@allowed-ipc ${currentPluginName} in the reciver plugin script to allow IPC communication.`);
                 return;
             }
