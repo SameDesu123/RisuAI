@@ -657,7 +657,7 @@ export function getFetchData(id: string) {
 
 const knownHostes = ["localhost", "127.0.0.1", "0.0.0.0"];
 const webLocalNetworkBlockedMessage = "웹에서는 사설망 직접 호출 불가. Tauri 또는 LAN Node self-host 사용";
-const defaultProxyJobHeartbeatSec = 15;
+const defaultProxyJobHeartbeatSec = 5;
 
 function getProxy2Url() {
     return !isTauri && !isNodeServer ? `${hubURL}/proxy2` : `/proxy2`;

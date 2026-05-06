@@ -49,7 +49,7 @@ const hexRegex = /^[0-9a-fA-F]+$/;
 const safeBlockNameRegex = /^[a-zA-Z0-9_-]+$/;
 const PROXY_STREAM_DEFAULT_TIMEOUT_MS = 600000;
 const PROXY_STREAM_MAX_TIMEOUT_MS = 3600000;
-const PROXY_STREAM_DEFAULT_HEARTBEAT_SEC = 15;
+const PROXY_STREAM_DEFAULT_HEARTBEAT_SEC = 5;
 const PROXY_STREAM_HEARTBEAT_MIN_SEC = 5;
 const PROXY_STREAM_HEARTBEAT_MAX_SEC = 60;
 const PROXY_STREAM_GC_INTERVAL_MS = 60000;
@@ -787,7 +787,7 @@ const reverseProxyFunc = async (req, res, next) => {
         if (!res.writableEnded) {
             res.write('\n');
         }
-    }, 15000);
+    }, 5000);
 
     const cleanupInterval = () => {
         clearInterval(keepAliveInterval);
@@ -1065,7 +1065,7 @@ async function hubProxyFunc(req, res) {
                 if (!res.writableEnded) {
                     res.write('\n');
                 }
-            }, 15000);
+            }, 5000);
         }
 
         const cleanupInterval = () => {
