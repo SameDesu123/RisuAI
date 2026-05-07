@@ -13,8 +13,10 @@ function registerStorageRoutes(app, arg) {
         authHelpers,
     } = arg;
     const { checkAuth, hashJSON, isHex } = authHelpers;
+    const routeGet = (...args) => app.get(...args);
+    const routePost = (...args) => app.post(...args);
 
-    app.get('/api/test_auth', authRouteLimiter, async(req, res) => {
+    routeGet('/api/test_auth', authRouteLimiter, async(req, res) => {
 
         if(!state.password){
             res.send({status: 'unset'})
@@ -26,8 +28,7 @@ function registerStorageRoutes(app, arg) {
             res.send({status: 'success'})
         }
     })
-
-    app.post('/api/login', loginRouteLimiter, async (req, res) => {
+    routePost('/api/login', loginRouteLimiter, async (req, res) => {
         if(state.password === ''){
             res.status(400).send({error: 'Password not set'})
             return;
@@ -42,7 +43,7 @@ function registerStorageRoutes(app, arg) {
         }
     })
 
-    app.post('/api/crypto', async (req, res) => {
+    routePost('/api/crypto', async (req, res) => {
         try {
             const hash = crypto.createHash('sha256')
             hash.update(Buffer.from(req.body.data, 'utf-8'))
@@ -51,9 +52,7 @@ function registerStorageRoutes(app, arg) {
             res.status(500).send({ error: 'Crypto operation failed' });
         }
     })
-
-
-    app.post('/api/set_password', async (req, res) => {
+    routePost('/api/set_password', authRouteLimiter, async (req, res) => {
         if(state.password === ''){
             state.password = req.body.password
             writeFileSync(passwordPath, state.password, 'utf-8')
@@ -63,8 +62,7 @@ function registerStorageRoutes(app, arg) {
             res.status(400).send("already set")
         }
     })
-
-    app.get('/api/read', authenticatedRouteLimiter, async (req, res, next) => {
+    routeGet('/api/read', authenticatedRouteLimiter, async (req, res, next) => {
         if(!await checkAuth(req, res)){
             return;
         }
@@ -95,8 +93,7 @@ function registerStorageRoutes(app, arg) {
             next(error);
         }
     });
-
-    app.get('/api/remove', authenticatedRouteLimiter, async (req, res, next) => {
+    routeGet('/api/remove', authenticatedRouteLimiter, async (req, res, next) => {
         if(!await checkAuth(req, res)){
             return;
         }
@@ -127,8 +124,7 @@ function registerStorageRoutes(app, arg) {
         }
 
     });
-
-    app.get('/api/list', authenticatedRouteLimiter, async (req, res, next) => {
+    routeGet('/api/list', authenticatedRouteLimiter, async (req, res, next) => {
         if(!await checkAuth(req, res)){
             return;
         }
@@ -144,8 +140,7 @@ function registerStorageRoutes(app, arg) {
             next(error);
         }
     });
-
-    app.post('/api/write', authenticatedRouteLimiter, async (req, res, next) => {
+    routePost('/api/write', authenticatedRouteLimiter, async (req, res, next) => {
         if(!await checkAuth(req, res)){
             return;
         }

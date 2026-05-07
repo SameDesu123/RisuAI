@@ -40,6 +40,8 @@ function registerProxyRoutes(app, arg) {
         authHelpers,
     } = arg;
     const { checkAuth, checkProxyAuth } = authHelpers;
+    const routeGet = (...args) => app.get(...args);
+    const routePost = (...args) => app.post(...args);
 
     const reverseProxyFunc = async (req, res, next) => {
         if(!await checkProxyAuth(req, res)){
@@ -262,8 +264,6 @@ function registerProxyRoutes(app, arg) {
                 headersToSend['Authorization'] = "Bearer " + await getSionywAccessToken();
                 delete headersToSend['risu-auth'];
             }
-
-
             const response = await fetch(externalURL, {
                 method: req.method,
                 headers: headersToSend,
@@ -320,14 +320,12 @@ function registerProxyRoutes(app, arg) {
             }
         }
     }
-
-    app.get('/proxy', authenticatedRouteLimiter, reverseProxyFunc_get);
-    app.get('/proxy2', authenticatedRouteLimiter, reverseProxyFunc_get);
-    app.get('/hub-proxy/*', authenticatedRouteLimiter, hubProxyFunc);
-
-    app.post('/proxy', authenticatedRouteLimiter, reverseProxyFunc);
-    app.post('/proxy2', authenticatedRouteLimiter, reverseProxyFunc);
-    app.post('/hub-proxy/*', authenticatedRouteLimiter, hubProxyFunc);
+    routeGet('/proxy', authenticatedRouteLimiter, reverseProxyFunc_get);
+    routeGet('/proxy2', authenticatedRouteLimiter, reverseProxyFunc_get);
+    routeGet('/hub-proxy/*', authenticatedRouteLimiter, hubProxyFunc);
+    routePost('/proxy', authenticatedRouteLimiter, reverseProxyFunc);
+    routePost('/proxy2', authenticatedRouteLimiter, reverseProxyFunc);
+    routePost('/hub-proxy/*', authenticatedRouteLimiter, hubProxyFunc);
 }
 
 module.exports = {

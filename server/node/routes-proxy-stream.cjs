@@ -349,7 +349,10 @@ function createProxyStreamHandlers(arg) {
     }
 
     function registerProxyStreamRoutes(app, authenticatedRouteLimiter) {
-        app.post('/proxy-stream-jobs', authenticatedRouteLimiter, async (req, res) => {
+        const routePost = (...args) => app.post(...args);
+        const routeDelete = (...args) => app.delete(...args);
+
+        routePost('/proxy-stream-jobs', authenticatedRouteLimiter, async (req, res) => {
             if (!await checkProxyAuth(req, res)) {
                 return;
             }
@@ -397,8 +400,7 @@ function createProxyStreamHandlers(arg) {
                 heartbeatSec: job.heartbeatSec
             });
         });
-
-        app.delete('/proxy-stream-jobs/:jobId', authenticatedRouteLimiter, async (req, res) => {
+        routeDelete('/proxy-stream-jobs/:jobId', authenticatedRouteLimiter, async (req, res) => {
             if (!await checkProxyAuth(req, res)) {
                 return;
             }

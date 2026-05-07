@@ -77,7 +77,7 @@ registerStorageRoutes(app, {
     authHelpers,
 });
 
-registerOAuthRoutes(app, state);
+registerOAuthRoutes(app, state, authRouteLimiter);
 
 (async () => {
     proxyStreamHandlers.startProxyStreamGc();

@@ -2,8 +2,10 @@ const { writeFileSync } = require('fs');
 const openid = require('openid-client');
 const { authCodePath } = require('./config.cjs');
 
-function registerOAuthRoutes(app, state) {
-    app.get('/api/oauth_login', async (req, res) => {
+function registerOAuthRoutes(app, state, authRouteLimiter) {
+    const routeGet = (...args) => app.get(...args);
+
+    routeGet('/api/oauth_login', authRouteLimiter, async (req, res) => {
         const redirect_uri = (new URL (req.url)).host + '/api/oauth_callback'
 
         if(!redirect_uri){
@@ -72,8 +74,7 @@ function registerOAuthRoutes(app, state) {
 
         res.status(500).send({ error: 'OAuth2 login failed' });
     });
-
-    app.get('/api/oauth_callback', async (req, res) => {
+    routeGet('/api/oauth_callback', authRouteLimiter, async (req, res) => {
 
         //since this is a callback we don't need to check password
 
