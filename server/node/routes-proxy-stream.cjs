@@ -5,140 +5,140 @@ const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const { proxyStreamConfig } = require('./config.cjs');
 
+function normalizeProxyStreamTimeoutMs(timeoutMs) {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+        return proxyStreamConfig.defaultTimeoutMs;
+    }
+    const parsed = Math.max(1, Math.floor(timeoutMs));
+    return Math.min(proxyStreamConfig.maxTimeoutMs, parsed);
+}
+
+function normalizeHeartbeatSec(heartbeatSec) {
+    if (!Number.isFinite(heartbeatSec)) {
+        return proxyStreamConfig.defaultHeartbeatSec;
+    }
+    const parsed = Math.floor(heartbeatSec);
+    return Math.min(proxyStreamConfig.heartbeatMaxSec, Math.max(proxyStreamConfig.heartbeatMinSec, parsed));
+}
+
+function isPrivateIPv4Host(hostname) {
+    const parts = hostname.split('.');
+    if (parts.length !== 4) {
+        return false;
+    }
+    const octets = parts.map((part) => Number.parseInt(part, 10));
+    if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+        return false;
+    }
+    const [a, b] = octets;
+    if (a === 10) {
+        return true;
+    }
+    if (a === 127) {
+        return true;
+    }
+    if (a === 0) {
+        return true;
+    }
+    if (a === 192 && b === 168) {
+        return true;
+    }
+    if (a === 172 && b >= 16 && b <= 31) {
+        return true;
+    }
+    if (a === 169 && b === 254) {
+        return true;
+    }
+    return false;
+}
+
+function isLocalNetworkHost(hostname) {
+    if (typeof hostname !== 'string' || hostname.trim() === '') {
+        return false;
+    }
+
+    const normalizedHost = hostname.toLowerCase().replace(/\.$/, '').split('%')[0];
+    if (normalizedHost === 'localhost' || normalizedHost === '::1' || normalizedHost.endsWith('.local')) {
+        return true;
+    }
+
+    if (net.isIP(normalizedHost) === 4) {
+        return isPrivateIPv4Host(normalizedHost);
+    }
+
+    if (net.isIP(normalizedHost) === 6) {
+        if (normalizedHost.startsWith('::ffff:')) {
+            const mapped = normalizedHost.substring(7);
+            return net.isIP(mapped) === 4 && isPrivateIPv4Host(mapped);
+        }
+        if (normalizedHost.startsWith('fc') || normalizedHost.startsWith('fd')) {
+            return true;
+        }
+        if (/^fe[89ab]/.test(normalizedHost)) {
+            return true;
+        }
+        return normalizedHost === '::1';
+    }
+
+    return false;
+}
+
+function sanitizeTargetUrl(raw) {
+    if (typeof raw !== 'string' || raw.trim() === '') {
+        return null;
+    }
+    try {
+        const parsed = new URL(raw);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return null;
+        }
+        if (!isLocalNetworkHost(parsed.hostname)) {
+            return null;
+        }
+        parsed.username = '';
+        parsed.password = '';
+        return parsed.toString();
+    } catch {
+        return null;
+    } // lgtm[js/request-forgery]
+}
+
+function normalizeForwardHeaders(input) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+        return {};
+    }
+    const normalized = {};
+    for (const [key, value] of Object.entries(input)) {
+        if (typeof key !== 'string') {
+            continue;
+        }
+        if (typeof value === 'string') {
+            normalized[key] = value;
+        }
+    }
+    delete normalized['risu-auth'];
+    delete normalized['risu-timeout-ms'];
+    delete normalized['host'];
+    delete normalized['connection'];
+    delete normalized['content-length'];
+    return normalized;
+}
+
+function normalizeProxyResponseHeaders(headers) {
+    const normalized = {};
+    for (const [key, value] of Object.entries(headers || {})) {
+        if (value === undefined) {
+            continue;
+        }
+        normalized[key.toLowerCase()] = Array.isArray(value) ? value.join(', ') : String(value);
+    }
+    return normalized;
+}
+
 function createProxyStreamHandlers(arg) {
     const { state, authHelpers } = arg;
     const { checkProxyAuth, isAuthorizedProxyRequest } = authHelpers;
     const proxyStreamJobs = state.proxyStreamJobs;
-
-    function normalizeProxyStreamTimeoutMs(timeoutMs) {
-        if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-            return proxyStreamConfig.defaultTimeoutMs;
-        }
-        const parsed = Math.max(1, Math.floor(timeoutMs));
-        return Math.min(proxyStreamConfig.maxTimeoutMs, parsed);
-    }
-
-    function normalizeHeartbeatSec(heartbeatSec) {
-        if (!Number.isFinite(heartbeatSec)) {
-            return proxyStreamConfig.defaultHeartbeatSec;
-        }
-        const parsed = Math.floor(heartbeatSec);
-        return Math.min(proxyStreamConfig.heartbeatMaxSec, Math.max(proxyStreamConfig.heartbeatMinSec, parsed));
-    }
-
-    function isPrivateIPv4Host(hostname) {
-        const parts = hostname.split('.');
-        if (parts.length !== 4) {
-            return false;
-        }
-        const octets = parts.map((part) => Number.parseInt(part, 10));
-        if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
-            return false;
-        }
-        const [a, b] = octets;
-        if (a === 10) {
-            return true;
-        }
-        if (a === 127) {
-            return true;
-        }
-        if (a === 0) {
-            return true;
-        }
-        if (a === 192 && b === 168) {
-            return true;
-        }
-        if (a === 172 && b >= 16 && b <= 31) {
-            return true;
-        }
-        if (a === 169 && b === 254) {
-            return true;
-        }
-        return false;
-    }
-
-    function isLocalNetworkHost(hostname) {
-        if (typeof hostname !== 'string' || hostname.trim() === '') {
-            return false;
-        }
-
-        const normalizedHost = hostname.toLowerCase().replace(/\.$/, '').split('%')[0];
-        if (normalizedHost === 'localhost' || normalizedHost === '::1' || normalizedHost.endsWith('.local')) {
-            return true;
-        }
-
-        if (net.isIP(normalizedHost) === 4) {
-            return isPrivateIPv4Host(normalizedHost);
-        }
-
-        if (net.isIP(normalizedHost) === 6) {
-            if (normalizedHost.startsWith('::ffff:')) {
-                const mapped = normalizedHost.substring(7);
-                return net.isIP(mapped) === 4 && isPrivateIPv4Host(mapped);
-            }
-            if (normalizedHost.startsWith('fc') || normalizedHost.startsWith('fd')) {
-                return true;
-            }
-            if (/^fe[89ab]/.test(normalizedHost)) {
-                return true;
-            }
-            return normalizedHost === '::1';
-        }
-
-        return false;
-    }
-
-    function sanitizeTargetUrl(raw) {
-        if (typeof raw !== 'string' || raw.trim() === '') {
-            return null;
-        }
-        try {
-            const parsed = new URL(raw);
-            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-                return null;
-            }
-            if (!isLocalNetworkHost(parsed.hostname)) {
-                return null;
-            }
-            parsed.username = '';
-            parsed.password = '';
-            return parsed.toString();
-        } catch {
-            return null;
-        } // lgtm[js/request-forgery]
-    }
-
-    function normalizeForwardHeaders(input) {
-        if (!input || typeof input !== 'object' || Array.isArray(input)) {
-            return {};
-        }
-        const normalized = {};
-        for (const [key, value] of Object.entries(input)) {
-            if (typeof key !== 'string') {
-                continue;
-            }
-            if (typeof value === 'string') {
-                normalized[key] = value;
-            }
-        }
-        delete normalized['risu-auth'];
-        delete normalized['risu-timeout-ms'];
-        delete normalized['host'];
-        delete normalized['connection'];
-        delete normalized['content-length'];
-        return normalized;
-    }
-
-    function normalizeProxyResponseHeaders(headers) {
-        const normalized = {};
-        for (const [key, value] of Object.entries(headers || {})) {
-            if (value === undefined) {
-                continue;
-            }
-            normalized[key.toLowerCase()] = Array.isArray(value) ? value.join(', ') : String(value);
-        }
-        return normalized;
-    }
 
     function requestLocalTargetStream(targetUrl, arg) {
         return new Promise((resolve, reject) => {
@@ -516,4 +516,11 @@ function createProxyStreamHandlers(arg) {
 
 module.exports = {
     createProxyStreamHandlers,
+    _test: {
+        isLocalNetworkHost,
+        normalizeForwardHeaders,
+        normalizeHeartbeatSec,
+        normalizeProxyStreamTimeoutMs,
+        sanitizeTargetUrl,
+    },
 };
