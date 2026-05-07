@@ -7,168 +7,35 @@ const http = require('http');
 const path = require('path');
 const net = require('net');
 const htmlparser = require('node-html-parser');
-const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('fs');
+const { existsSync, readFileSync, writeFileSync } = require('fs');
 const fs = require('fs/promises')
 const crypto = require('crypto')
-const rateLimit = require('express-rate-limit');
 const { WebSocketServer } = require('ws');
+const { createAuthHelpers, createLimiters } = require('./auth.cjs');
+const { savePath, passwordPath, knownPublicKeysPath, authCodePath, sslPath, hubURL, proxyStreamConfig } = require('./config.cjs');
+const { createServerState } = require('./state.cjs');
 app.use(express.static(path.join(process.cwd(), 'dist'), {index: false}));
 app.use(express.json({ limit: '100mb' }));
 app.use(express.raw({ type: 'application/octet-stream', limit: '100mb' }));
 app.use(express.text({ limit: '100mb' }));
 const {pipeline} = require('stream/promises')
 const https = require('https');
-const sslPath = path.join(process.cwd(), 'server/node/ssl/certificate');
-const hubURL = 'https://sv.risuai.xyz'; 
 const openid = require('openid-client');
 
-let password = ''
-let knownPublicKeysHashes = []
-
-const savePath = path.join(process.cwd(), "save")
-if(!existsSync(savePath)){
-    mkdirSync(savePath)
-}
-
-const passwordPath = path.join(process.cwd(), 'save', '__password')
-if(existsSync(passwordPath)){
-    password = readFileSync(passwordPath, 'utf-8')
-}
-
-const knownPublicKeysPath = path.join(process.cwd(), 'save', '__known_public_key_hashes.json')
-if(existsSync(knownPublicKeysPath)){
-    const knownPublicKeysRaw = readFileSync(knownPublicKeysPath, 'utf-8');
-    knownPublicKeysHashes = JSON.parse(knownPublicKeysRaw);
-}
-
-const authCodePath = path.join(process.cwd(), 'save', '__authcode')
-const hexRegex = /^[0-9a-fA-F]+$/;
-const PROXY_STREAM_DEFAULT_TIMEOUT_MS = 600000;
-const PROXY_STREAM_MAX_TIMEOUT_MS = 3600000;
-const PROXY_STREAM_DEFAULT_HEARTBEAT_SEC = 15;
-const PROXY_STREAM_HEARTBEAT_MIN_SEC = 5;
-const PROXY_STREAM_HEARTBEAT_MAX_SEC = 60;
-const PROXY_STREAM_GC_INTERVAL_MS = 60000;
-const PROXY_STREAM_DONE_GRACE_MS = 30000;
-const PROXY_STREAM_MAX_ACTIVE_JOBS = 64;
-const PROXY_STREAM_MAX_PENDING_EVENTS = 512;
-const PROXY_STREAM_MAX_PENDING_BYTES = 2 * 1024 * 1024;
-const PROXY_STREAM_MAX_BODY_BASE64_BYTES = 8 * 1024 * 1024;
-const proxyStreamJobs = new Map();
-const authenticatedRouteLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 2000,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: 'Too many requests. Please retry shortly.' }
-});
-const authRouteLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 2000,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: 'Too many requests. Please retry shortly.' }
-});
-const loginRouteLimiter = rateLimit({
-    windowMs: 30 * 1000,
-    max: 10,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: 'Too many attempts. Please wait and try again later.' }
-});
-function isHex(str) {
-    return hexRegex.test(str.toUpperCase().trim()) || str === '__password';
-}
-
-async function hashJSON(json){
-    const hash = crypto.createHash('sha256');
-    hash.update(JSON.stringify(json));
-    return hash.digest('hex');
-}
-
-function isAuthorizedRequest(req) {
-    const authHeader = normalizeAuthHeader(req.headers['risu-auth']);
-    return !!authHeader && authHeader.trim() === password.trim();
-}
-
-function normalizeAuthHeader(authHeader) {
-    if (Array.isArray(authHeader)) {
-        return authHeader[0] || '';
-    }
-    return typeof authHeader === 'string' ? authHeader : '';
-}
-
-async function isAuthorizedJwtHeader(authHeader) {
-    try {
-        const normalized = normalizeAuthHeader(authHeader);
-        if (!normalized) {
-            return false;
-        }
-
-        const [
-            jsonHeaderB64,
-            jsonPayloadB64,
-            signatureB64,
-        ] = normalized.split('.');
-
-        if (!jsonHeaderB64 || !jsonPayloadB64 || !signatureB64) {
-            return false;
-        }
-
-        const jsonHeader = JSON.parse(Buffer.from(jsonHeaderB64, 'base64url').toString('utf-8'));
-        const jsonPayload = JSON.parse(Buffer.from(jsonPayloadB64, 'base64url').toString('utf-8'));
-        const signature = Buffer.from(signatureB64, 'base64url');
-
-        const now = Math.floor(Date.now() / 1000);
-        if (jsonPayload.exp < now) {
-            return false;
-        }
-
-        const pubKeyHash = await hashJSON(jsonPayload.pub);
-        if (!knownPublicKeysHashes.includes(pubKeyHash)) {
-            return false;
-        }
-
-        if (jsonHeader.alg !== 'ES256') {
-            return false;
-        }
-
-        return await crypto.subtle.verify(
-            {
-                name: 'ECDSA',
-                hash: { name: 'SHA-256' },
-            },
-            await crypto.subtle.importKey(
-                'jwk',
-                jsonPayload.pub,
-                {
-                    name: 'ECDSA',
-                    namedCurve: 'P-256',
-                },
-                false,
-                ['verify']
-            ),
-            signature,
-            Buffer.from(`${jsonHeaderB64}.${jsonPayloadB64}`)
-        );
-    } catch {
-        return false;
-    }
-}
-
-async function isAuthorizedProxyRequest(req) {
-    if (isAuthorizedRequest(req)) {
-        return true;
-    }
-    return await isAuthorizedJwtHeader(req.headers['risu-auth']);
-}
-
-async function checkProxyAuth(req, res) {
-    if (isAuthorizedRequest(req)) {
-        return true;
-    }
-    return await checkAuth(req, res);
-}
+const state = createServerState();
+const {
+    authenticatedRouteLimiter,
+    authRouteLimiter,
+    loginRouteLimiter
+} = createLimiters();
+const {
+    isHex,
+    hashJSON,
+    isAuthorizedProxyRequest,
+    checkProxyAuth,
+    checkAuth,
+} = createAuthHelpers(state);
+const proxyStreamJobs = state.proxyStreamJobs;
 
 function getRequestTimeoutMs(timeoutHeader) {
     const raw = Array.isArray(timeoutHeader) ? timeoutHeader[0] : timeoutHeader;
@@ -201,18 +68,18 @@ function createTimeoutController(timeoutMs) {
 
 function normalizeProxyStreamTimeoutMs(timeoutMs) {
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-        return PROXY_STREAM_DEFAULT_TIMEOUT_MS;
+        return proxyStreamConfig.defaultTimeoutMs;
     }
     const parsed = Math.max(1, Math.floor(timeoutMs));
-    return Math.min(PROXY_STREAM_MAX_TIMEOUT_MS, parsed);
+    return Math.min(proxyStreamConfig.maxTimeoutMs, parsed);
 }
 
 function normalizeHeartbeatSec(heartbeatSec) {
     if (!Number.isFinite(heartbeatSec)) {
-        return PROXY_STREAM_DEFAULT_HEARTBEAT_SEC;
+        return proxyStreamConfig.defaultHeartbeatSec;
     }
     const parsed = Math.floor(heartbeatSec);
-    return Math.min(PROXY_STREAM_HEARTBEAT_MAX_SEC, Math.max(PROXY_STREAM_HEARTBEAT_MIN_SEC, parsed));
+    return Math.min(proxyStreamConfig.heartbeatMaxSec, Math.max(proxyStreamConfig.heartbeatMinSec, parsed));
 }
 
 function isPrivateIPv4Host(hostname) {
@@ -427,10 +294,10 @@ function pushJobEvent(job, event) {
     const text = JSON.stringify(event);
     if (job.clients.size === 0) {
         job.pendingEvents.push(text);
-        job.pendingBytes += Buffer.byteLength(text);
-        while (
-            job.pendingEvents.length > PROXY_STREAM_MAX_PENDING_EVENTS
-            || job.pendingBytes > PROXY_STREAM_MAX_PENDING_BYTES
+            job.pendingBytes += Buffer.byteLength(text);
+            while (
+            job.pendingEvents.length > proxyStreamConfig.maxPendingEvents
+            || job.pendingBytes > proxyStreamConfig.maxPendingBytes
         ) {
             const removed = job.pendingEvents.shift();
             if (!removed) {
@@ -452,7 +319,7 @@ function markJobDone(job) {
         return;
     }
     job.done = true;
-    job.cleanupAt = Date.now() + PROXY_STREAM_DONE_GRACE_MS;
+    job.cleanupAt = Date.now() + proxyStreamConfig.doneGraceMs;
 }
 
 function cleanupJob(jobId) {
@@ -624,121 +491,6 @@ app.get('/', async (req, res, next) => {
     }
 })
 
-async function checkAuth(req, res, returnOnlyStatus = false){
-    try {
-        const authHeader = normalizeAuthHeader(req.headers['risu-auth']);
-
-        if(!authHeader){
-            console.log('No auth header')
-            if(returnOnlyStatus){
-                return false;
-            }
-            res.status(400).send({
-                error:'No auth header'
-            });
-            return false
-        }
-
-
-        //jwt token
-        const [
-            jsonHeaderB64,
-            jsonPayloadB64,
-            signatureB64,
-        ] = authHeader.split('.');
-
-        //alg, typ
-        const jsonHeader = JSON.parse(Buffer.from(jsonHeaderB64, 'base64url').toString('utf-8'));
-
-        //iat, exp, pub
-        const jsonPayload = JSON.parse(Buffer.from(jsonPayloadB64, 'base64url').toString('utf-8'));
-
-        //signature
-        const signature = Buffer.from(signatureB64, 'base64url');
-
-        
-        //check expiration
-        const now = Math.floor(Date.now() / 1000);
-        if(jsonPayload.exp < now){
-            console.log('Token expired')
-            if(returnOnlyStatus){
-                return false;
-            }
-            res.status(400).send({
-                error:'Token Expired'
-            });
-            return false
-        }
-
-        //check if public key is known
-        const pubKeyHash = await hashJSON(jsonPayload.pub)
-        if(!knownPublicKeysHashes.includes(pubKeyHash)){
-            console.log('Unknown public key')
-            if(returnOnlyStatus){
-                return false;
-            }
-            res.status(400).send({
-                error:'Unknown Public Key'
-            });
-            return false
-        }
-
-        //check signature
-        if(jsonHeader.alg !== "ES256"){
-            //only support ECDSA for now
-            console.log('Unsupported algorithm')
-            if(returnOnlyStatus){
-                return false;
-            }
-            res.status(400).send({
-                error:'Unsupported Algorithm'
-            });
-            return false
-        }
-
-        const isValid = await crypto.subtle.verify(
-            {
-                name: 'ECDSA',
-                hash: {name: 'SHA-256'},
-            },
-            await crypto.subtle.importKey(
-                'jwk',
-                jsonPayload.pub,
-                {
-                    name: 'ECDSA',
-                    namedCurve: 'P-256',
-                },
-                false,
-                ['verify']
-            ),
-            signature,
-            Buffer.from(`${jsonHeaderB64}.${jsonPayloadB64}`)
-        );
-
-        if(!isValid){
-            console.log('Invalid signature')
-            if(returnOnlyStatus){
-                return false;
-            }
-            res.status(400).send({
-                error:'Invalid Signature'
-            });
-            return false
-        }
-        
-        return true   
-    } catch (error) {
-        console.log(error)
-        if(returnOnlyStatus){
-            return false;
-        }
-        res.status(500).send({
-            error:'Internal Server Error'
-        });
-        return false
-    }
-}
-
 const reverseProxyFunc = async (req, res, next) => {
     if(!await checkProxyAuth(req, res)){
         return;
@@ -887,13 +639,9 @@ const reverseProxyFunc_get = async (req, res, next) => {
     }
 }
 
-let accessTokenCache = {
-    token: null,
-    expiry: 0
-}
 async function getSionywAccessToken() {
-    if(accessTokenCache.token && Date.now() < accessTokenCache.expiry){
-        return accessTokenCache.token;
+    if(state.accessTokenCache.token && Date.now() < state.accessTokenCache.expiry){
+        return state.accessTokenCache.token;
     }
     //Schema of the client data file
     // {
@@ -942,8 +690,8 @@ async function getSionywAccessToken() {
         writeFileSync(clientDataPath, JSON.stringify(clientData), 'utf-8');
     }
 
-    accessTokenCache.token = tokenData.access_token;
-    accessTokenCache.expiry = Date.now() + (tokenData.expires_in * 1000) - (5 * 60 * 1000); //5 minutes early
+    state.accessTokenCache.token = tokenData.access_token;
+    state.accessTokenCache.expiry = Date.now() + (tokenData.expires_in * 1000) - (5 * 60 * 1000); //5 minutes early
 
     return tokenData.access_token;
 }
@@ -1074,11 +822,11 @@ app.post('/proxy-stream-jobs', authenticatedRouteLimiter, async (req, res) => {
     }
 
     const bodyBase64 = typeof req.body?.bodyBase64 === 'string' ? req.body.bodyBase64 : '';
-    if (bodyBase64.length > PROXY_STREAM_MAX_BODY_BASE64_BYTES) {
+    if (bodyBase64.length > proxyStreamConfig.maxBodyBase64Bytes) {
         res.status(413).send({ error: 'Request body too large' });
         return;
     }
-    if (proxyStreamJobs.size >= PROXY_STREAM_MAX_ACTIVE_JOBS) {
+    if (proxyStreamJobs.size >= proxyStreamConfig.maxActiveJobs) {
         res.status(429).send({ error: 'Too many active stream jobs. Retry shortly.' });
         return;
     }
@@ -1132,7 +880,7 @@ app.delete('/proxy-stream-jobs/:jobId', authenticatedRouteLimiter, async (req, r
 
 app.get('/api/test_auth', authRouteLimiter, async(req, res) => {
 
-    if(!password){
+    if(!state.password){
         res.send({status: 'unset'})
     }
     else if(!await checkAuth(req, res, true)){
@@ -1144,13 +892,13 @@ app.get('/api/test_auth', authRouteLimiter, async(req, res) => {
 })
 
 app.post('/api/login', loginRouteLimiter, async (req, res) => {
-    if(password === ''){
+    if(state.password === ''){
         res.status(400).send({error: 'Password not set'})
         return;
     }
-    if(req.body.password && req.body.password.trim() === password.trim()){
-        knownPublicKeysHashes.push(await hashJSON(req.body.publicKey))
-        writeFileSync(knownPublicKeysPath, JSON.stringify(knownPublicKeysHashes), 'utf-8')
+    if(req.body.password && req.body.password.trim() === state.password.trim()){
+        state.knownPublicKeysHashes.push(await hashJSON(req.body.publicKey))
+        writeFileSync(knownPublicKeysPath, JSON.stringify(state.knownPublicKeysHashes), 'utf-8')
         res.send({status:'success'})
     }
     else{
@@ -1170,9 +918,9 @@ app.post('/api/crypto', async (req, res) => {
 
 
 app.post('/api/set_password', async (req, res) => {
-    if(password === ''){
-        password = req.body.password
-        writeFileSync(passwordPath, password, 'utf-8')
+    if(state.password === ''){
+        state.password = req.body.password
+        writeFileSync(passwordPath, state.password, 'utf-8')
         res.send({status: 'success'})
     }
     else{
@@ -1290,13 +1038,6 @@ app.post('/api/write', authenticatedRouteLimiter, async (req, res, next) => {
     }
 });
 
-const oauthData = {
-    client_id: '',
-    client_secret: '',
-    config: {},
-    code_verifier: ''
-
-}
 app.get('/api/oauth_login', async (req, res) => {
     const redirect_uri = (new URL (req.url)).host + '/api/oauth_callback'
 
@@ -1304,9 +1045,9 @@ app.get('/api/oauth_login', async (req, res) => {
         res.status(400).send({ error: 'redirect_uri is required' });
         return
     }
-    if(!oauthData.client_id || !oauthData.client_secret){
+    if(!state.oauthData.client_id || !state.oauthData.client_secret){
         const discovery = await openid.discovery('https://account.sionyw.com/','','');
-        oauthData.config = discovery;
+        state.oauthData.config = discovery;
 
         //oauth dynamic client registration
         //https://datatracker.ietf.org/doc/html/rfc7591
@@ -1320,8 +1061,8 @@ app.get('/api/oauth_login', async (req, res) => {
                 'Authorization': 'Bearer ' + (serverMeta.registration_access_token || '')
             },
             body: JSON.stringify({
-                client_id: oauthData.client_id,
-                client_secret: oauthData.client_secret,
+                client_id: state.oauthData.client_id,
+                client_secret: state.oauthData.client_secret,
                 redirect_uris: [redirect_uri],
                 response_types: ['code'],
                 grant_types: ['authorization_code'],
@@ -1333,10 +1074,10 @@ app.get('/api/oauth_login', async (req, res) => {
 
         if(registrationResponse.status === 201 || registrationResponse.status === 200){
             const registrationData = await registrationResponse.json();
-            oauthData.client_id = registrationData.client_id;
-            oauthData.client_secret = registrationData.client_secret;
-            discovery.clientMetadata().client_id = oauthData.client_id;
-            discovery.clientMetadata().client_secret = oauthData.client_secret;
+            state.oauthData.client_id = registrationData.client_id;
+            state.oauthData.client_secret = registrationData.client_secret;
+            discovery.clientMetadata().client_id = state.oauthData.client_id;
+            discovery.clientMetadata().client_secret = state.oauthData.client_secret;
         }
         else{
             console.error('[Server] OAuth2 dynamic client registration failed:', registrationResponse.statusText);
@@ -1350,8 +1091,8 @@ app.get('/api/oauth_login', async (req, res) => {
         let code_verifier = openid.randomPKCECodeVerifier();
         let code_challenge = await openid.calculatePKCECodeChallenge(code_verifier);
 
-        oauthData.code_verifier = code_verifier;
-        let redirectTo = openid.buildAuthorizationUrl(oauthData.config, {
+        state.oauthData.code_verifier = code_verifier;
+        let redirectTo = openid.buildAuthorizationUrl(state.oauthData.config, {
             redirect_uri,
             code_challenge,
             code_challenge_method: 'S256',
@@ -1378,16 +1119,16 @@ app.get('/api/oauth_callback', async (req, res) => {
         res.status(400).send({ error: 'code is required' });
         return
     }
-    if(!oauthData.client_id || !oauthData.client_secret || !oauthData.code_verifier){
+    if(!state.oauthData.client_id || !state.oauthData.client_secret || !state.oauthData.code_verifier){
         res.status(400).send({ error: 'OAuth2 not initialized' });
         return
     }
 
     let tokens = await openid.authorizationCodeGrant(
-        oauthData.config,   
+        state.oauthData.config,
         getCurrentUrl(),
         {
-            pkceCodeVerifier: oauthData.code_verifier,
+            pkceCodeVerifier: state.oauthData.code_verifier,
         },
     )
 
@@ -1537,10 +1278,10 @@ async function startServer() {
                 cleanupJob(jobId);
                 continue;
             }
-            if (!job.done && now - job.updatedAt > Math.max(PROXY_STREAM_DEFAULT_TIMEOUT_MS, job.timeoutMs * 2)) {
+            if (!job.done && now - job.updatedAt > Math.max(proxyStreamConfig.defaultTimeoutMs, job.timeoutMs * 2)) {
                 cleanupJob(jobId);
             }
         }
-    }, PROXY_STREAM_GC_INTERVAL_MS);
+    }, proxyStreamConfig.gcIntervalMs);
     await startServer();
 })();
