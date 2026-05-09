@@ -29,9 +29,10 @@ export class AutoStorage{
             return await (this.realStorage as AccountStorage).setItem(key, value)
         }
         if(isNodeServer && key === DATABASE_KEY){
+            const nodeStorage = this.realStorage as NodeStorage
             try {
                 const db = await decodeRisuSave(value)
-                await saveNodeSplitDatabaseToStorage(this.realStorage as NodeStorage, db)
+                await saveNodeSplitDatabaseToStorage(nodeStorage, db)
                 if(db.characters?.some(isNodeSplitCharacterStub)){
                     return null
                 }
@@ -45,7 +46,8 @@ export class AutoStorage{
     async getItem(key:string):Promise<Buffer> {
         await this.Init()
         if(isNodeServer && !this.isAccount && key === DATABASE_KEY){
-            const splitRoot = await loadNodeSplitRootFromStorage(this.realStorage as NodeStorage)
+            const nodeStorage = this.realStorage as NodeStorage
+            const splitRoot = await loadNodeSplitRootFromStorage(nodeStorage)
             if(splitRoot){
                 return Buffer.from(encodeRisuSaveLegacy(splitRoot))
             }
@@ -53,8 +55,9 @@ export class AutoStorage{
 
         const item = await this.realStorage.getItem(key)
         if(isNodeServer && !this.isAccount && key === DATABASE_KEY && item){
+            const nodeStorage = this.realStorage as NodeStorage
             decodeRisuSave(item as Uint8Array)
-                .then((db) => migrateMonolithToNodeSplitStorage(this.realStorage as NodeStorage, db))
+                .then((db) => migrateMonolithToNodeSplitStorage(nodeStorage, db))
                 .catch((error) => console.warn('[node-split-save] monolith migration skipped', error))
         }
         return item
@@ -158,8 +161,9 @@ export class AutoStorage{
             }
             if(isNodeServer){
                 console.log("using node storage")
-                this.realStorage = new NodeStorage()
-                startNodeSplitCharacterHydration(this.realStorage)
+                const nodeStorage = new NodeStorage()
+                this.realStorage = nodeStorage
+                startNodeSplitCharacterHydration(nodeStorage)
                 return
             }
             else if(window.navigator?.storage?.getDirectory &&
