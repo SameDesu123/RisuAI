@@ -11,7 +11,8 @@ import { language } from "src/lang"
 import {
     loadNodeSplitRootFromStorage,
     migrateMonolithToNodeSplitStorage,
-    saveNodeSplitDatabaseToStorage
+    saveNodeSplitDatabaseToStorage,
+    startNodeSplitCharacterHydration
 } from "./nodeSplitSave.svelte"
 
 const DATABASE_KEY = 'database/database.bin'
@@ -154,6 +155,7 @@ export class AutoStorage{
             if(isNodeServer){
                 console.log("using node storage")
                 this.realStorage = new NodeStorage()
+                startNodeSplitCharacterHydration(this.realStorage)
                 return
             }
             else if(window.navigator?.storage?.getDirectory &&
