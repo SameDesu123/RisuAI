@@ -1,8 +1,6 @@
 import { isNodeServer } from "../platform"
 import { DBState } from "../stores.svelte"
-import { forageStorage, saving } from "../globalApi.svelte"
-import { getDatabase, type Database, type character, type groupChat } from "./database.svelte"
-import { sleep } from "../util"
+import type { Database, character, groupChat } from "./database.svelte"
 
 const SPLIT_VERSION = 1
 const SPLIT_PREFIX = "database/split/v1"
@@ -10,6 +8,11 @@ const META_KEY = `${SPLIT_PREFIX}/meta.json`
 const ROOT_KEY = `${SPLIT_PREFIX}/root.bin`
 const CHARACTER_PREFIX = `${SPLIT_PREFIX}/characters`
 const BLOCK_HEADER = "RISU_NODE_SPLIT_V1\0"
+
+type NodeSplitStorage = {
+    getItem(key: string): Promise<Uint8Array | Buffer | null>
+    setItem(key: string, value: Uint8Array): Promise<unknown>
+}
 
 export type NodeSplitMeta = {
     type: 'risu-node-split-save'
@@ -58,7 +61,6 @@ type NodeSplitSaveOptions = {
 }
 
 let migrationInFlight = false
-let saveLoopStarted = false
 let writeChain: Promise<void> = Promise.resolve()
 
 function debugTime(label: string, startedAt: number) {
@@ -188,14 +190,14 @@ function enqueueWrite(label: string, task: () => Promise<void>) {
     return writeChain
 }
 
-export async function loadNodeSplitRoot(): Promise<Database | null> {
-    if (!isNodeServer || forageStorage.isAccount) {
+export async function loadNodeSplitRootFromStorage(storage: NodeSplitStorage): Promise<Database | null> {
+    if (!isNodeServer) {
         return null
     }
 
     try {
         const metaStartedAt = performance.now()
-        const metaRaw = toBytes(await forageStorage.getItem(META_KEY))
+        const metaRaw = toBytes(await storage.getItem(META_KEY))
         debugTime('split meta read', metaStartedAt)
         if (!metaRaw) {
             return null
@@ -207,7 +209,7 @@ export async function loadNodeSplitRoot(): Promise<Database | null> {
         }
 
         const rootReadStartedAt = performance.now()
-        const rootRaw = toBytes(await forageStorage.getItem(meta.rootKey))
+        const rootRaw = toBytes(await storage.getItem(meta.rootKey))
         debugTime('split root read', rootReadStartedAt)
         if (!rootRaw) {
             return null
@@ -227,8 +229,8 @@ export async function loadNodeSplitRoot(): Promise<Database | null> {
     }
 }
 
-export async function saveNodeSplitDatabase(db: Database, options: NodeSplitSaveOptions = {}): Promise<void> {
-    if (!isNodeServer || forageStorage.isAccount) {
+export async function saveNodeSplitDatabaseToStorage(storage: NodeSplitStorage, db: Database, options: NodeSplitSaveOptions = {}): Promise<void> {
+    if (!isNodeServer) {
         return
     }
 
@@ -238,11 +240,11 @@ export async function saveNodeSplitDatabase(db: Database, options: NodeSplitSave
         const chars = getWritableCharacters(db, options.changedCharacterIds)
 
         for (const char of chars) {
-            await forageStorage.setItem(characterKey(char.chaId), await encodeNodeSplitBlock(char))
+            await storage.setItem(characterKey(char.chaId), await encodeNodeSplitBlock(char))
         }
 
-        await forageStorage.setItem(ROOT_KEY, await encodeNodeSplitBlock(root))
-        await forageStorage.setItem(META_KEY, encodePlainJson({
+        await storage.setItem(ROOT_KEY, await encodeNodeSplitBlock(root))
+        await storage.setItem(META_KEY, encodePlainJson({
             type: 'risu-node-split-save',
             version: SPLIT_VERSION,
             createdAt: now,
@@ -251,13 +253,13 @@ export async function saveNodeSplitDatabase(db: Database, options: NodeSplitSave
         } satisfies NodeSplitMeta))
 
         if (options.writeCompatibilitySnapshot) {
-            console.debug('[node-split-save] compatibility snapshot requested but intentionally skipped for this Node-only split save path')
+            console.debug('[node-split-save] compatibility snapshot requested but handled by the existing monolithic save path')
         }
     })
 }
 
-export async function ensureNodeSplitCharacterLoaded(index: number): Promise<void> {
-    if (!isNodeServer || forageStorage.isAccount) {
+export async function ensureNodeSplitCharacterLoaded(index: number, storage: NodeSplitStorage): Promise<void> {
+    if (!isNodeServer) {
         return
     }
 
@@ -267,7 +269,7 @@ export async function ensureNodeSplitCharacterLoaded(index: number): Promise<voi
     }
 
     const readStartedAt = performance.now()
-    const raw = toBytes(await forageStorage.getItem(characterKey(char.chaId)))
+    const raw = toBytes(await storage.getItem(characterKey(char.chaId)))
     debugTime('character hydration read', readStartedAt)
     if (!raw) {
         throw new Error(`Missing split character data: ${char.chaId}`)
@@ -283,15 +285,15 @@ export async function ensureNodeSplitCharacterLoaded(index: number): Promise<voi
     DBState.db.characters[index] = loaded
 }
 
-export async function migrateMonolithToNodeSplit(db: Database): Promise<void> {
-    if (!isNodeServer || forageStorage.isAccount || migrationInFlight) {
+export async function migrateMonolithToNodeSplitStorage(storage: NodeSplitStorage, db: Database): Promise<void> {
+    if (!isNodeServer || migrationInFlight) {
         return
     }
 
     migrationInFlight = true
     try {
         const startedAt = performance.now()
-        await saveNodeSplitDatabase(db, {
+        await saveNodeSplitDatabaseToStorage(storage, db, {
             changedCharacterIds: db.characters?.map((char) => char?.chaId).filter(Boolean),
             migratedFromMonolith: true
         })
@@ -299,49 +301,4 @@ export async function migrateMonolithToNodeSplit(db: Database): Promise<void> {
     } finally {
         migrationInFlight = false
     }
-}
-
-export function startNodeSplitSaveLoop(): boolean {
-    if (!isNodeServer || forageStorage.isAccount || saveLoopStarted) {
-        return false
-    }
-    saveLoopStarted = true
-
-    let changed = false
-    let saveTimeout: ReturnType<typeof setTimeout> | null = null
-
-    $effect.root(() => {
-        $effect(() => {
-            $state.snapshot(DBState.db)
-            if (saveTimeout) {
-                clearTimeout(saveTimeout)
-            }
-            saveTimeout = setTimeout(() => {
-                changed = true
-            }, 500)
-        })
-    })
-
-    async function loop() {
-        await sleep(1000)
-        while (true) {
-            if (!changed) {
-                await sleep(500)
-                continue
-            }
-
-            changed = false
-            saving.state = true
-            try {
-                await saveNodeSplitDatabase(getDatabase({ snapshot: true }))
-            } catch (error) {
-                console.error('[node-split-save] save failed', error)
-            } finally {
-                saving.state = false
-            }
-        }
-    }
-
-    loop()
-    return true
 }
