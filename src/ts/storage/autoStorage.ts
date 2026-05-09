@@ -9,6 +9,7 @@ import { AccountStorage } from "./accountStorage"
 import { decodeRisuSave, encodeRisuSaveLegacy } from "./risuSave";
 import { language } from "src/lang"
 import {
+    isNodeSplitCharacterStub,
     loadNodeSplitRootFromStorage,
     migrateMonolithToNodeSplitStorage,
     saveNodeSplitDatabaseToStorage,
@@ -31,6 +32,9 @@ export class AutoStorage{
             try {
                 const db = await decodeRisuSave(value)
                 await saveNodeSplitDatabaseToStorage(this.realStorage as NodeStorage, db)
+                if(db.characters?.some(isNodeSplitCharacterStub)){
+                    return null
+                }
             } catch (error) {
                 console.warn('[node-split-save] failed to write split save; preserving monolithic write', error)
             }
