@@ -1,5 +1,6 @@
+import { get } from "svelte/store"
 import { isNodeServer } from "../platform"
-import { DBState } from "../stores.svelte"
+import { DBState, selectedCharID } from "../stores.svelte"
 import type { Database, character, groupChat } from "./database.svelte"
 
 const SPLIT_VERSION = 1
@@ -61,6 +62,7 @@ type NodeSplitSaveOptions = {
 }
 
 let migrationInFlight = false
+let hydrationWatcherStarted = false
 let writeChain: Promise<void> = Promise.resolve()
 
 function debugTime(label: string, startedAt: number) {
@@ -283,6 +285,31 @@ export async function ensureNodeSplitCharacterLoaded(index: number, storage: Nod
     }
 
     DBState.db.characters[index] = loaded
+}
+
+export function startNodeSplitCharacterHydration(storage: NodeSplitStorage) {
+    if (!isNodeServer || hydrationWatcherStarted) {
+        return
+    }
+    hydrationWatcherStarted = true
+
+    let inFlight: Promise<void> | null = null
+    selectedCharID.subscribe((index) => {
+        if (index < 0) {
+            return
+        }
+        inFlight = (inFlight ?? Promise.resolve())
+            .catch(() => {})
+            .then(async () => {
+                if (get(selectedCharID) !== index) {
+                    return
+                }
+                await ensureNodeSplitCharacterLoaded(index, storage)
+            })
+            .catch((error) => {
+                console.error('[node-split-save] character hydration failed', error)
+            })
+    })
 }
 
 export async function migrateMonolithToNodeSplitStorage(storage: NodeSplitStorage, db: Database): Promise<void> {
