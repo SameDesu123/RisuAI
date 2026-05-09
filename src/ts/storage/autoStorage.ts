@@ -8,6 +8,13 @@ import { getDatabase, type Database } from "./database.svelte"
 import { AccountStorage } from "./accountStorage"
 import { decodeRisuSave, encodeRisuSaveLegacy } from "./risuSave";
 import { language } from "src/lang"
+import {
+    loadNodeSplitRootFromStorage,
+    migrateMonolithToNodeSplitStorage,
+    saveNodeSplitDatabaseToStorage
+} from "./nodeSplitSave.svelte"
+
+const DATABASE_KEY = 'database/database.bin'
 
 export class AutoStorage{
     isAccount:boolean = false
@@ -19,12 +26,33 @@ export class AutoStorage{
         if(this.isAccount){
             return await (this.realStorage as AccountStorage).setItem(key, value)
         }
+        if(isNodeServer && key === DATABASE_KEY){
+            try {
+                const db = await decodeRisuSave(value)
+                await saveNodeSplitDatabaseToStorage(this.realStorage as NodeStorage, db)
+            } catch (error) {
+                console.warn('[node-split-save] failed to write split save; preserving monolithic write', error)
+            }
+        }
         await this.realStorage.setItem(key, value)
         return null
     }
     async getItem(key:string):Promise<Buffer> {
         await this.Init()
-        return await this.realStorage.getItem(key)
+        if(isNodeServer && !this.isAccount && key === DATABASE_KEY){
+            const splitRoot = await loadNodeSplitRootFromStorage(this.realStorage as NodeStorage)
+            if(splitRoot){
+                return Buffer.from(encodeRisuSaveLegacy(splitRoot))
+            }
+        }
+
+        const item = await this.realStorage.getItem(key)
+        if(isNodeServer && !this.isAccount && key === DATABASE_KEY && item){
+            decodeRisuSave(item as Uint8Array)
+                .then((db) => migrateMonolithToNodeSplitStorage(this.realStorage as NodeStorage, db))
+                .catch((error) => console.warn('[node-split-save] monolith migration skipped', error))
+        }
+        return item
 
     }
     async keys():Promise<string[]>{
