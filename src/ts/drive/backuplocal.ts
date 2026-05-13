@@ -6,7 +6,7 @@ import { isTauri } from "src/ts/platform"
 import { decodeRisuSave, encodeRisuSaveLegacy } from "../storage/risuSave";
 import { getDatabase, setDatabaseLite } from "../storage/database.svelte";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { sleep } from "../util";
+import { selectSingleFile, sleep, type SelectedFile } from "../util";
 import { hubURL } from "../characterCards";
 import { language } from "src/lang";
 import { getColdStorageItem, listColdDataKeys, setColdStorageItem } from "../process/coldstorage.svelte";
@@ -380,114 +380,114 @@ export async function SavePartialLocalBackup(){
     }
 }
 
-export function LoadLocalBackup(){
+export async function LoadLocalBackup(selectedFile?: SelectedFile | null){
     try {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.bin';
-        input.onchange = async () => {
-            if (!input.files || input.files.length === 0) {
-                input.remove();
-                return;
-            }
-            const file = input.files[0];
-            input.remove();
+        const file = selectedFile === undefined ? await selectSingleFile(['bin']) : selectedFile
+        if(!file){
+            return
+        }
 
-            const reader = file.stream().getReader();
-            const CHUNK_SIZE = 1024 * 1024; // 1MB chunk size
-            let bytesRead = 0;
-            let remainingBuffer = new Uint8Array();
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) {
-                    break;
-                }
-
-                bytesRead += value.length;
-                const progress = ((bytesRead / file.size) * 100).toFixed(2);
-                alertWait(`Loading local Backup... (${progress}%)`);
-
-                const newBuffer = new Uint8Array(remainingBuffer.length + value.length);
-                newBuffer.set(remainingBuffer);
-                newBuffer.set(value, remainingBuffer.length);
-                remainingBuffer = newBuffer;
-
-                let offset = 0;
-                while (offset + 4 <= remainingBuffer.length) {
-                    const nameLength = new Uint32Array(remainingBuffer.slice(offset, offset + 4).buffer)[0];
-
-                    if (offset + 4 + nameLength > remainingBuffer.length) {
-                        break;
-                    }
-                    const nameBuffer = remainingBuffer.slice(offset + 4, offset + 4 + nameLength);
-                    const name = new TextDecoder().decode(nameBuffer);
-
-                    if (offset + 4 + nameLength + 4 > remainingBuffer.length) {
-                        break;
-                    }
-                    const dataLength = new Uint32Array(remainingBuffer.slice(offset + 4 + nameLength, offset + 4 + nameLength + 4).buffer)[0];
-
-                    if (offset + 4 + nameLength + 4 + dataLength > remainingBuffer.length) {
-                        break;
-                    }
-                    const data = remainingBuffer.slice(offset + 4 + nameLength + 4, offset + 4 + nameLength + 4 + dataLength);
-
-                    if (name === 'database.risudat') {
-                        const db = new Uint8Array(data);
-                        const dbData = await decodeRisuSave(db);
-                        setDatabaseLite(dbData);
-                        requiresFullEncoderReload.state = true;
-                        if (isTauri) {
-                            await writeFile('database/database.bin', db, { baseDir: BaseDirectory.AppData });
-                            await relaunch();
-                            alertStore.set({
-                                type: "wait",
-                                msg: "Success, Refreshing your app."
-                            });
-                        } else {
-                            await forageStorage.setItem('database/database.bin', db);
-                            location.search = '';
-                            alertStore.set({
-                                type: "wait",
-                                msg: "Success, Refreshing your app."
-                            });
-                        }
-                    }
-                    else if (name.startsWith('coldstorage/')) {
-                        const key = name.replace('coldstorage/', '').replace('.json', '')
-                        const text = new TextDecoder().decode(data)
-                        if(!forageStorage.isAccount){
-                            try {
-                                const jsonData = JSON.parse(text)
-                                await setColdStorageItem(key, jsonData)
-                            } catch (e) {
-                                console.error(`Failed to parse cold storage item ${key}:`, e)
-                            }
-                        }
-                    } else {
-                        if (isTauri) {
-                            await writeFile(`assets/` + name, data, { baseDir: BaseDirectory.AppData });
-                        } else {
-                            await forageStorage.setItem('assets/' + name, data);
-                        }
-                    }
-                    await sleep(10);
-                    if (forageStorage.isAccount) {
-                        await sleep(1000);
-                    }
-
-                    offset += 4 + nameLength + 4 + dataLength;
-                }
-                remainingBuffer = remainingBuffer.slice(offset);
-            }
-
-            alertNormal('Success');
-        };
-
-        input.click();
+        await loadBackupFromBytes(file.data)
     } catch (error) {
         console.error(error);
         alertError('Failed, Is file corrupted?')
     }
+}
+
+async function loadBackupFromBytes(data: Uint8Array) {
+    const copied = new Uint8Array(data.byteLength)
+    copied.set(data)
+    await loadBackupFromStream(new Blob([copied]))
+}
+
+async function loadBackupFromStream(file: Blob) {
+    const reader = file.stream().getReader();
+    let bytesRead = 0;
+    let remainingBuffer = new Uint8Array();
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+            break;
+        }
+
+        bytesRead += value.length;
+        const progress = ((bytesRead / file.size) * 100).toFixed(2);
+        alertWait(`Loading local Backup... (${progress}%)`);
+
+        const newBuffer = new Uint8Array(remainingBuffer.length + value.length);
+        newBuffer.set(remainingBuffer);
+        newBuffer.set(value, remainingBuffer.length);
+        remainingBuffer = newBuffer;
+
+        let offset = 0;
+        while (offset + 4 <= remainingBuffer.length) {
+            const nameLength = new Uint32Array(remainingBuffer.slice(offset, offset + 4).buffer)[0];
+
+            if (offset + 4 + nameLength > remainingBuffer.length) {
+                break;
+            }
+            const nameBuffer = remainingBuffer.slice(offset + 4, offset + 4 + nameLength);
+            const name = new TextDecoder().decode(nameBuffer);
+
+            if (offset + 4 + nameLength + 4 > remainingBuffer.length) {
+                break;
+            }
+            const dataLength = new Uint32Array(remainingBuffer.slice(offset + 4 + nameLength, offset + 4 + nameLength + 4).buffer)[0];
+
+            if (offset + 4 + nameLength + 4 + dataLength > remainingBuffer.length) {
+                break;
+            }
+            const data = remainingBuffer.slice(offset + 4 + nameLength + 4, offset + 4 + nameLength + 4 + dataLength);
+
+            if (name === 'database.risudat') {
+                const db = new Uint8Array(data);
+                const dbData = await decodeRisuSave(db);
+                setDatabaseLite(dbData);
+                requiresFullEncoderReload.state = true;
+                if (isTauri) {
+                    await writeFile('database/database.bin', db, { baseDir: BaseDirectory.AppData });
+                    await relaunch();
+                    alertStore.set({
+                        type: "wait",
+                        msg: "Success, Refreshing your app."
+                    });
+                } else {
+                    await forageStorage.setItem('database/database.bin', db);
+                    location.search = '';
+                    alertStore.set({
+                        type: "wait",
+                        msg: "Success, Refreshing your app."
+                    });
+                }
+            }
+            else if (name.startsWith('coldstorage/')) {
+                const key = name.replace('coldstorage/', '').replace('.json', '')
+                const text = new TextDecoder().decode(data)
+                if(!forageStorage.isAccount){
+                    try {
+                        const jsonData = JSON.parse(text)
+                        await setColdStorageItem(key, jsonData)
+                    } catch (e) {
+                        console.error(`Failed to parse cold storage item ${key}:`, e)
+                    }
+                }
+            } else {
+                if (isTauri) {
+                    await writeFile(`assets/` + name, data, { baseDir: BaseDirectory.AppData });
+                } else {
+                    await forageStorage.setItem('assets/' + name, data);
+                }
+            }
+            await sleep(10);
+            if (forageStorage.isAccount) {
+                await sleep(1000);
+            }
+
+            offset += 4 + nameLength + 4 + dataLength;
+        }
+        remainingBuffer = remainingBuffer.slice(offset);
+    }
+
+    alertNormal('Success');
 }
