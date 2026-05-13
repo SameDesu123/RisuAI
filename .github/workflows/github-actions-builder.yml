@@ -70,6 +70,18 @@ jobs:
         run: rustup target add x86_64-apple-darwin
       - if: matrix.settings.platform == 'macos-latest'
         run: rustup target add aarch64-apple-darwin
+      - name: configure Tauri updater signing
+        shell: bash
+        env:
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+        run: |
+          if [ -n "$TAURI_PRIVATE_KEY" ]; then
+            echo 'TAURI_BUILD_ARGS=${{ matrix.settings.args }}' >> "$GITHUB_ENV"
+          else
+            NO_UPDATER_CONFIG="$RUNNER_TEMP/tauri-no-updater.json"
+            printf '{"bundle":{"createUpdaterArtifacts":false}}\n' > "$NO_UPDATER_CONFIG"
+            echo "TAURI_BUILD_ARGS=${{ matrix.settings.args }} --config $NO_UPDATER_CONFIG" >> "$GITHUB_ENV"
+          fi
       - uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -84,5 +96,5 @@ jobs:
           releaseBody: 'Release of v__VERSION__'
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.settings.args }}
+          args: ${{ env.TAURI_BUILD_ARGS }}
           tauriScript: "pnpm tauri"
