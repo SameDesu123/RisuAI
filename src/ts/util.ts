@@ -45,19 +45,40 @@ export function checkNullish(data:any){
     return data === undefined || data === null
 }
 
-const domSelect = true
-export async function selectSingleFile(ext:string[]){
-    if(domSelect){
+export type SelectedFile = {
+    name: string
+    data: Uint8Array
+}
+
+const FILE_DIALOG_FOCUS_DELAY = 300
+
+function normalizeFileExtension(ext: string) {
+    return ext.startsWith('.') ? ext.slice(1) : ext
+}
+
+function getDialogFilters(ext: string[]) {
+    if(ext[0] === '*'){
+        return undefined
+    }
+
+    return [{
+        name: ext.map(normalizeFileExtension).join(', '),
+        extensions: ext.map(normalizeFileExtension)
+    }]
+}
+
+export async function selectSingleFile(ext:string[]):Promise<SelectedFile|null>{
+    if(!isTauri){
         const v = await selectFileByDom(ext, 'single')
         const file = v[0]
+        if(!file){
+            return null
+        }
         return {name: file.name,data:await readFileAsUint8Array(file)}
     }
 
     const selected = await open({
-        filters: [{
-            name: ext.join(', '),
-            extensions: ext
-        }]
+        filters: getDialogFilters(ext)
     });
     if (Array.isArray(selected)) {
         return null
@@ -68,10 +89,10 @@ export async function selectSingleFile(ext:string[]){
     }
 }
 
-export async function selectMultipleFile(ext:string[]){
+export async function selectMultipleFile(ext:string[]):Promise<SelectedFile[]>{
     if(!isTauri){
         const v = await selectFileByDom(ext, 'multiple')
-        let arr:{name:string, data:Uint8Array}[] = []
+        let arr:SelectedFile[] = []
         for(const file of v){
             arr.push({name: file.name,data:await readFileAsUint8Array(file)})
         }
@@ -79,20 +100,17 @@ export async function selectMultipleFile(ext:string[]){
     }
 
     const selected = await open({
-        filters: [{
-            name: ext.join(', '),
-            extensions: ext,
-        }],
+        filters: getDialogFilters(ext),
         multiple: true
     });
     if (Array.isArray(selected)) {
-        let arr:{name:string, data:Uint8Array}[] = []
+        let arr:SelectedFile[] = []
         for(const file of selected){
             arr.push({name: await basename(file),data:await readFile(file)})
         }
         return arr
     } else if (selected === null) {
-        return null
+        return []
     } else {
         return [{name: await basename(selected),data:await readFile(selected)}]
     }
@@ -163,40 +181,70 @@ export function getUserIconProtrait(){
     }
 }
 
-export function selectFileByDom(allowedExtensions:string[], multiple:'multiple'|'single' = 'single') {
-    return new Promise<null|File[]>((resolve) => {
+export function selectFileByDom(allowedExtensions:string[], multiple:'multiple'|'single' = 'single'):Promise<File[]> {
+    return new Promise<File[]>((resolve) => {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.multiple = multiple === 'multiple';
+        fileInput.tabIndex = -1
         const acceptAll = (getDatabase().allowAllExtentionFiles || isIOS() || allowedExtensions[0] === '*')
         if(!acceptAll){
             if (allowedExtensions && allowedExtensions.length) {
-                fileInput.accept = allowedExtensions.map(ext => `.${ext}`).join(',');
+                fileInput.accept = allowedExtensions.map(ext => `.${normalizeFileExtension(ext)}`).join(',');
             }
         }
         else{
             fileInput.accept = '*'
         }
 
+        fileInput.style.position = 'fixed'
+        fileInput.style.left = '-9999px'
+        fileInput.style.top = '0'
+        fileInput.style.width = '1px'
+        fileInput.style.height = '1px'
+        fileInput.style.opacity = '0'
+        fileInput.style.pointerEvents = 'none'
     
-        fileInput.addEventListener('change', (event) => {
-            if (fileInput.files.length === 0) {
-                resolve([]);
+        let settled = false
+        const cleanup = () => {
+            fileInput.remove()
+            window.removeEventListener('focus', handleFocus)
+        }
+        const finish = (files: File[]) => {
+            if(settled){
+                return;
+            }
+            settled = true
+            cleanup()
+            resolve(files)
+        }
+    
+        fileInput.addEventListener('change', () => {
+            if (!fileInput.files || fileInput.files.length === 0) {
+                finish([])
                 return;
             }
     
             const files = acceptAll ? Array.from(fileInput.files) :(Array.from(fileInput.files).filter(file => {
-                const fileExtension = file.name.split('.').pop().toLowerCase();
-                return !allowedExtensions || allowedExtensions.includes(fileExtension);
+                const lastDotIndex = file.name.lastIndexOf('.')
+                const fileExtension = lastDotIndex > 0 ? file.name.slice(lastDotIndex + 1).toLowerCase() : ''
+                return !allowedExtensions || allowedExtensions.map(normalizeFileExtension).includes(fileExtension);
             })) 
     
-            fileInput.remove()
-            resolve(files);
+            finish(files);
         });
+
+        const handleFocus = () => {
+            setTimeout(() => {
+                if(!settled && (!fileInput.files || fileInput.files.length === 0)){
+                    finish([])
+                }
+            }, FILE_DIALOG_FOCUS_DELAY)
+        }
     
         document.body.appendChild(fileInput);
+        window.addEventListener('focus', handleFocus, { once: true })
         fileInput.click();
-        fileInput.style.display = 'none'; // Hide the file input element
     });
 }
 
