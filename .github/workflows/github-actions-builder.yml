@@ -15,12 +15,16 @@ jobs:
         # platform: [ubuntu-latest,macos-latest,windows-latest]
         settings:
           - platform: 'macos-latest' # for Arm based macs (M1 and above).
+            target: 'aarch64-apple-darwin'
             args: '--target aarch64-apple-darwin'
           - platform: 'macos-latest' # for Intel based macs.
+            target: 'x86_64-apple-darwin'
             args: '--target x86_64-apple-darwin'
           - platform: 'ubuntu-latest' # for Tauri v1 you could replace this with ubuntu-20.04.
+            target: 'x86_64-unknown-linux-gnu'
             args: '--target x86_64-unknown-linux-gnu'
           - platform: 'windows-latest'
+            target: 'x86_64-pc-windows-msvc'
             args: '--target x86_64-pc-windows-msvc'
           
     runs-on: ${{ matrix.settings.platform }}
@@ -98,3 +102,9 @@ jobs:
           prerelease: false
           args: ${{ env.TAURI_BUILD_ARGS }}
           tauriScript: "pnpm tauri"
+      - name: upload Tauri artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: risuai-${{ matrix.settings.target }}
+          path: src-tauri/target/${{ matrix.settings.target }}/release/bundle/**
+          if-no-files-found: error
