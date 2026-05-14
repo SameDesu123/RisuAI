@@ -1,4 +1,4 @@
-import { BaseDirectory, readFile, readDir, writeFile } from "@tauri-apps/plugin-fs";
+import { BaseDirectory, open as openFile, readFile, readDir, writeFile } from "@tauri-apps/plugin-fs";
 import localforage from "localforage";
 import { alertError, alertNormal, alertStore, alertWait, alertMd, alertConfirm } from "../alert";
 import { LocalWriter, forageStorage, requiresFullEncoderReload } from "../globalApi.svelte";
@@ -6,7 +6,7 @@ import { isTauri } from "src/ts/platform"
 import { decodeRisuSave, encodeRisuSaveLegacy } from "../storage/risuSave";
 import { getDatabase, setDatabaseLite } from "../storage/database.svelte";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { decryptBuffer, encryptBuffer, selectSingleFile, sleep, type SelectedFile } from "../util";
+import { decryptBuffer, encryptBuffer, selectSingleFileReference, sleep, type SelectedFileReference } from "../util";
 import { hubURL } from "../characterCards";
 import { language } from "src/lang";
 import { getColdStorageItem, listColdDataKeys, setColdStorageItem } from "../process/coldstorage.svelte";
@@ -425,28 +425,61 @@ export async function SavePartialLocalBackup(){
     }
 }
 
-export async function LoadLocalBackup(selectedFile?: SelectedFile | null){
+export async function LoadLocalBackup(selectedFile?: SelectedFileReference | null){
     try {
-        const file = selectedFile === undefined ? await selectSingleFile(['bin']) : selectedFile
+        const file = selectedFile === undefined ? await selectSingleFileReference(['bin']) : selectedFile
         if(!file){
             return
         }
 
-        await loadBackupFromBytes(file.data)
+        await loadBackupFromSelectedFile(file)
     } catch (error) {
         console.error(error);
         alertError('Failed, Is file corrupted?')
     }
 }
 
-async function loadBackupFromBytes(data: Uint8Array) {
-    const copied = new Uint8Array(data.byteLength)
-    copied.set(data)
-    await loadBackupFromStream(new Blob([copied]))
+async function loadBackupFromSelectedFile(file: SelectedFileReference) {
+    if(file.file){
+        await loadBackupFromBlob(file.file)
+        return
+    }
+
+    if(file.path){
+        await loadBackupFromTauriPath(file.path)
+    }
 }
 
-async function loadBackupFromStream(file: Blob) {
+async function loadBackupFromBlob(file: Blob) {
     const reader = file.stream().getReader();
+    await loadBackupFromChunks(async () => {
+        const { done, value } = await reader.read();
+        if(done){
+            return null
+        }
+        return value
+    }, file.size)
+}
+
+async function loadBackupFromTauriPath(path: string) {
+    const file = await openFile(path, { read: true });
+    try {
+        const fileInfo = await file.stat()
+        const chunkSize = 1024 * 1024
+        await loadBackupFromChunks(async () => {
+            const buffer = new Uint8Array(chunkSize)
+            const bytesRead = await file.read(buffer)
+            if(bytesRead === null){
+                return null
+            }
+            return buffer.slice(0, bytesRead)
+        }, fileInfo.size)
+    } finally {
+        await file.close()
+    }
+}
+
+async function loadBackupFromChunks(readNextChunk: () => Promise<Uint8Array | null>, fileSize: number) {
     const encryptionMeta:{
         type: 'none' | 'account';
         time?: number;
@@ -457,13 +490,13 @@ async function loadBackupFromStream(file: Blob) {
     let remainingBuffer = new Uint8Array();
 
     while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
+        const value = await readNextChunk();
+        if (!value) {
             break;
         }
 
         bytesRead += value.length;
-        const progress = ((bytesRead / file.size) * 100).toFixed(2);
+        const progress = fileSize > 0 ? ((bytesRead / fileSize) * 100).toFixed(2) : '100.00';
         alertWait(`Loading local Backup... (${progress}%)`);
 
         const newBuffer = new Uint8Array(remainingBuffer.length + value.length);

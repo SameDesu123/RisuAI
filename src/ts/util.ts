@@ -50,6 +50,12 @@ export type SelectedFile = {
     data: Uint8Array
 }
 
+export type SelectedFileReference = {
+    name: string
+    file?: File
+    path?: string
+}
+
 const FILE_DIALOG_FOCUS_DELAY = 300
 
 function normalizeFileExtension(ext: string) {
@@ -57,7 +63,7 @@ function normalizeFileExtension(ext: string) {
 }
 
 function getDialogFilters(ext: string[]) {
-    if(ext[0] === '*'){
+    if(getDatabase().allowAllExtentionFiles || ext[0] === '*'){
         return undefined
     }
 
@@ -86,6 +92,28 @@ export async function selectSingleFile(ext:string[]):Promise<SelectedFile|null>{
         return null
     } else {
         return {name: await basename(selected),data:await readFile(selected)}
+    }
+}
+
+export async function selectSingleFileReference(ext:string[]):Promise<SelectedFileReference|null>{
+    if(!isTauri){
+        const v = await selectFileByDom(ext, 'single')
+        const file = v[0]
+        if(!file){
+            return null
+        }
+        return {name: file.name, file}
+    }
+
+    const selected = await open({
+        filters: getDialogFilters(ext)
+    });
+    if (Array.isArray(selected)) {
+        return null
+    } else if (selected === null) {
+        return null
+    } else {
+        return {name: await basename(selected), path: selected}
     }
 }
 
