@@ -30,6 +30,12 @@
         "$DOCUMENT/**/*",
         "$DOWNLOAD/*",
         "$DOWNLOAD/**/*",
+        "/mnt/*",
+        "/mnt/**/*",
+        "/media/*",
+        "/media/**/*",
+        "/run/media/*",
+        "/run/media/**/*",
         "/data/**/*",
         "$RESOURCE/*"
       ]
