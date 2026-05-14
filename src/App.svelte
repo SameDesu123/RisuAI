@@ -70,9 +70,10 @@
             DBState.db.modules.push(module)
             alertNormal(language.successImport)
         } else {
+            const data = new Uint8Array(await file.arrayBuffer())
             await importCharacterProcess({
                 name: file.name,
-                data: file
+                data
             })
             checkCharOrder()
         }
