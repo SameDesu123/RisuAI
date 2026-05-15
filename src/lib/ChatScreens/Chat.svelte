@@ -4,7 +4,6 @@
     import { ColorSchemeTypeStore } from "src/ts/gui/colorscheme"
     import { longpress } from "src/ts/gui/longtouch"
     import { getModelInfo } from "src/ts/model/modellist"
-    import { doingChat } from "src/ts/process/index.svelte"
     import { runLuaButtonTrigger } from 'src/ts/process/scriptings'
     import { risuChatParser } from "src/ts/process/scripts"
     import { runTrigger } from 'src/ts/process/triggers'
@@ -26,6 +25,8 @@
     import PopupButton from "../UI/PopupButton.svelte";
     import PartialEditController from './PartialEditController.svelte';
     import { getLLMCache, setLLMCache } from "../../ts/translator/translator"
+
+    type StreamingDisplayOptimizationMode = 'off'|'balanced'|'strong'
 
     let translating = $state(false)
     let editMode = $state(false)
@@ -54,6 +55,9 @@
         totalPages?: number;
         isComment?: boolean;
         disabled?: boolean | 'allBefore';
+        isOptimizedStreamingMessage?: boolean;
+        streamingOptimizationMode?: StreamingDisplayOptimizationMode;
+        rawStreamingText?: string;
     }
 
     let {
@@ -76,11 +80,24 @@
         totalPages = 1,
         isComment = false,
         disabled = false,
+        isOptimizedStreamingMessage = false,
+        streamingOptimizationMode = 'off',
+        rawStreamingText = message,
     }: Props = $props();
 
     let msgDisplay = $state('')
     let translated = $state(false)
     let partialEditEnabled = $state(true)
+
+    export function updateStreamingDisplay(state: {
+        isOptimizedStreamingMessage: boolean
+        streamingOptimizationMode: StreamingDisplayOptimizationMode
+        rawStreamingText: string
+    }){
+        isOptimizedStreamingMessage = state.isOptimizedStreamingMessage
+        streamingOptimizationMode = state.streamingOptimizationMode
+        rawStreamingText = state.rawStreamingText
+    }
 
     async function rm(e:MouseEvent, rec?:boolean){
         if(e.shiftKey){
@@ -176,21 +193,20 @@
 
 
     let blankMessage = $derived((message === '{{none}}' || message === '{{blank}}' || message === '') && idx === -1 || isComment)
-    let activePerformanceStreamingMessage = $derived.by(() => {
-        const performanceMode = DBState.db.largeChatPerformanceMode ?? 'off'
-        const chat = DBState.db.characters?.[selIdState.selId]?.chats?.[DBState.db.characters?.[selIdState.selId]?.chatPage]
-        return performanceMode !== 'off'
-            && $doingChat
-            && chat?.isStreaming
-            && idx === (chat?.message?.length ?? 0) - 1
-            && role === 'char'
-    })
-    let displayMessage = $derived.by(() => {
-        if(activePerformanceStreamingMessage){
-            return DBState.db.characters?.[selIdState.selId]?.chats?.[DBState.db.characters?.[selIdState.selId]?.chatPage]?.message?.[idx]?.data ?? message
-        }
-        return message
-    })
+    let displayMessage = $derived(isOptimizedStreamingMessage ? rawStreamingText : message)
+    let renderRawStreaming = $derived(isOptimizedStreamingMessage && streamingOptimizationMode === 'strong')
+    let displayParseCacheKey = $derived.by(() => [
+        DBState.db.hideAllImages ? 'hide-images' : 'show-images',
+        DBState.db.assetWidth ?? '',
+        DBState.db.legacyMediaFindings ? 'legacy-media' : 'smart-media',
+        DBState.db.assetMaxDifference ?? '',
+        DBState.db.customQuotes ? 'custom-quotes' : 'default-quotes',
+        DBState.db.customQuotesData?.join('\u001f') ?? '',
+        DBState.db.unformatQuotes ? 'unformat-quotes' : 'format-quotes',
+        DBState.db.blockquoteStyling ? 'blockquote-styled' : 'blockquote-inline',
+        DBState.db.dynamicAssets ? 'dynamic-assets' : 'static-assets',
+        DBState.db.dynamicAssetsEditDisplay ? 'dynamic-display-assets' : 'normal-display-assets',
+    ].join('|'))
 
     $effect.pre(() => {
         displaya(displayMessage)
@@ -200,7 +216,7 @@
 
     onMount(()=>{
         unsubscribers.push(ReloadGUIPointer.subscribe((v) => {
-            displaya(message)
+            displaya(displayMessage)
         }))
     })
 
@@ -410,6 +426,7 @@
         </div>
     {:else}
         {@const chatReloadPointer = $ReloadGUIPointer + ($ReloadChatPointer[idx] ?? 0)}
+        {@const parseCacheKeyExtra = `${chatReloadPointer}|${displayParseCacheKey}`}
         {@const totalLengthPointer = (idx > totalLength - 6) ? totalLength : 0}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -439,7 +456,9 @@
                     bind:translated={translated}
                     bind:translating={translating}
                     bind:retranslate={retranslate}
-                    parseCacheKeyExtra={chatReloadPointer} />
+                    {parseCacheKeyExtra}
+                    {renderRawStreaming}
+                    {rawStreamingText} />
             {/key}
             {#if idx >= 0 && !editMode && partialEditEnabled && (DBState.db.enableBlockPartialEdit || DBState.db.enableDragPartialEdit)}
                 <PartialEditController

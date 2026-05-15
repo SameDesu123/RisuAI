@@ -40,7 +40,15 @@
 
     let chatBody: HTMLDivElement;
     let hashes: Set<number> = new Set();
-    let mountInstances: Map<number, {}> = new Map();
+    type StreamingDisplayOptimizationMode = 'off'|'balanced'|'strong'
+    type ChatInstance = {
+        updateStreamingDisplay?: (state: {
+            isOptimizedStreamingMessage: boolean
+            streamingOptimizationMode: StreamingDisplayOptimizationMode
+            rawStreamingText: string
+        }) => void
+    }
+    let mountInstances: Map<number, ChatInstance> = new Map();
 
     //Non-cryptographic hash function to generate a unique hash for each message
     function hashCode(str:string):number {
@@ -68,6 +76,11 @@
         const simpleChar = createSimpleCharacter(currentCharacter);
         let loadStart = messages.length - 1
         let loadEnd = messages.length - loadPages
+        const performanceMode = DBState.db.streamingDisplayOptimizationMode ?? 'off';
+        const currentChat = currentCharacter.chats?.[currentCharacter.chatPage]
+        const activeStreamingIndex = performanceMode !== 'off' && $doingChat && currentChat?.isStreaming
+            ? messages.length - 1
+            : -1
 
         if(chatFoldedStateMessageIndex.index !== -1){
             loadStart = chatFoldedStateMessageIndex.index
@@ -81,12 +94,7 @@
             const message = messages[i];
             const messageLargePortrait = message.role === 'user' ? (userIconPortrait ?? false) : ((currentCharacter as character).largePortrait ?? false);
             const reloadPointer = reloadPointerMap[i] ?? 0;
-            const performanceMode = DBState.db.largeChatPerformanceMode ?? 'off';
-            const activeStreamingMessage = performanceMode !== 'off'
-                && $doingChat
-                && currentCharacter.chats?.[currentCharacter.chatPage]?.isStreaming
-                && i === messages.length - 1
-                && message.role === 'char';
+            const activeStreamingMessage = i === activeStreamingIndex && message.role === 'char';
             const hashMessageData = activeStreamingMessage ? '' : message.data;
             let hashd = hashMessageData + (message.chatId ?? '') + i.toString() + messageLargePortrait.toString() + message.disabled?.toString() + reloadPointer.toString();
             const currentHash = hashCode(hashd);
@@ -113,6 +121,9 @@
                         name: message.role === 'user' ? currentUsername : currentCharacter.name,
                         isComment: message.isComment ?? false,
                         disabled: message.disabled ?? false,
+                        isOptimizedStreamingMessage: activeStreamingMessage,
+                        streamingOptimizationMode: performanceMode,
+                        rawStreamingText: message.data,
                     },
 
                 })
@@ -124,6 +135,13 @@
                 else{
                     chatBody.prepend(b);
                 }
+            }
+            else{
+                mountInstances.get(currentHash)?.updateStreamingDisplay?.({
+                    isOptimizedStreamingMessage: activeStreamingMessage,
+                    streamingOptimizationMode: performanceMode,
+                    rawStreamingText: message.data,
+                })
             }
             nextHash = currentHash;
             
@@ -148,7 +166,7 @@
     };
 
     onDestroy(() => {
-        if((DBState.db.largeChatPerformanceMode ?? 'off') === 'off'){
+        if((DBState.db.streamingDisplayOptimizationMode ?? 'off') === 'off'){
             console.log('Unmounting Chats');
         }
         hashes.clear();
@@ -181,7 +199,7 @@
     let previousChatRoomId: string | null = null;
 
     $effect(() => {
-        if((DBState.db.largeChatPerformanceMode ?? 'off') === 'off'){
+        if((DBState.db.streamingDisplayOptimizationMode ?? 'off') === 'off'){
             console.log('Updating Chats');
         }
         void $ReloadChatPointer; // Make $effect track ReloadChatPointer changes

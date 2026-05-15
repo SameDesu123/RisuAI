@@ -133,18 +133,18 @@ export const advancedSettingsItems: SettingItem[] = [
     { id: 'adv.autoCont', type: 'check', labelKey: 'autoContinueChat', bindKey: 'autoContinueChat', helpKey: 'autoContinueChat', classes: 'mt-4' },
     { id: 'adv.remIncomp', type: 'check', labelKey: 'removeIncompleteResponse', bindKey: 'removeIncompleteResponse', classes: 'mt-4' },
     {
-        id: 'adv.largeChatPerf',
+        id: 'adv.streamingDisplayOpt',
         type: 'segmented',
-        labelKey: 'largeChatPerformanceMode',
-        bindKey: 'largeChatPerformanceMode',
-        helpKey: 'largeChatPerformanceMode',
+        labelKey: 'streamingDisplayOptimizationMode',
+        bindKey: 'streamingDisplayOptimizationMode',
+        helpKey: 'streamingDisplayOptimizationMode',
         showExperimental: true,
         classes: 'mt-4',
         options: {
             segmentOptions: [
-                { value: 'off', labelKey: 'largeChatPerformanceOff' },
-                { value: 'balanced', labelKey: 'largeChatPerformanceBalanced' },
-                { value: 'strong', labelKey: 'largeChatPerformanceStrong' }
+                { value: 'off', labelKey: 'streamingDisplayOptimizationOff' },
+                { value: 'balanced', labelKey: 'streamingDisplayOptimizationBalanced' },
+                { value: 'strong', labelKey: 'streamingDisplayOptimizationStrong' }
             ]
         }
     },

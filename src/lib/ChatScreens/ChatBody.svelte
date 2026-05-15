@@ -27,8 +27,7 @@
 
 <script lang="ts">
     import isEqual from "lodash/isEqual"
-    import { doingChat } from "src/ts/process/index.svelte"
-    import { DBState, selectedCharID } from 'src/ts/stores.svelte'
+    import { DBState } from 'src/ts/stores.svelte'
     import { sleep } from "src/ts/util"
     import { alertError } from "../../ts/alert"
     import { addMetadataToElement, getDistance, ParseMarkdown, postTranslationParse, trimMarkdown, type CbsConditions, type simpleCharacterArgument } from "../../ts/parser/parser.svelte"
@@ -50,6 +49,8 @@
         bodyRoot?: HTMLElement|null
         modelShortName: string
         parseCacheKeyExtra?: string | number
+        renderRawStreaming?: boolean
+        rawStreamingText?: string
     }
 
     let {
@@ -64,6 +65,8 @@
         bodyRoot,
         modelShortName = '',
         parseCacheKeyExtra = '',
+        renderRawStreaming = false,
+        rawStreamingText = '',
     }: Props =  $props()
 
     // svelte-ignore non_reactive_update
@@ -106,25 +109,7 @@
         ].join('|')
     }
 
-    let rawStreamingText = $derived.by(() => {
-        const charId = $selectedCharID
-        const char = DBState.db.characters?.[charId]
-        const chat = char?.chats?.[char.chatPage]
-        return chat?.message?.[idx]?.data ?? msgDisplay ?? ''
-    })
-
-    let renderRawStreaming = $derived.by(() => {
-        const charId = $selectedCharID
-        const char = DBState.db.characters?.[charId]
-        const chat = char?.chats?.[char.chatPage]
-        return (DBState.db.largeChatPerformanceMode ?? 'off') === 'strong'
-            && $doingChat
-            && chat?.isStreaming
-            && idx === (chat?.message?.length ?? 0) - 1
-            && role === 'char'
-            && !translated
-            && !retranslate
-    })
+    let shouldRenderRawStreaming = $derived(renderRawStreaming && !translated && !retranslate)
 
     const markParsing = async (data: string, charArg: string | simpleCharacterArgument, chatID: number, tries?:number) => {
         // track 'translated' and 'retranslate' state
@@ -321,10 +306,13 @@
         }
     }
 
-    let markParsingResult = $derived.by(() => markParsing(msgDisplay, character, idx))
+    let markParsingResult = $derived.by(() => {
+        parseCacheKeyExtra
+        return markParsing(msgDisplay, character, idx)
+    })
 
     $effect(() => {
-        if(renderRawStreaming){
+        if(shouldRenderRawStreaming){
             return
         }
         markParsingResult
@@ -333,7 +321,7 @@
     })
 </script>
 
-{#if renderRawStreaming}
+{#if shouldRenderRawStreaming}
     <span class="whitespace-pre-wrap">{rawStreamingText}</span>
 {:else}
     {#await markParsingResult}

@@ -113,7 +113,7 @@ export async function processScriptFull(char:character|groupChat|simpleCharacter
                 })
     
                 data = d?.displayData ?? data
-                if((db.largeChatPerformanceMode ?? 'off') === 'off'){
+                if((db.streamingDisplayOptimizationMode ?? 'off') === 'off'){
                     console.log('Trigger time', performance.now() - perf)
                 }
             }

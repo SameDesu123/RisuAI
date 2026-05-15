@@ -130,8 +130,12 @@ export const languageEnglish = {
         forcePlainFetch: "If enabled, it will use browser fetch api instead of native http request. this can cause CORS errors.",
         forcePluginFetchStreaming: "If enabled, OpenAI-compatible fetch requests made by plugins are streamed in the background, then returned to the plugin as a normal non-streaming response.",
         streamingDisplayOptimization: "If enabled, streamed chat text is processed and redrawn at a limited frame rate instead of every received chunk. This can reduce mobile overhead when regex scripts or markdown rendering are expensive.",
-        largeChatPerformanceMode:
-            "Experimental display optimization for very long chats. Balanced batches streaming UI updates; Strong also shows the active streaming message as raw text until completion. Off keeps the existing behavior and hot-path logs unchanged.",
+        streamingDisplayOptimizationMode:
+            "Reduces display lag when long responses are streamed with heavy post-processing, such as regex-based scripts. This can help on mobile or low-end devices.\n\n" +
+            "Off keeps the normal behavior, but post-processing runs on every token and can add significant overhead.\n\n" +
+            "Balanced lowers the load by trying post-processing only at short intervals, about every 0.125 seconds.\n\n" +
+            "Strong is similar to Balanced, but skips post-processing while streaming and runs it only once after the stream finishes.\n\n" +
+            "This is an experimental feature, and some features may behave unexpectedly because of it.",
         autoFillRequestURL: "If enabled, it will autofill request url to match the current model.",
         localNetworkModeDesc:
             "Routes private/LAN model URLs through the local runtime path instead of browser direct fetch.\n\n" +
@@ -1579,10 +1583,10 @@ export const languageEnglish = {
     forcePluginFetchStreaming: "Force Plugin Fetch Streaming",
     streamingDisplayOptimization: "Streaming Display Optimization",
     streamingDisplayOptimizationLevel: "Optimization Strength",
-    largeChatPerformanceMode: "Large Chat Performance Mode",
-    largeChatPerformanceOff: "Off",
-    largeChatPerformanceBalanced: "Balanced",
-    largeChatPerformanceStrong: "Strong",
+    streamingDisplayOptimizationMode: "Streaming Display Optimization",
+    streamingDisplayOptimizationOff: "Off",
+    streamingDisplayOptimizationBalanced: "Balanced",
+    streamingDisplayOptimizationStrong: "Strong",
     veryLow: "Very Low",
     low: "Low",
     medium: "Medium",
