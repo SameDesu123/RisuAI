@@ -3,6 +3,12 @@ import {
     createWorkspaceDataFile,
     createWorkspaceManifest,
     getWorkspaceBotFilePath,
+    getWorkspaceChatFilePath,
+    getWorkspaceChatIndexPath,
+    getWorkspaceLorebookFilePath,
+    getWorkspaceLorebookIndexPath,
+    getWorkspaceRegexFilePath,
+    getWorkspaceRegexIndexPath,
     joinWorkspacePath,
     workspaceDirectoryNames,
     workspaceFileNames,
@@ -32,6 +38,12 @@ const rootDatabaseKeys = new Set([
     "modules",
     "plugins",
     "pluginCustomStorage"
+])
+
+const splitBotKeys = new Set([
+    "chats",
+    "customscript",
+    "globalLore"
 ])
 
 export async function writeWorkspaceDatabase(
@@ -118,13 +130,14 @@ export async function writeWorkspaceDatabase(
         const botId = getWorkspaceCharacterId(character, i)
         const path = getWorkspaceBotFilePath(botId)
 
+        await writeWorkspaceBotResources(workspaceRoot, botId, character, now)
         await writeWorkspaceJsonFile(
             workspaceRoot,
             path,
             createWorkspaceDataFile({
                 format: "risu.bot",
                 id: botId,
-                data: character,
+                data: getWorkspaceBotData(character),
                 now
             })
         )
@@ -170,7 +183,9 @@ export async function readWorkspaceDatabase(
 
     for(const item of botIndex.data.items){
         const botFile = await readWorkspaceDataFile<any>(workspaceRoot, item.path, "risu.bot")
-        ;(database as any).characters.push(botFile.data)
+        const bot = botFile.data
+        await readWorkspaceBotResources(workspaceRoot, item.id, bot)
+        ;(database as any).characters.push(bot)
     }
 
     const botPresets = await readOptionalWorkspaceDataFile<any[]>(workspaceRoot, manifest.paths.botPresets, "risu.botPresets")
@@ -191,6 +206,138 @@ export async function readWorkspaceManifest(workspaceRoot: FileSystemDirectoryHa
     assertWorkspaceFormat(manifest, "risu.workspace")
     assertWorkspaceVersion(manifest)
     return manifest
+}
+
+async function writeWorkspaceBotResources(workspaceRoot: FileSystemDirectoryHandle, botId: string, character: any, now: number) {
+    await writeWorkspaceBotResourceList(workspaceRoot, {
+        botId,
+        values: Array.isArray(character?.chats) ? character.chats : [],
+        indexPath: getWorkspaceChatIndexPath(botId),
+        getFilePath: getWorkspaceChatFilePath,
+        format: "risu.chat",
+        fallbackPrefix: "chat",
+        now
+    })
+
+    await writeWorkspaceBotResourceList(workspaceRoot, {
+        botId,
+        values: Array.isArray(character?.customscript) ? character.customscript : [],
+        indexPath: getWorkspaceRegexIndexPath(botId),
+        getFilePath: getWorkspaceRegexFilePath,
+        format: "risu.regex",
+        fallbackPrefix: "regex",
+        now
+    })
+
+    await writeWorkspaceBotResourceList(workspaceRoot, {
+        botId,
+        values: Array.isArray(character?.globalLore) ? character.globalLore : [],
+        indexPath: getWorkspaceLorebookIndexPath(botId),
+        getFilePath: getWorkspaceLorebookFilePath,
+        format: "risu.lorebook",
+        fallbackPrefix: "lorebook",
+        now
+    })
+}
+
+async function writeWorkspaceBotResourceList(argWorkspaceRoot: FileSystemDirectoryHandle, arg: {
+    botId: string
+    values: any[]
+    indexPath: string
+    getFilePath: (botId: string, id: string) => string
+    format: "risu.chat" | "risu.regex" | "risu.lorebook"
+    fallbackPrefix: string
+    now: number
+}) {
+    const items: WorkspaceIndexItem[] = []
+
+    for(let i = 0; i < arg.values.length; i++){
+        const value = arg.values[i]
+        const id = getWorkspaceResourceId(value, i, arg.fallbackPrefix)
+        const path = arg.getFilePath(arg.botId, id)
+
+        await writeWorkspaceJsonFile(
+            argWorkspaceRoot,
+            path,
+            createWorkspaceDataFile({
+                format: arg.format,
+                id,
+                data: value,
+                now: arg.now
+            })
+        )
+
+        items.push({
+            id,
+            name: getWorkspaceResourceName(value),
+            path,
+            updatedAt: arg.now
+        })
+    }
+
+    await writeWorkspaceJsonFile(
+        argWorkspaceRoot,
+        arg.indexPath,
+        createWorkspaceDataFile({
+            format: getIndexFormatForResourceFormat(arg.format),
+            data: { items },
+            now: arg.now
+        })
+    )
+}
+
+async function readWorkspaceBotResources(workspaceRoot: FileSystemDirectoryHandle, botId: string, bot: any) {
+    bot.chats = await readWorkspaceBotResourceList(workspaceRoot, {
+        indexPath: getWorkspaceChatIndexPath(botId),
+        format: "risu.chat",
+        fallback: Array.isArray(bot.chats) ? bot.chats : []
+    })
+
+    bot.customscript = await readWorkspaceBotResourceList(workspaceRoot, {
+        indexPath: getWorkspaceRegexIndexPath(botId),
+        format: "risu.regex",
+        fallback: Array.isArray(bot.customscript) ? bot.customscript : []
+    })
+
+    bot.globalLore = await readWorkspaceBotResourceList(workspaceRoot, {
+        indexPath: getWorkspaceLorebookIndexPath(botId),
+        format: "risu.lorebook",
+        fallback: Array.isArray(bot.globalLore) ? bot.globalLore : []
+    })
+}
+
+async function readWorkspaceBotResourceList(workspaceRoot: FileSystemDirectoryHandle, arg: {
+    indexPath: string
+    format: "risu.chat" | "risu.regex" | "risu.lorebook"
+    fallback: any[]
+}) {
+    const index = await readOptionalWorkspaceDataFile<{ items: WorkspaceIndexItem[] }>(
+        workspaceRoot,
+        arg.indexPath,
+        getIndexFormatForResourceFormat(arg.format)
+    )
+
+    if(!index){
+        return arg.fallback
+    }
+
+    const values: any[] = []
+    for(const item of index.data.items){
+        const file = await readWorkspaceDataFile<any>(workspaceRoot, item.path, arg.format)
+        values.push(file.data)
+    }
+
+    return values
+}
+
+function getIndexFormatForResourceFormat(format: "risu.chat" | "risu.regex" | "risu.lorebook") {
+    if(format === "risu.chat"){
+        return "risu.index.chats"
+    }
+    if(format === "risu.regex"){
+        return "risu.index.regex"
+    }
+    return "risu.index.lorebooks"
 }
 
 async function readWorkspaceBotsIndex(
@@ -279,6 +426,17 @@ function getWorkspaceRootSettings(database: Database): Record<string, unknown> {
     return rootSettings
 }
 
+function getWorkspaceBotData(character: any): Record<string, unknown> {
+    const botData: Record<string, unknown> = {}
+    for(const key of Object.keys(character ?? {})){
+        if(splitBotKeys.has(key)){
+            continue
+        }
+        botData[key] = character[key]
+    }
+    return botData
+}
+
 function getWorkspaceCharacterId(character: any, index: number) {
     if(typeof character?.chaId === "string" && character.chaId.length > 0){
         return character.chaId
@@ -295,6 +453,32 @@ function getWorkspaceCharacterName(character: any) {
     }
     if(typeof character?.nickname === "string" && character.nickname.length > 0){
         return character.nickname
+    }
+    return undefined
+}
+
+function getWorkspaceResourceId(value: any, index: number, fallbackPrefix: string) {
+    if(typeof value?.id === "string" && value.id.length > 0){
+        return value.id
+    }
+    if(typeof value?.chatId === "string" && value.chatId.length > 0){
+        return value.chatId
+    }
+    if(typeof value?.name === "string" && value.name.length > 0){
+        return `${fallbackPrefix}_${index}_${value.name}`
+    }
+    if(typeof value?.comment === "string" && value.comment.length > 0){
+        return `${fallbackPrefix}_${index}_${value.comment}`
+    }
+    return `${fallbackPrefix}_${index}`
+}
+
+function getWorkspaceResourceName(value: any) {
+    if(typeof value?.name === "string" && value.name.length > 0){
+        return value.name
+    }
+    if(typeof value?.comment === "string" && value.comment.length > 0){
+        return value.comment
     }
     return undefined
 }
