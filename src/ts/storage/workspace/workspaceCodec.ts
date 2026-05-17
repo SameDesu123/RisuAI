@@ -9,6 +9,8 @@ import {
     getWorkspaceChatIndexPath,
     getWorkspaceLorebookFilePath,
     getWorkspaceLorebookIndexPath,
+    getWorkspacePluginFilePath,
+    getWorkspacePluginStorageFilePath,
     getWorkspaceRegexFilePath,
     getWorkspaceRegexIndexPath,
     getWorkspaceScriptBackgroundFilePath,
@@ -178,25 +180,8 @@ export async function writeWorkspaceDatabase(
         })
     )
 
-    await writeWorkspaceJsonFile(
-        workspaceRoot,
-        manifest.paths.plugins,
-        createWorkspaceDataFile({
-            format: "risu.plugins",
-            data: (database as any).plugins ?? [],
-            now
-        })
-    )
-
-    await writeWorkspaceJsonFile(
-        workspaceRoot,
-        manifest.paths.pluginStorage,
-        createWorkspaceDataFile({
-            format: "risu.pluginStorage",
-            data: (database as any).pluginCustomStorage ?? {},
-            now
-        })
-    )
+    await writeWorkspacePlugins(workspaceRoot, manifest, (database as any).plugins ?? [], now)
+    await writeWorkspacePluginStorage(workspaceRoot, manifest, (database as any).pluginCustomStorage ?? {}, now)
 
     const characters = Array.isArray((database as any).characters) ? (database as any).characters : []
     const botIndexItems: WorkspaceIndexItem[] = []
@@ -266,13 +251,11 @@ export async function readWorkspaceDatabase(
 
     const botPresets = await readOptionalWorkspaceDataFile<any[]>(workspaceRoot, manifest.paths.botPresets, "risu.botPresets")
     const modules = await readOptionalWorkspaceDataFile<any[]>(workspaceRoot, manifest.paths.modules, "risu.modules")
-    const plugins = await readOptionalWorkspaceDataFile<any[]>(workspaceRoot, manifest.paths.plugins, "risu.plugins")
-    const pluginStorage = await readOptionalWorkspaceDataFile<Record<string, unknown>>(workspaceRoot, manifest.paths.pluginStorage, "risu.pluginStorage")
 
     ;(database as any).botPresets = botPresets?.data ?? []
     ;(database as any).modules = modules?.data ?? []
-    ;(database as any).plugins = plugins?.data ?? []
-    ;(database as any).pluginCustomStorage = pluginStorage?.data ?? {}
+    ;(database as any).plugins = await readWorkspacePlugins(workspaceRoot, manifest)
+    ;(database as any).pluginCustomStorage = await readWorkspacePluginStorage(workspaceRoot, manifest)
 
     return database
 }
@@ -282,6 +265,122 @@ export async function readWorkspaceManifest(workspaceRoot: FileSystemDirectoryHa
     assertWorkspaceFormat(manifest, "risu.workspace")
     assertWorkspaceVersion(manifest)
     return manifest
+}
+
+async function writeWorkspacePlugins(workspaceRoot: FileSystemDirectoryHandle, manifest: WorkspaceManifest, plugins: any[], now: number) {
+    const items: WorkspaceIndexItem[] = []
+    const values = Array.isArray(plugins) ? plugins : []
+
+    for(let i = 0; i < values.length; i++){
+        const plugin = values[i]
+        const id = getWorkspacePluginId(plugin, i)
+        const path = getWorkspacePluginFilePath(id)
+
+        await writeWorkspaceJsonFile(
+            workspaceRoot,
+            path,
+            createWorkspaceDataFile({
+                format: "risu.plugin",
+                id,
+                data: plugin,
+                now
+            })
+        )
+
+        items.push({
+            id,
+            name: getWorkspacePluginName(plugin),
+            path,
+            updatedAt: now
+        })
+    }
+
+    await writeWorkspaceJsonFile(
+        workspaceRoot,
+        manifest.paths.plugins,
+        createWorkspaceDataFile({
+            format: "risu.index.plugins",
+            data: { items },
+            now
+        })
+    )
+}
+
+async function readWorkspacePlugins(workspaceRoot: FileSystemDirectoryHandle, manifest: WorkspaceManifest) {
+    const index = await readOptionalWorkspaceDataFile<{ items: WorkspaceIndexItem[] }>(
+        workspaceRoot,
+        manifest.paths.plugins,
+        "risu.index.plugins"
+    )
+
+    if(!index){
+        const legacy = await readOptionalWorkspaceDataFile<any[]>(workspaceRoot, manifest.paths.plugins, "risu.plugins")
+        return legacy?.data ?? []
+    }
+
+    const plugins: any[] = []
+    for(const item of index.data.items){
+        const file = await readWorkspaceDataFile<any>(workspaceRoot, item.path, "risu.plugin")
+        plugins.push(file.data)
+    }
+
+    return plugins
+}
+
+async function writeWorkspacePluginStorage(workspaceRoot: FileSystemDirectoryHandle, manifest: WorkspaceManifest, pluginStorage: Record<string, unknown>, now: number) {
+    const storage = isPlainObject(pluginStorage) ? pluginStorage : {}
+    const items: WorkspaceIndexItem[] = []
+
+    for(const pluginId of Object.keys(storage)){
+        const path = getWorkspacePluginStorageFilePath(pluginId)
+        await writeWorkspaceJsonFile(
+            workspaceRoot,
+            path,
+            createWorkspaceDataFile({
+                format: "risu.pluginStorage.entry",
+                id: pluginId,
+                data: storage[pluginId],
+                now
+            })
+        )
+
+        items.push({
+            id: pluginId,
+            path,
+            updatedAt: now
+        })
+    }
+
+    await writeWorkspaceJsonFile(
+        workspaceRoot,
+        manifest.paths.pluginStorage,
+        createWorkspaceDataFile({
+            format: "risu.index.pluginStorage",
+            data: { items },
+            now
+        })
+    )
+}
+
+async function readWorkspacePluginStorage(workspaceRoot: FileSystemDirectoryHandle, manifest: WorkspaceManifest) {
+    const index = await readOptionalWorkspaceDataFile<{ items: WorkspaceIndexItem[] }>(
+        workspaceRoot,
+        manifest.paths.pluginStorage,
+        "risu.index.pluginStorage"
+    )
+
+    if(!index){
+        const legacy = await readOptionalWorkspaceDataFile<Record<string, unknown>>(workspaceRoot, manifest.paths.pluginStorage, "risu.pluginStorage")
+        return legacy?.data ?? {}
+    }
+
+    const storage: Record<string, unknown> = {}
+    for(const item of index.data.items){
+        const file = await readWorkspaceDataFile<unknown>(workspaceRoot, item.path, "risu.pluginStorage.entry")
+        storage[item.id] = file.data
+    }
+
+    return storage
 }
 
 async function writeWorkspaceBotResources(workspaceRoot: FileSystemDirectoryHandle, botId: string, character: any, now: number) {
@@ -628,6 +727,30 @@ function getWorkspaceResourceName(value: any) {
         return value.comment
     }
     return undefined
+}
+
+function getWorkspacePluginId(plugin: any, index: number) {
+    if(typeof plugin?.id === "string" && plugin.id.length > 0){
+        return plugin.id
+    }
+    if(typeof plugin?.name === "string" && plugin.name.length > 0){
+        return plugin.name
+    }
+    return `plugin_${index}`
+}
+
+function getWorkspacePluginName(plugin: any) {
+    if(typeof plugin?.name === "string" && plugin.name.length > 0){
+        return plugin.name
+    }
+    if(typeof plugin?.id === "string" && plugin.id.length > 0){
+        return plugin.id
+    }
+    return undefined
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return Boolean(value && typeof value === "object" && !Array.isArray(value))
 }
 
 async function ensureWorkspaceDirectories(workspaceRoot: FileSystemDirectoryHandle) {
