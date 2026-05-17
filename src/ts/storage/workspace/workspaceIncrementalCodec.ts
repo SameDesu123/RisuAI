@@ -10,6 +10,8 @@ import {
     getWorkspaceChatIndexPath,
     getWorkspaceLorebookFilePath,
     getWorkspaceLorebookIndexPath,
+    getWorkspacePluginFilePath,
+    getWorkspacePluginStorageFilePath,
     getWorkspaceRegexFilePath,
     getWorkspaceRegexIndexPath,
     getWorkspaceScriptBackgroundFilePath,
@@ -190,27 +192,11 @@ export async function writeWorkspaceDatabaseIncremental(
     }
 
     if(options.changes.plugins){
-        await writeWorkspaceJsonFile(
-            workspaceRoot,
-            manifest.paths.plugins,
-            createWorkspaceDataFile({
-                format: "risu.plugins",
-                data: (database as any).plugins ?? [],
-                now
-            })
-        )
+        await writeWorkspacePlugins(workspaceRoot, manifest, (database as any).plugins ?? [], now)
     }
 
     if(options.changes.pluginCustomStorage){
-        await writeWorkspaceJsonFile(
-            workspaceRoot,
-            manifest.paths.pluginStorage,
-            createWorkspaceDataFile({
-                format: "risu.pluginStorage",
-                data: (database as any).pluginCustomStorage ?? {},
-                now
-            })
-        )
+        await writeWorkspacePluginStorage(workspaceRoot, manifest, (database as any).pluginCustomStorage ?? {}, now)
     }
 
     await writeChangedWorkspaceChats(workspaceRoot, database, options.changes, now)
@@ -321,6 +307,80 @@ async function writeWorkspaceIndexes(
         createWorkspaceDataFile({
             format: "risu.index.bots",
             data: { items: botIndexItems },
+            now
+        })
+    )
+}
+
+async function writeWorkspacePlugins(workspaceRoot: FileSystemDirectoryHandle, manifest: WorkspaceManifest, plugins: any[], now: number) {
+    const items: WorkspaceIndexItem[] = []
+    const values = Array.isArray(plugins) ? plugins : []
+
+    for(let i = 0; i < values.length; i++){
+        const plugin = values[i]
+        const id = getWorkspacePluginId(plugin, i)
+        const path = getWorkspacePluginFilePath(id)
+
+        await writeWorkspaceJsonFile(
+            workspaceRoot,
+            path,
+            createWorkspaceDataFile({
+                format: "risu.plugin",
+                id,
+                data: plugin,
+                now
+            })
+        )
+
+        items.push({
+            id,
+            name: getWorkspacePluginName(plugin),
+            path,
+            updatedAt: now
+        })
+    }
+
+    await writeWorkspaceJsonFile(
+        workspaceRoot,
+        manifest.paths.plugins,
+        createWorkspaceDataFile({
+            format: "risu.index.plugins",
+            data: { items },
+            now
+        })
+    )
+}
+
+async function writeWorkspacePluginStorage(workspaceRoot: FileSystemDirectoryHandle, manifest: WorkspaceManifest, pluginStorage: Record<string, unknown>, now: number) {
+    const storage = isPlainObject(pluginStorage) ? pluginStorage : {}
+    const items: WorkspaceIndexItem[] = []
+
+    for(const pluginId of Object.keys(storage)){
+        const path = getWorkspacePluginStorageFilePath(pluginId)
+        await writeWorkspaceJsonFile(
+            workspaceRoot,
+            path,
+            createWorkspaceDataFile({
+                format: "risu.pluginStorage.entry",
+                id: pluginId,
+                data: storage[pluginId],
+                now
+            })
+        )
+
+        items.push({
+            id: pluginId,
+            path,
+            updatedAt: now
+        })
+    }
+
+    await writeWorkspaceJsonFile(
+        workspaceRoot,
+        manifest.paths.pluginStorage,
+        createWorkspaceDataFile({
+            format: "risu.index.pluginStorage",
+            data: { items },
             now
         })
     )
@@ -776,6 +836,30 @@ function getWorkspaceResourceName(value: any) {
         return value.comment
     }
     return undefined
+}
+
+function getWorkspacePluginId(plugin: any, index: number) {
+    if(typeof plugin?.id === "string" && plugin.id.length > 0){
+        return plugin.id
+    }
+    if(typeof plugin?.name === "string" && plugin.name.length > 0){
+        return plugin.name
+    }
+    return `plugin_${index}`
+}
+
+function getWorkspacePluginName(plugin: any) {
+    if(typeof plugin?.name === "string" && plugin.name.length > 0){
+        return plugin.name
+    }
+    if(typeof plugin?.id === "string" && plugin.id.length > 0){
+        return plugin.id
+    }
+    return undefined
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return Boolean(value && typeof value === "object" && !Array.isArray(value))
 }
 
 async function ensureWorkspaceDirectories(workspaceRoot: FileSystemDirectoryHandle) {
