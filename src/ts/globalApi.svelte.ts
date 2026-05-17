@@ -64,6 +64,20 @@ interface fetchLog {
 
 let fetchLog: fetchLog[] = []
 
+type WorkspaceDirectChangeTracker = toSaveType & {
+    regex?: [string, string][]
+    regexIndex?: string[]
+    trigger?: [string, string][]
+    triggerIndex?: string[]
+    lorebook?: [string, string][]
+    lorebookIndex?: string[]
+    asset?: string[]
+    tts?: string[]
+    scriptBackground?: string[]
+    scriptVirtual?: string[]
+    advanced?: string[]
+}
+
 export async function downloadFile(name: string, dat: Uint8Array | ArrayBuffer | string) {
     if (typeof (dat) === 'string') {
         dat = Buffer.from(dat, 'utf-8')
@@ -312,7 +326,7 @@ export async function saveDb() {
         }
     }
 
-    const changeTracker: toSaveType = {
+    const changeTracker: WorkspaceDirectChangeTracker = {
         root: false,
         character: [],
         chat: [],
@@ -349,6 +363,77 @@ export async function saveDb() {
         let rootWatcherReady = false
         let characterWatcherReadyFor = ''
         let chatWatcherReadyFor = ''
+        let assetWatcherReadyFor = ''
+        let ttsWatcherReadyFor = ''
+        let backgroundWatcherReadyFor = ''
+        let virtualScriptWatcherReadyFor = ''
+        let advancedWatcherReadyFor = ''
+        const regexSignatures = new Map<string, Map<string, string>>()
+        const triggerSignatures = new Map<string, Map<string, string>>()
+        const lorebookSignatures = new Map<string, Map<string, string>>()
+
+        const workspaceAssetKeys = [
+            'image',
+            'emotionImages',
+            'sdData',
+            'additionalAssets',
+            'ccAssets',
+            'largePortrait',
+            'inlayViewScreen',
+            'prebuiltAssetCommand',
+            'prebuiltAssetStyle',
+            'prebuiltAssetExclude',
+        ]
+
+        const workspaceTtsKeys = [
+            'ttsMode',
+            'ttsSpeech',
+            'voicevoxConfig',
+            'naittsConfig',
+            'gptSoVitsConfig',
+            'fishSpeechConfig',
+            'ttsReadOnlyQuoted',
+            'oaiVoice',
+            'oaiTTSConfig',
+            'hfTTS',
+            'vits',
+        ]
+
+        const workspaceBackgroundKeys = [
+            'backgroundHTML',
+            'backgroundCSS',
+        ]
+
+        const workspaceVirtualScriptKeys = [
+            'virtualscript',
+            'scriptstate',
+        ]
+
+        const workspaceAdvancedKeys = [
+            'utilityBot',
+            'loreSettings',
+            'loreExt',
+            'additionalData',
+            'realmId',
+            'imported',
+            'trashTime',
+            'private',
+            'source',
+            'creation_date',
+            'modification_date',
+            'defaultVariables',
+            'lowLevelAccess',
+            'hideChatIcon',
+            'lastInteraction',
+            'translatorNote',
+            'doNotChangeSeperateModels',
+            'escapeOutput',
+            'modules',
+            'coldstorage',
+            'coldStoragedChats',
+            'depth_prompt',
+            'lorePlus',
+        ]
 
         const debounceTime = 500; // 500 milliseconds
         let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -364,6 +449,94 @@ export async function saveDb() {
             saveTimeout = setTimeout(() => {
                 changed = true;
             }, debounceTime);
+        }
+
+        function snapshotKeys(source: any, keys: readonly string[]) {
+            for (const key of keys) {
+                $state.snapshot(source?.[key])
+            }
+        }
+
+        function pushUnique(values: string[], value: string) {
+            if (value && values[0] !== value) {
+                values.unshift(value)
+            }
+        }
+
+        function pushUniquePair(values: [string, string][], pair: [string, string]) {
+            if (
+                pair[0] &&
+                pair[1] &&
+                (
+                    values[0]?.[0] !== pair[0] ||
+                    values[0]?.[1] !== pair[1]
+                )
+            ) {
+                values.unshift(pair)
+            }
+        }
+
+        function getWorkspaceTrackedResourceId(value: any, index: number, fallbackPrefix: string) {
+            if (typeof value?.id === 'string' && value.id.length > 0) {
+                return value.id
+            }
+            if (typeof value?.chatId === 'string' && value.chatId.length > 0) {
+                return value.chatId
+            }
+            if (typeof value?.name === 'string' && value.name.length > 0) {
+                return `${fallbackPrefix}_${index}_${value.name}`
+            }
+            if (typeof value?.comment === 'string' && value.comment.length > 0) {
+                return `${fallbackPrefix}_${index}_${value.comment}`
+            }
+            return `${fallbackPrefix}_${index}`
+        }
+
+        function trackWorkspaceResourceList(
+            character: any,
+            key: string,
+            fallbackPrefix: string,
+            signatures: Map<string, Map<string, string>>,
+            changedItems: [string, string][],
+            changedIndexes: string[]
+        ) {
+            const values = Array.isArray(character?.[key]) ? character[key] : []
+            $state.snapshot(values)
+
+            const next = new Map<string, string>()
+            for (let i = 0; i < values.length; i++) {
+                const value = values[i]
+                const id = getWorkspaceTrackedResourceId(value, i, fallbackPrefix)
+                next.set(id, JSON.stringify(value))
+            }
+
+            const previous = signatures.get(character.chaId)
+            if (!previous) {
+                signatures.set(character.chaId, next)
+                return
+            }
+
+            let indexChanged = previous.size !== next.size
+
+            for (const [id, signature] of next) {
+                if (previous.get(id) !== signature) {
+                    pushUniquePair(changedItems, [character.chaId, id])
+                    indexChanged = true
+                }
+            }
+
+            for (const id of previous.keys()) {
+                if (!next.has(id)) {
+                    indexChanged = true
+                }
+            }
+
+            if (indexChanged) {
+                pushUnique(changedIndexes, character.chaId)
+                saveTimeoutExecute()
+            }
+
+            signatures.set(character.chaId, next)
         }
 
         $effect(() => {
@@ -418,7 +591,17 @@ export async function saveDb() {
             }
 
             for (const key in character) {
-                if (key !== 'chats') {
+                if (
+                    key !== 'chats' &&
+                    key !== 'customscript' &&
+                    key !== 'triggerscript' &&
+                    key !== 'globalLore' &&
+                    !workspaceAssetKeys.includes(key) &&
+                    !workspaceTtsKeys.includes(key) &&
+                    !workspaceBackgroundKeys.includes(key) &&
+                    !workspaceVirtualScriptKeys.includes(key) &&
+                    !workspaceAdvancedKeys.includes(key)
+                ) {
                     $state.snapshot(character[key])
                 }
             }
@@ -433,6 +616,84 @@ export async function saveDb() {
             }
 
             saveTimeoutExecute()
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            snapshotKeys(character, workspaceAssetKeys)
+            if (assetWatcherReadyFor !== character.chaId) {
+                assetWatcherReadyFor = character.chaId
+                return
+            }
+            pushUnique(changeTracker.asset ??= [], character.chaId)
+            saveTimeoutExecute()
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            snapshotKeys(character, workspaceTtsKeys)
+            if (ttsWatcherReadyFor !== character.chaId) {
+                ttsWatcherReadyFor = character.chaId
+                return
+            }
+            pushUnique(changeTracker.tts ??= [], character.chaId)
+            saveTimeoutExecute()
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            snapshotKeys(character, workspaceBackgroundKeys)
+            if (backgroundWatcherReadyFor !== character.chaId) {
+                backgroundWatcherReadyFor = character.chaId
+                return
+            }
+            pushUnique(changeTracker.scriptBackground ??= [], character.chaId)
+            saveTimeoutExecute()
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            snapshotKeys(character, workspaceVirtualScriptKeys)
+            if (virtualScriptWatcherReadyFor !== character.chaId) {
+                virtualScriptWatcherReadyFor = character.chaId
+                return
+            }
+            pushUnique(changeTracker.scriptVirtual ??= [], character.chaId)
+            saveTimeoutExecute()
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            snapshotKeys(character, workspaceAdvancedKeys)
+            if (advancedWatcherReadyFor !== character.chaId) {
+                advancedWatcherReadyFor = character.chaId
+                return
+            }
+            pushUnique(changeTracker.advanced ??= [], character.chaId)
+            saveTimeoutExecute()
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackWorkspaceResourceList(character, 'customscript', 'regex', regexSignatures, changeTracker.regex ??= [], changeTracker.regexIndex ??= [])
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackWorkspaceResourceList(character, 'triggerscript', 'trigger', triggerSignatures, changeTracker.trigger ??= [], changeTracker.triggerIndex ??= [])
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackWorkspaceResourceList(character, 'globalLore', 'lorebook', lorebookSignatures, changeTracker.lorebook ??= [], changeTracker.lorebookIndex ??= [])
         })
 
         $effect(() => {
@@ -496,6 +757,17 @@ export async function saveDb() {
             changeTracker.loadouts = false
             changeTracker.plugins = false
             changeTracker.pluginCustomStorage = false
+            changeTracker.regex = changeTracker.regex?.length ? [changeTracker.regex[0]] : []
+            changeTracker.regexIndex = changeTracker.regexIndex?.length ? [changeTracker.regexIndex[0]] : []
+            changeTracker.trigger = changeTracker.trigger?.length ? [changeTracker.trigger[0]] : []
+            changeTracker.triggerIndex = changeTracker.triggerIndex?.length ? [changeTracker.triggerIndex[0]] : []
+            changeTracker.lorebook = changeTracker.lorebook?.length ? [changeTracker.lorebook[0]] : []
+            changeTracker.lorebookIndex = changeTracker.lorebookIndex?.length ? [changeTracker.lorebookIndex[0]] : []
+            changeTracker.asset = changeTracker.asset?.length ? [changeTracker.asset[0]] : []
+            changeTracker.tts = changeTracker.tts?.length ? [changeTracker.tts[0]] : []
+            changeTracker.scriptBackground = changeTracker.scriptBackground?.length ? [changeTracker.scriptBackground[0]] : []
+            changeTracker.scriptVirtual = changeTracker.scriptVirtual?.length ? [changeTracker.scriptVirtual[0]] : []
+            changeTracker.advanced = changeTracker.advanced?.length ? [changeTracker.advanced[0]] : []
             if (gotChannel) {
                 //Data is saved in other tab
                 await sleep(1000)
