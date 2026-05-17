@@ -1,11 +1,12 @@
 <script lang="ts">
+    import localforage from "localforage";
     import { language } from "src/lang";
     import { hubURL } from "src/ts/characterCards";
     import { loadRisuAccountBackup, loadRisuAccountData, saveRisuAccountData } from "src/ts/drive/accounter";
     
     import { DBState } from 'src/ts/stores.svelte';
     import Check from "src/lib/UI/GUI/CheckInput.svelte";
-    import { alertConfirm} from "src/ts/alert";
+    import { alertConfirm, alertError, alertNormal } from "src/ts/alert";
     import { forageStorage, loadInternalBackup } from "src/ts/globalApi.svelte";
     import { isTauri, isNodeServer } from "src/ts/platform"
     import { unMigrationAccount } from "src/ts/storage/accountStorage";
@@ -15,9 +16,163 @@
     import { exportAsDataset } from "src/ts/storage/exportAsDataset";
     import { loginToSionyw, testSionywLogin } from "src/ts/sionyw";
     import { cleanColdStorage } from "src/ts/process/coldstorage.svelte";
+    import {
+        getWorkspaceDirectoryHandle,
+        isWorkspaceDirectoryStorage,
+        readStorageConfig,
+        setStandardDatabaseStorageMode,
+        setWorkspaceDirectoryStorageMode,
+        type StorageMode,
+    } from "src/ts/storage/storageConfig";
+    import { convertStandardDatabaseToWorkspace } from "src/ts/storage/converter/standardToWorkspace";
+    import { convertWorkspaceToStandardDatabase, previewWorkspaceToStandardDatabase } from "src/ts/storage/converter/workspaceToStandard";
+    import { OpfsStorage } from "src/ts/storage/opfsStorage";
+    import type { RisuRawStorage } from "src/ts/storage/storageTypes";
+
     let openIframe = $state(false)
     let openIframeURL = $state('')
     let popup:Window = null
+    let storageMode = $state<StorageMode>(readStorageConfig().mode)
+    let workspaceBusy = $state(false)
+    let workspaceStatus = $state('')
+
+    function canUseWorkspaceDirectoryStorage() {
+        return !isTauri && !isNodeServer && typeof window.showDirectoryPicker === 'function'
+    }
+
+    function refreshStorageMode() {
+        storageMode = readStorageConfig().mode
+    }
+
+    async function enableWorkspaceDirectoryStorage() {
+        if(workspaceBusy){
+            return
+        }
+        if(!canUseWorkspaceDirectoryStorage()){
+            alertError('Workspace folder storage is only available in browsers that support directory access.')
+            return
+        }
+        if(isWorkspaceDirectoryStorage(readStorageConfig())){
+            alertNormal('Workspace folder storage is already enabled.')
+            return
+        }
+        if(forageStorage.isAccount || DBState.db.account?.useSync){
+            alertError('Disable account sync before switching to workspace folder storage.')
+            return
+        }
+        if(!(await alertConfirm('Convert the current standard database storage into a workspace folder? The selected folder will contain Risu workspace files.'))){
+            return
+        }
+
+        let workspaceHandle: FileSystemDirectoryHandle
+        try {
+            workspaceHandle = await window.showDirectoryPicker({
+                mode: 'readwrite'
+            })
+        } catch (error) {
+            if(error instanceof DOMException && error.name === 'AbortError'){
+                return
+            }
+            alertError(error)
+            return
+        }
+
+        workspaceBusy = true
+        workspaceStatus = 'Converting standard database storage to workspace folder...'
+        try {
+            const result = await convertStandardDatabaseToWorkspace(forageStorage, workspaceHandle)
+            await setWorkspaceDirectoryStorageMode(result.workspaceId, workspaceHandle)
+            refreshStorageMode()
+            alertNormal('Workspace folder storage has been enabled. Risu will reload now.')
+            location.reload()
+        } catch (error) {
+            alertError(error)
+        } finally {
+            workspaceBusy = false
+            workspaceStatus = ''
+        }
+    }
+
+    async function checkWorkspaceDirectoryStorage() {
+        if(workspaceBusy){
+            return
+        }
+        const config = readStorageConfig()
+        if(!isWorkspaceDirectoryStorage(config)){
+            alertNormal('Workspace folder storage is not enabled.')
+            return
+        }
+
+        const workspaceHandle = await getWorkspaceDirectoryHandle(config.workspaceId)
+        if(!workspaceHandle){
+            alertError('Workspace folder handle was not found. Select the workspace folder again by converting from standard storage.')
+            return
+        }
+
+        workspaceBusy = true
+        workspaceStatus = 'Checking workspace folder storage...'
+        try {
+            const result = await previewWorkspaceToStandardDatabase(workspaceHandle)
+            alertNormal(`Workspace check passed. Characters: ${result.database.characters?.length ?? 0}`)
+        } catch (error) {
+            alertError(error)
+        } finally {
+            workspaceBusy = false
+            workspaceStatus = ''
+        }
+    }
+
+    async function revertWorkspaceDirectoryStorage() {
+        if(workspaceBusy){
+            return
+        }
+        const config = readStorageConfig()
+        if(!isWorkspaceDirectoryStorage(config)){
+            alertNormal('Workspace folder storage is not enabled.')
+            return
+        }
+        if(!(await alertConfirm('Convert the workspace folder back into standard database storage? The workspace folder will be kept, but Risu will switch back to database.bin storage.'))){
+            return
+        }
+
+        const workspaceHandle = await getWorkspaceDirectoryHandle(config.workspaceId)
+        if(!workspaceHandle){
+            alertError('Workspace folder handle was not found. Cannot revert automatically.')
+            return
+        }
+
+        workspaceBusy = true
+        workspaceStatus = 'Converting workspace folder back to standard database storage...'
+        try {
+            const targetStorage = getStandardDatabaseTargetStorage()
+            await convertWorkspaceToStandardDatabase(workspaceHandle, targetStorage)
+            await setStandardDatabaseStorageMode()
+            refreshStorageMode()
+            alertNormal('Standard database storage has been restored. Risu will reload now.')
+            location.reload()
+        } catch (error) {
+            alertError(error)
+        } finally {
+            workspaceBusy = false
+            workspaceStatus = ''
+        }
+    }
+
+    function getStandardDatabaseTargetStorage(): RisuRawStorage {
+        if(
+            !isTauri &&
+            !isNodeServer &&
+            window.navigator?.storage?.getDirectory &&
+            FileSystemFileHandle?.prototype?.createWritable &&
+            localStorage.getItem('opfs_flag!') === "able"
+        ){
+            return new OpfsStorage()
+        }
+
+        return localforage.createInstance({
+            name: "risuai"
+        }) as RisuRawStorage
+    }
 </script>
 
 <svelte:window onmessage={async (e) => {
@@ -131,6 +286,32 @@
 <Button onclick={exportAsDataset} className="mt-2">
     {language.exportAsDataset}
 </Button>
+
+<div class="bg-darkbg p-3 rounded-md mb-2 flex flex-col items-start mt-2 gap-2">
+    <div class="w-full">
+        <h1 class="text-3xl font-black min-w-0">Risu Workspace Storage</h1>
+    </div>
+    <span class="text-textcolor2">Current storage mode: {storageMode === 'workspace-directory' ? 'Workspace folder' : 'Standard database'}</span>
+    <span class="text-textcolor2 text-sm">Workspace folder storage splits Risu data into a selected local folder. Standard database storage keeps using database.bin.</span>
+    {#if workspaceStatus}
+        <span class="text-textcolor2 text-sm">{workspaceStatus}</span>
+    {/if}
+    <div class="flex flex-wrap gap-2">
+        <Button onclick={enableWorkspaceDirectoryStorage} disabled={workspaceBusy || storageMode === 'workspace-directory' || !canUseWorkspaceDirectoryStorage()}>
+            Convert to Workspace Folder
+        </Button>
+        <Button onclick={checkWorkspaceDirectoryStorage} disabled={workspaceBusy || storageMode !== 'workspace-directory'} styled="outlined">
+            Check Workspace
+        </Button>
+        <Button onclick={revertWorkspaceDirectoryStorage} disabled={workspaceBusy || storageMode !== 'workspace-directory'} styled="danger">
+            Revert to Standard Database
+        </Button>
+    </div>
+    {#if !canUseWorkspaceDirectoryStorage()}
+        <span class="text-textcolor2 text-sm">Workspace folder storage requires browser directory access support.</span>
+    {/if}
+</div>
+
 <div class="bg-darkbg p-3 rounded-md mb-2 flex flex-col items-start mt-2">
     <div class="w-full">
         <h1 class="text-3xl font-black min-w-0">Risu Account{#if DBState.db.account}
