@@ -9,6 +9,8 @@ import { AccountStorage } from "./accountStorage"
 import { decodeRisuSave, encodeRisuSaveLegacy } from "./risuSave";
 import { language } from "src/lang"
 import type { RisuRawStorage } from "./storageTypes"
+import { getWorkspaceDirectoryHandle, isWorkspaceDirectoryStorage, readStorageConfig } from "./storageConfig"
+import { WorkspaceDirectoryStorage } from "./workspaceDirectoryStorage"
 
 export class AutoStorage{
     isAccount:boolean = false
@@ -129,7 +131,21 @@ export class AutoStorage{
                 this.realStorage = new NodeStorage()
                 return
             }
-            else if(window.navigator?.storage?.getDirectory &&
+
+            const storageConfig = readStorageConfig()
+            if(isWorkspaceDirectoryStorage(storageConfig)){
+                const workspaceHandle = await getWorkspaceDirectoryHandle(storageConfig.workspaceId)
+                if(workspaceHandle){
+                    console.log("using workspace directory storage")
+                    this.realStorage = new WorkspaceDirectoryStorage(workspaceHandle, {
+                        workspaceId: storageConfig.workspaceId
+                    })
+                    return
+                }
+                console.warn("workspace directory storage is enabled, but the workspace handle was not found")
+            }
+
+            if(window.navigator?.storage?.getDirectory &&
                     FileSystemFileHandle?.prototype?.createWritable &&
                     localStorage.getItem('opfs_flag!') === "able"){
                 console.log("using opfs storage")
