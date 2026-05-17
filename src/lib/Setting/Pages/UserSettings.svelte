@@ -317,7 +317,7 @@
         <Button onclick={checkWorkspaceDirectoryStorage} disabled={workspaceBusy || storageMode !== 'workspace-directory'} styled="outlined">
             {language.workspaceStorage.checkButton}
         </Button>
-        <Button onclick={revertWorkspaceDirectoryStorage} disabled={workspaceBusy || storageMode !== 'workspace-directory'} styled="danger">
+        <Button onclick={revertWorkspaceDirectoryStorage} disabled={workspaceBusy || storageMode !== 'workspace-directory'} styled="outlined">
             {language.workspaceStorage.revertButton}
         </Button>
     </div>
