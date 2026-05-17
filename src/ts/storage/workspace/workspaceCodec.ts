@@ -2,13 +2,21 @@ import type { Database } from "../database.svelte"
 import {
     createWorkspaceDataFile,
     createWorkspaceManifest,
+    getWorkspaceAdvancedFilePath,
+    getWorkspaceAssetFilePath,
     getWorkspaceBotFilePath,
     getWorkspaceChatFilePath,
     getWorkspaceChatIndexPath,
+    getWorkspaceLegacyRegexIndexPath,
     getWorkspaceLorebookFilePath,
     getWorkspaceLorebookIndexPath,
     getWorkspaceRegexFilePath,
     getWorkspaceRegexIndexPath,
+    getWorkspaceScriptBackgroundFilePath,
+    getWorkspaceScriptVirtualFilePath,
+    getWorkspaceTriggerFilePath,
+    getWorkspaceTriggersIndexPath,
+    getWorkspaceTtsFilePath,
     joinWorkspacePath,
     workspaceDirectoryNames,
     workspaceFileNames,
@@ -40,10 +48,79 @@ const rootDatabaseKeys = new Set([
     "pluginCustomStorage"
 ])
 
+const botAssetKeys = [
+    "image",
+    "emotionImages",
+    "sdData",
+    "additionalAssets",
+    "ccAssets",
+    "largePortrait",
+    "inlayViewScreen",
+    "prebuiltAssetCommand",
+    "prebuiltAssetStyle",
+    "prebuiltAssetExclude"
+] as const
+
+const botTtsKeys = [
+    "ttsMode",
+    "ttsSpeech",
+    "voicevoxConfig",
+    "naittsConfig",
+    "gptSoVitsConfig",
+    "fishSpeechConfig",
+    "ttsReadOnlyQuoted",
+    "oaiVoice",
+    "oaiTTSConfig",
+    "hfTTS",
+    "vits"
+] as const
+
+const botBackgroundScriptKeys = [
+    "backgroundHTML",
+    "backgroundCSS"
+] as const
+
+const botVirtualScriptKeys = [
+    "virtualscript",
+    "scriptstate"
+] as const
+
+const botAdvancedKeys = [
+    "utilityBot",
+    "loreSettings",
+    "loreExt",
+    "additionalData",
+    "realmId",
+    "imported",
+    "trashTime",
+    "private",
+    "source",
+    "creation_date",
+    "modification_date",
+    "defaultVariables",
+    "lowLevelAccess",
+    "hideChatIcon",
+    "lastInteraction",
+    "translatorNote",
+    "doNotChangeSeperateModels",
+    "escapeOutput",
+    "modules",
+    "coldstorage",
+    "coldStoragedChats",
+    "depth_prompt",
+    "lorePlus"
+] as const
+
 const splitBotKeys = new Set([
     "chats",
     "customscript",
-    "globalLore"
+    "triggerscript",
+    "globalLore",
+    ...botAssetKeys,
+    ...botTtsKeys,
+    ...botBackgroundScriptKeys,
+    ...botVirtualScriptKeys,
+    ...botAdvancedKeys
 ])
 
 export async function writeWorkspaceDatabase(
@@ -231,6 +308,16 @@ async function writeWorkspaceBotResources(workspaceRoot: FileSystemDirectoryHand
 
     await writeWorkspaceBotResourceList(workspaceRoot, {
         botId,
+        values: Array.isArray(character?.triggerscript) ? character.triggerscript : [],
+        indexPath: getWorkspaceTriggersIndexPath(botId),
+        getFilePath: getWorkspaceTriggerFilePath,
+        format: "risu.trigger",
+        fallbackPrefix: "trigger",
+        now
+    })
+
+    await writeWorkspaceBotResourceList(workspaceRoot, {
+        botId,
         values: Array.isArray(character?.globalLore) ? character.globalLore : [],
         indexPath: getWorkspaceLorebookIndexPath(botId),
         getFilePath: getWorkspaceLorebookFilePath,
@@ -238,6 +325,12 @@ async function writeWorkspaceBotResources(workspaceRoot: FileSystemDirectoryHand
         fallbackPrefix: "lorebook",
         now
     })
+
+    await writeWorkspaceBotSection(workspaceRoot, getWorkspaceAssetFilePath(botId), "risu.bot.asset", pickWorkspaceFields(character, botAssetKeys), now)
+    await writeWorkspaceBotSection(workspaceRoot, getWorkspaceTtsFilePath(botId), "risu.bot.tts", pickWorkspaceFields(character, botTtsKeys), now)
+    await writeWorkspaceBotSection(workspaceRoot, getWorkspaceScriptBackgroundFilePath(botId), "risu.bot.script.background", pickWorkspaceFields(character, botBackgroundScriptKeys), now)
+    await writeWorkspaceBotSection(workspaceRoot, getWorkspaceScriptVirtualFilePath(botId), "risu.bot.script.virtual", pickWorkspaceFields(character, botVirtualScriptKeys), now)
+    await writeWorkspaceBotSection(workspaceRoot, getWorkspaceAdvancedFilePath(botId), "risu.bot.advanced", pickWorkspaceFields(character, botAdvancedKeys), now)
 }
 
 async function writeWorkspaceBotResourceList(argWorkspaceRoot: FileSystemDirectoryHandle, arg: {
@@ -245,7 +338,7 @@ async function writeWorkspaceBotResourceList(argWorkspaceRoot: FileSystemDirecto
     values: any[]
     indexPath: string
     getFilePath: (botId: string, id: string) => string
-    format: "risu.chat" | "risu.regex" | "risu.lorebook"
+    format: "risu.chat" | "risu.regex" | "risu.trigger" | "risu.lorebook"
     fallbackPrefix: string
     now: number
 }) {
@@ -286,6 +379,24 @@ async function writeWorkspaceBotResourceList(argWorkspaceRoot: FileSystemDirecto
     )
 }
 
+async function writeWorkspaceBotSection(
+    workspaceRoot: FileSystemDirectoryHandle,
+    path: string,
+    format: "risu.bot.asset" | "risu.bot.tts" | "risu.bot.script.background" | "risu.bot.script.virtual" | "risu.bot.advanced",
+    data: Record<string, unknown>,
+    now: number
+) {
+    await writeWorkspaceJsonFile(
+        workspaceRoot,
+        path,
+        createWorkspaceDataFile({
+            format,
+            data,
+            now
+        })
+    )
+}
+
 async function readWorkspaceBotResources(workspaceRoot: FileSystemDirectoryHandle, botId: string, bot: any) {
     bot.chats = await readWorkspaceBotResourceList(workspaceRoot, {
         indexPath: getWorkspaceChatIndexPath(botId),
@@ -295,8 +406,15 @@ async function readWorkspaceBotResources(workspaceRoot: FileSystemDirectoryHandl
 
     bot.customscript = await readWorkspaceBotResourceList(workspaceRoot, {
         indexPath: getWorkspaceRegexIndexPath(botId),
+        fallbackIndexPath: getWorkspaceLegacyRegexIndexPath(botId),
         format: "risu.regex",
         fallback: Array.isArray(bot.customscript) ? bot.customscript : []
+    })
+
+    bot.triggerscript = await readWorkspaceBotResourceList(workspaceRoot, {
+        indexPath: getWorkspaceTriggersIndexPath(botId),
+        format: "risu.trigger",
+        fallback: Array.isArray(bot.triggerscript) ? bot.triggerscript : []
     })
 
     bot.globalLore = await readWorkspaceBotResourceList(workspaceRoot, {
@@ -304,18 +422,33 @@ async function readWorkspaceBotResources(workspaceRoot: FileSystemDirectoryHandl
         format: "risu.lorebook",
         fallback: Array.isArray(bot.globalLore) ? bot.globalLore : []
     })
+
+    await mergeWorkspaceBotSection(workspaceRoot, bot, getWorkspaceAssetFilePath(botId), "risu.bot.asset")
+    await mergeWorkspaceBotSection(workspaceRoot, bot, getWorkspaceTtsFilePath(botId), "risu.bot.tts")
+    await mergeWorkspaceBotSection(workspaceRoot, bot, getWorkspaceScriptBackgroundFilePath(botId), "risu.bot.script.background")
+    await mergeWorkspaceBotSection(workspaceRoot, bot, getWorkspaceScriptVirtualFilePath(botId), "risu.bot.script.virtual")
+    await mergeWorkspaceBotSection(workspaceRoot, bot, getWorkspaceAdvancedFilePath(botId), "risu.bot.advanced")
 }
 
 async function readWorkspaceBotResourceList(workspaceRoot: FileSystemDirectoryHandle, arg: {
     indexPath: string
-    format: "risu.chat" | "risu.regex" | "risu.lorebook"
+    fallbackIndexPath?: string
+    format: "risu.chat" | "risu.regex" | "risu.trigger" | "risu.lorebook"
     fallback: any[]
 }) {
-    const index = await readOptionalWorkspaceDataFile<{ items: WorkspaceIndexItem[] }>(
+    let index = await readOptionalWorkspaceDataFile<{ items: WorkspaceIndexItem[] }>(
         workspaceRoot,
         arg.indexPath,
         getIndexFormatForResourceFormat(arg.format)
     )
+
+    if(!index && arg.fallbackIndexPath){
+        index = await readOptionalWorkspaceDataFile<{ items: WorkspaceIndexItem[] }>(
+            workspaceRoot,
+            arg.fallbackIndexPath,
+            getIndexFormatForResourceFormat(arg.format)
+        )
+    }
 
     if(!index){
         return arg.fallback
@@ -330,12 +463,27 @@ async function readWorkspaceBotResourceList(workspaceRoot: FileSystemDirectoryHa
     return values
 }
 
-function getIndexFormatForResourceFormat(format: "risu.chat" | "risu.regex" | "risu.lorebook") {
+async function mergeWorkspaceBotSection(
+    workspaceRoot: FileSystemDirectoryHandle,
+    bot: any,
+    path: string,
+    format: "risu.bot.asset" | "risu.bot.tts" | "risu.bot.script.background" | "risu.bot.script.virtual" | "risu.bot.advanced"
+) {
+    const file = await readOptionalWorkspaceDataFile<Record<string, unknown>>(workspaceRoot, path, format)
+    if(file){
+        Object.assign(bot, file.data)
+    }
+}
+
+function getIndexFormatForResourceFormat(format: "risu.chat" | "risu.regex" | "risu.trigger" | "risu.lorebook") {
     if(format === "risu.chat"){
         return "risu.index.chats"
     }
     if(format === "risu.regex"){
         return "risu.index.regex"
+    }
+    if(format === "risu.trigger"){
+        return "risu.index.triggers"
     }
     return "risu.index.lorebooks"
 }
@@ -435,6 +583,16 @@ function getWorkspaceBotData(character: any): Record<string, unknown> {
         botData[key] = character[key]
     }
     return botData
+}
+
+function pickWorkspaceFields(source: any, keys: readonly string[]): Record<string, unknown> {
+    const result: Record<string, unknown> = {}
+    for(const key of keys){
+        if(source?.[key] !== undefined){
+            result[key] = source[key]
+        }
+    }
+    return result
 }
 
 function getWorkspaceCharacterId(character: any, index: number) {
