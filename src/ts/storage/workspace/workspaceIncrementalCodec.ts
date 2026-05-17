@@ -353,7 +353,6 @@ async function writeWorkspaceChatIndex(workspaceRoot: FileSystemDirectoryHandle,
 async function writeWorkspaceBot(workspaceRoot: FileSystemDirectoryHandle, character: any, now: number) {
     const botId = getWorkspaceCharacterId(character, 0)
 
-    await writeWorkspaceBotResources(workspaceRoot, botId, character, now)
     await writeWorkspaceJsonFile(
         workspaceRoot,
         getWorkspaceBotFilePath(botId),
