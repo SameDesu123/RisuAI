@@ -7,7 +7,6 @@ import {
     getWorkspaceBotFilePath,
     getWorkspaceChatFilePath,
     getWorkspaceChatIndexPath,
-    getWorkspaceLegacyRegexIndexPath,
     getWorkspaceLorebookFilePath,
     getWorkspaceLorebookIndexPath,
     getWorkspaceRegexFilePath,
@@ -406,7 +405,6 @@ async function readWorkspaceBotResources(workspaceRoot: FileSystemDirectoryHandl
 
     bot.customscript = await readWorkspaceBotResourceList(workspaceRoot, {
         indexPath: getWorkspaceRegexIndexPath(botId),
-        fallbackIndexPath: getWorkspaceLegacyRegexIndexPath(botId),
         format: "risu.regex",
         fallback: Array.isArray(bot.customscript) ? bot.customscript : []
     })
@@ -432,23 +430,14 @@ async function readWorkspaceBotResources(workspaceRoot: FileSystemDirectoryHandl
 
 async function readWorkspaceBotResourceList(workspaceRoot: FileSystemDirectoryHandle, arg: {
     indexPath: string
-    fallbackIndexPath?: string
     format: "risu.chat" | "risu.regex" | "risu.trigger" | "risu.lorebook"
     fallback: any[]
 }) {
-    let index = await readOptionalWorkspaceDataFile<{ items: WorkspaceIndexItem[] }>(
+    const index = await readOptionalWorkspaceDataFile<{ items: WorkspaceIndexItem[] }>(
         workspaceRoot,
         arg.indexPath,
         getIndexFormatForResourceFormat(arg.format)
     )
-
-    if(!index && arg.fallbackIndexPath){
-        index = await readOptionalWorkspaceDataFile<{ items: WorkspaceIndexItem[] }>(
-            workspaceRoot,
-            arg.fallbackIndexPath,
-            getIndexFormatForResourceFormat(arg.format)
-        )
-    }
 
     if(!index){
         return arg.fallback
