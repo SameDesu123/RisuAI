@@ -139,7 +139,7 @@ export async function writeWorkspaceDatabaseIncremental(
         await writeWorkspaceJsonFile(workspaceRoot, workspaceManifestFileName, manifest)
     }
 
-    if(options.changes.root){
+    if(options.changes.root || options.changes.loadouts){
         await writeWorkspaceRootSettings(workspaceRoot, manifest, database, now)
     }
 
