@@ -19,6 +19,7 @@ import {
     workspaceDirectoryNames,
     workspaceFileNames,
     workspaceManifestFileName,
+    workspacePluginDirectoryNames,
     type WorkspaceManifest,
 } from "./workspace/workspaceFormat"
 
@@ -218,11 +219,7 @@ function isWorkspaceManagedKey(key: string) {
         return true
     }
 
-    if(key === `${workspaceDirectoryNames.plugins}/${workspaceFileNames.plugins}`){
-        return true
-    }
-
-    if(key === `${workspaceDirectoryNames.plugins}/${workspaceFileNames.pluginStorage}`){
+    if(isWorkspacePluginDataFileKey(key)){
         return true
     }
 
@@ -235,6 +232,31 @@ function isWorkspaceManagedKey(key: string) {
     }
 
     return isWorkspaceBotDataFileKey(key)
+}
+
+function isWorkspacePluginDataFileKey(key: string) {
+    const parts = splitWorkspacePath(key)
+
+    if(parts[0] !== workspaceDirectoryNames.plugins){
+        return false
+    }
+
+    if(parts.length === 2){
+        const fileName = parts[1]
+        return (
+            fileName === workspaceFileNames.plugins ||
+            fileName === workspaceFileNames.pluginStorage ||
+            fileName === workspaceFileNames.pluginsIndex ||
+            fileName === workspaceFileNames.pluginStorageIndex ||
+            fileName.endsWith(".risuplug")
+        )
+    }
+
+    if(parts.length === 3 && parts[1] === workspacePluginDirectoryNames.storage){
+        return parts[2].endsWith(".risuplugstore")
+    }
+
+    return false
 }
 
 function isWorkspaceBotDataFileKey(key: string) {
