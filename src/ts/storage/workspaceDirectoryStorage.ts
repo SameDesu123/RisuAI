@@ -126,7 +126,7 @@ export class WorkspaceDirectoryStorage implements RisuRawStorage{
 async function writeWorkspaceRawFile(workspaceRoot: FileSystemDirectoryHandle, key: string, value: Uint8Array) {
     const handle = await getWorkspaceFileHandleByPath(workspaceRoot, key, true)
     const writable = await handle.createWritable()
-    await writable.write(value)
+    await writable.write(toWritableArrayBuffer(value))
     await writable.close()
 }
 
@@ -293,6 +293,12 @@ function toUint8Array(data: Uint8Array | ArrayBuffer): Uint8Array {
         return data
     }
     return new Uint8Array(data)
+}
+
+function toWritableArrayBuffer(data: Uint8Array): ArrayBuffer {
+    const buffer = new ArrayBuffer(data.byteLength)
+    new Uint8Array(buffer).set(data)
+    return buffer
 }
 
 function isNotFoundError(error: unknown) {
