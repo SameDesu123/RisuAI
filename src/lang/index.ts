@@ -6,14 +6,18 @@ import { languageKorean } from "./ko";
 import { languageVietnamese } from "./vi";
 import { languageChineseTraditional } from "./zh-Hant";
 import { languageSpanish } from "./es";
-import { workspaceStorageTranslations, type WorkspaceStorageLanguage } from "./workspaceStorage";
+import { workspaceStorageTranslations, type WorkspaceStorageLanguage, type WorkspaceStorageTranslation } from "./workspaceStorage";
 
-export let language:typeof languageEnglish = mergeWorkspaceStorage(languageEnglish, 'en')
+type RisuLanguage = typeof languageEnglish & {
+    workspaceStorage: WorkspaceStorageTranslation
+}
 
-function mergeWorkspaceStorage<T extends typeof languageEnglish>(base: T, lang: WorkspaceStorageLanguage): T {
+export let language:RisuLanguage = mergeWorkspaceStorage(languageEnglish, 'en')
+
+function mergeWorkspaceStorage(base: typeof languageEnglish, lang: WorkspaceStorageLanguage): RisuLanguage {
     return merge(safeStructuredClone(base), {
         workspaceStorage: workspaceStorageTranslations[lang]
-    })
+    }) as RisuLanguage
 }
 
 export function changeLanguage(lang:string){
