@@ -13,6 +13,7 @@ import {
     readWorkspaceManifest,
     writeWorkspaceDatabase,
 } from "./workspace/workspaceCodec"
+import { writeWorkspaceDatabaseIncremental } from "./workspace/workspaceIncrementalCodec"
 import {
     getWorkspaceBotFilePath,
     workspaceDirectoryNames,
@@ -101,9 +102,10 @@ export class WorkspaceDirectoryStorage implements RisuRawStorage{
         return null
     }
 
-    async saveDatabaseDirect(database: Database, _changes?: toSaveType) {
-        await writeWorkspaceDatabase(this.workspaceRoot, database, {
-            workspaceId: await this.getWorkspaceId()
+    async saveDatabaseDirect(database: Database, changes?: toSaveType) {
+        await writeWorkspaceDatabaseIncremental(this.workspaceRoot, database, {
+            workspaceId: await this.getWorkspaceId(),
+            changes
         })
     }
 
