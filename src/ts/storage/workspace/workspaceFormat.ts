@@ -14,6 +14,12 @@ export const workspaceDirectoryNames = {
     tmp: "tmp"
 } as const
 
+export const workspaceBotDirectoryNames = {
+    chats: "chats",
+    regex: "regex",
+    lorebooks: "lorebooks"
+} as const
+
 export const workspaceFileNames = {
     databaseSnapshot: "source.database.bin",
     rootSettings: "root.risuset",
@@ -22,18 +28,30 @@ export const workspaceFileNames = {
     modules: "modules.risumodule",
     plugins: "plugins.risuplug",
     pluginStorage: "pluginStorage.risuplugstore",
-    botsIndex: "bots.risuindex"
+    botsIndex: "bots.risuindex",
+    chatsIndex: "chats.risuindex",
+    regexIndex: "regex.risuindex",
+    lorebooksIndex: "lorebooks.risuindex"
 } as const
 
 export type WorkspaceFormatName =
     | "risu.workspace"
     | "risu.settings.root"
     | "risu.bot"
+    | "risu.chat"
+    | "risu.regex"
+    | "risu.lorebook"
     | "risu.botPresets"
     | "risu.modules"
     | "risu.plugins"
     | "risu.pluginStorage"
+    | WorkspaceIndexFormatName
+
+export type WorkspaceIndexFormatName =
     | "risu.index.bots"
+    | "risu.index.chats"
+    | "risu.index.regex"
+    | "risu.index.lorebooks"
 
 export type WorkspaceManifest = {
     format: "risu.workspace"
@@ -79,9 +97,12 @@ export type WorkspaceIndexItem = {
     updatedAt?: number
 }
 
-export type WorkspaceIndexFile<TItem extends WorkspaceIndexItem = WorkspaceIndexItem> = WorkspaceDataFile<{
+export type WorkspaceIndexFile<
+    TItem extends WorkspaceIndexItem = WorkspaceIndexItem,
+    TFormat extends WorkspaceIndexFormatName = "risu.index.bots"
+> = WorkspaceDataFile<{
     items: TItem[]
-}, "risu.index.bots">
+}, TFormat>
 
 export function createWorkspaceManifest(arg: {
     id: string
@@ -139,6 +160,47 @@ export function getWorkspaceBotDirectoryPath(botId: string) {
 
 export function getWorkspaceBotFilePath(botId: string) {
     return joinWorkspacePath(getWorkspaceBotDirectoryPath(botId), workspaceFileNames.bot)
+}
+
+export function getWorkspaceBotResourceDirectoryPath(botId: string, resourceDirectoryName: string) {
+    return joinWorkspacePath(getWorkspaceBotDirectoryPath(botId), resourceDirectoryName)
+}
+
+export function getWorkspaceBotResourceIndexPath(botId: string, resourceDirectoryName: string, indexFileName: string) {
+    return joinWorkspacePath(getWorkspaceBotResourceDirectoryPath(botId, resourceDirectoryName), indexFileName)
+}
+
+export function getWorkspaceChatIndexPath(botId: string) {
+    return getWorkspaceBotResourceIndexPath(botId, workspaceBotDirectoryNames.chats, workspaceFileNames.chatsIndex)
+}
+
+export function getWorkspaceChatFilePath(botId: string, chatId: string) {
+    return joinWorkspacePath(
+        getWorkspaceBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.chats),
+        `${toWorkspacePathSegment(chatId)}.risuchat`
+    )
+}
+
+export function getWorkspaceRegexIndexPath(botId: string) {
+    return getWorkspaceBotResourceIndexPath(botId, workspaceBotDirectoryNames.regex, workspaceFileNames.regexIndex)
+}
+
+export function getWorkspaceRegexFilePath(botId: string, regexId: string) {
+    return joinWorkspacePath(
+        getWorkspaceBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.regex),
+        `${toWorkspacePathSegment(regexId)}.risuregex`
+    )
+}
+
+export function getWorkspaceLorebookIndexPath(botId: string) {
+    return getWorkspaceBotResourceIndexPath(botId, workspaceBotDirectoryNames.lorebooks, workspaceFileNames.lorebooksIndex)
+}
+
+export function getWorkspaceLorebookFilePath(botId: string, lorebookId: string) {
+    return joinWorkspacePath(
+        getWorkspaceBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.lorebooks),
+        `${toWorkspacePathSegment(lorebookId)}.risulore`
+    )
 }
 
 export function joinWorkspacePath(...parts: string[]) {
