@@ -8,11 +8,12 @@ import { getDatabase, type Database } from "./database.svelte"
 import { AccountStorage } from "./accountStorage"
 import { decodeRisuSave, encodeRisuSaveLegacy } from "./risuSave";
 import { language } from "src/lang"
+import type { RisuRawStorage } from "./storageTypes"
 
 export class AutoStorage{
     isAccount:boolean = false
 
-    realStorage:LocalForage|NodeStorage|OpfsStorage|AccountStorage
+    realStorage:RisuRawStorage
 
     async setItem(key:string, value:Uint8Array):Promise<string|null> {
         await this.Init()
@@ -24,7 +25,7 @@ export class AutoStorage{
     }
     async getItem(key:string):Promise<Buffer> {
         await this.Init()
-        return await this.realStorage.getItem(key)
+        return await this.realStorage.getItem(key) as Buffer
 
     }
     async keys():Promise<string[]>{
@@ -79,7 +80,7 @@ export class AutoStorage{
                     type: "wait",
                     msg: `Migrating your data...(${i}/${keys.length})`
                 })
-                const rkey = await accountStorage.setItem(key,await this.realStorage.getItem(key))
+                const rkey = await accountStorage.setItem(key, await this.realStorage.getItem(key) as Uint8Array)
                 if(rkey !== key){
                     replaced[key] = rkey
                 }
@@ -153,7 +154,7 @@ export class AutoStorage{
                             type: "wait",
                             msg: `Migrating your data...(${i}/${keys.length})`
                         })
-                        await opfs.setItem(key,await forage.getItem(key))
+                        await opfs.setItem(key, await forage.getItem(key) as Uint8Array)
                         i += 1
                     }
                     this.realStorage = opfs
@@ -168,7 +169,7 @@ export class AutoStorage{
             console.log("using forage storage")
             this.realStorage = localforage.createInstance({
                 name: "risuai"
-            })
+            }) as RisuRawStorage
         }
     }
 
