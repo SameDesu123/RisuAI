@@ -1,5 +1,5 @@
 const workspaceStorageEnglish = {
-    title: "Risu Workspace Storage",
+    title: "Risu Local Workspace",
     currentMode: "Current storage mode: {0}",
     standardDatabaseMode: "Standard database",
     workspaceFolderMode: "Workspace folder",
@@ -31,7 +31,7 @@ export type WorkspaceStorageLanguage = "en" | "cn" | "de" | "ko" | "vi" | "zh-Ha
 export const workspaceStorageTranslations: Record<WorkspaceStorageLanguage, WorkspaceStorageTranslation> = {
     en: workspaceStorageEnglish,
     cn: {
-        title: "Risu 工作区存储",
+        title: "Risu Local Workspace",
         currentMode: "当前存储模式：{0}",
         standardDatabaseMode: "标准数据库",
         workspaceFolderMode: "工作区文件夹",
@@ -56,7 +56,7 @@ export const workspaceStorageTranslations: Record<WorkspaceStorageLanguage, Work
         revertButton: "还原为标准数据库",
     },
     de: {
-        title: "Risu-Workspace-Speicher",
+        title: "Risu Local Workspace",
         currentMode: "Aktueller Speichermodus: {0}",
         standardDatabaseMode: "Standarddatenbank",
         workspaceFolderMode: "Workspace-Ordner",
@@ -81,7 +81,7 @@ export const workspaceStorageTranslations: Record<WorkspaceStorageLanguage, Work
         revertButton: "Zur Standarddatenbank zurückkehren",
     },
     ko: {
-        title: "Risu 워크스페이스 저장소",
+        title: "Risu Local Workspace",
         currentMode: "현재 저장 방식: {0}",
         standardDatabaseMode: "표준 데이터베이스",
         workspaceFolderMode: "워크스페이스 폴더",
@@ -106,7 +106,7 @@ export const workspaceStorageTranslations: Record<WorkspaceStorageLanguage, Work
         revertButton: "표준 데이터베이스로 되돌리기",
     },
     vi: {
-        title: "Lưu trữ Workspace Risu",
+        title: "Risu Local Workspace",
         currentMode: "Chế độ lưu trữ hiện tại: {0}",
         standardDatabaseMode: "Cơ sở dữ liệu tiêu chuẩn",
         workspaceFolderMode: "Thư mục workspace",
@@ -131,7 +131,7 @@ export const workspaceStorageTranslations: Record<WorkspaceStorageLanguage, Work
         revertButton: "Hoàn nguyên về cơ sở dữ liệu tiêu chuẩn",
     },
     "zh-Hant": {
-        title: "Risu 工作區儲存",
+        title: "Risu Local Workspace",
         currentMode: "目前儲存模式：{0}",
         standardDatabaseMode: "標準資料庫",
         workspaceFolderMode: "工作區資料夾",
@@ -156,7 +156,7 @@ export const workspaceStorageTranslations: Record<WorkspaceStorageLanguage, Work
         revertButton: "還原為標準資料庫",
     },
     es: {
-        title: "Almacenamiento de Workspace de Risu",
+        title: "Risu Local Workspace",
         currentMode: "Modo de almacenamiento actual: {0}",
         standardDatabaseMode: "Base de datos estándar",
         workspaceFolderMode: "Carpeta de workspace",
