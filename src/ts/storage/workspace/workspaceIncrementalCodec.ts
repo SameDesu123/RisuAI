@@ -94,6 +94,13 @@ const botVirtualScriptKeys = [
 
 const botAdvancedKeys = [
     "utilityBot",
+    "supaMemory",
+    "replaceGlobalNote",
+    "reloadKeys",
+    "extentions",
+    "license",
+    "additionalText",
+    "removedQuotes",
     "loreSettings",
     "loreExt",
     "additionalData",

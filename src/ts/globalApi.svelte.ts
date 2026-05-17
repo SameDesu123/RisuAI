@@ -411,6 +411,13 @@ export async function saveDb() {
 
         const workspaceAdvancedKeys = [
             'utilityBot',
+            'supaMemory',
+            'replaceGlobalNote',
+            'reloadKeys',
+            'extentions',
+            'license',
+            'additionalText',
+            'removedQuotes',
             'loreSettings',
             'loreExt',
             'additionalData',
