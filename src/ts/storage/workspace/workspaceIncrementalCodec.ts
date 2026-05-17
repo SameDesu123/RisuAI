@@ -34,6 +34,17 @@ export type WorkspaceIncrementalWriteOptions = {
 
 type WorkspaceDirectSaveType = toSaveType & {
     root?: boolean
+    regex?: [string, string][]
+    regexIndex?: string[]
+    trigger?: [string, string][]
+    triggerIndex?: string[]
+    lorebook?: [string, string][]
+    lorebookIndex?: string[]
+    asset?: string[]
+    tts?: string[]
+    scriptBackground?: string[]
+    scriptVirtual?: string[]
+    advanced?: string[]
 }
 
 const rootDatabaseKeys = new Set([
@@ -196,6 +207,8 @@ export async function writeWorkspaceDatabaseIncremental(
     }
 
     await writeChangedWorkspaceChats(workspaceRoot, database, options.changes, now)
+    await writeChangedWorkspaceResources(workspaceRoot, database, options.changes, now)
+    await writeChangedWorkspaceSections(workspaceRoot, database, options.changes, now)
 
     for(const botId of uniqueStrings(options.changes.character)){
         const character = findWorkspaceCharacter(database, botId)
@@ -216,8 +229,23 @@ function hasWorkspaceScopedChanges(changes: WorkspaceDirectSaveType) {
         changes.modules ||
         changes.loadouts ||
         changes.plugins ||
-        changes.pluginCustomStorage
+        changes.pluginCustomStorage ||
+        hasListChanges(changes.regex) ||
+        hasListChanges(changes.regexIndex) ||
+        hasListChanges(changes.trigger) ||
+        hasListChanges(changes.triggerIndex) ||
+        hasListChanges(changes.lorebook) ||
+        hasListChanges(changes.lorebookIndex) ||
+        hasListChanges(changes.asset) ||
+        hasListChanges(changes.tts) ||
+        hasListChanges(changes.scriptBackground) ||
+        hasListChanges(changes.scriptVirtual) ||
+        hasListChanges(changes.advanced)
     )
+}
+
+function hasListChanges(value: unknown[] | undefined) {
+    return Boolean(value && value.length > 0)
 }
 
 async function readOrCreateManifest(workspaceRoot: FileSystemDirectoryHandle, workspaceId: string, now: number): Promise<{
@@ -297,7 +325,7 @@ async function writeChangedWorkspaceChats(
     changes: WorkspaceDirectSaveType,
     now: number
 ) {
-    const grouped = groupChatChanges(changes.chat)
+    const grouped = groupResourceChanges(changes.chat)
 
     for(const [botId, chatIds] of grouped){
         const character = findWorkspaceCharacter(database, botId)
@@ -306,10 +334,18 @@ async function writeChangedWorkspaceChats(
         }
 
         const chats = Array.isArray(character?.chats) ? character.chats : []
-        await writeWorkspaceChatIndex(workspaceRoot, botId, chats, now)
+        await writeWorkspaceResourceIndex(workspaceRoot, {
+            botId,
+            values: chats,
+            indexPath: getWorkspaceChatIndexPath(botId),
+            getFilePath: getWorkspaceChatFilePath,
+            format: "risu.index.chats",
+            fallbackPrefix: "chat",
+            now
+        })
 
         for(const chatId of chatIds){
-            const chat = chats.find((item: any, index: number) => getWorkspaceResourceId(item, index, "chat") === chatId)
+            const chat = findWorkspaceResource(chats, chatId, "chat")
             if(!chat){
                 continue
             }
@@ -328,26 +364,164 @@ async function writeChangedWorkspaceChats(
     }
 }
 
-async function writeWorkspaceChatIndex(workspaceRoot: FileSystemDirectoryHandle, botId: string, chats: any[], now: number) {
-    const items: WorkspaceIndexItem[] = chats.map((chat, index) => {
-        const id = getWorkspaceResourceId(chat, index, "chat")
+async function writeChangedWorkspaceResources(
+    workspaceRoot: FileSystemDirectoryHandle,
+    database: Database,
+    changes: WorkspaceDirectSaveType,
+    now: number
+) {
+    await writeChangedWorkspaceResourceList(workspaceRoot, database, {
+        changes: changes.regex ?? [],
+        indexOnlyBotIds: changes.regexIndex ?? [],
+        getValues: (character) => Array.isArray(character?.customscript) ? character.customscript : [],
+        indexPath: getWorkspaceRegexIndexPath,
+        getFilePath: getWorkspaceRegexFilePath,
+        indexFormat: "risu.index.regex",
+        fileFormat: "risu.regex",
+        fallbackPrefix: "regex",
+        now
+    })
+
+    await writeChangedWorkspaceResourceList(workspaceRoot, database, {
+        changes: changes.trigger ?? [],
+        indexOnlyBotIds: changes.triggerIndex ?? [],
+        getValues: (character) => Array.isArray(character?.triggerscript) ? character.triggerscript : [],
+        indexPath: getWorkspaceTriggersIndexPath,
+        getFilePath: getWorkspaceTriggerFilePath,
+        indexFormat: "risu.index.triggers",
+        fileFormat: "risu.trigger",
+        fallbackPrefix: "trigger",
+        now
+    })
+
+    await writeChangedWorkspaceResourceList(workspaceRoot, database, {
+        changes: changes.lorebook ?? [],
+        indexOnlyBotIds: changes.lorebookIndex ?? [],
+        getValues: (character) => Array.isArray(character?.globalLore) ? character.globalLore : [],
+        indexPath: getWorkspaceLorebookIndexPath,
+        getFilePath: getWorkspaceLorebookFilePath,
+        indexFormat: "risu.index.lorebooks",
+        fileFormat: "risu.lorebook",
+        fallbackPrefix: "lorebook",
+        now
+    })
+}
+
+async function writeChangedWorkspaceResourceList(workspaceRoot: FileSystemDirectoryHandle, database: Database, arg: {
+    changes: [string, string][]
+    indexOnlyBotIds: string[]
+    getValues: (character: any) => any[]
+    indexPath: (botId: string) => string
+    getFilePath: (botId: string, resourceId: string) => string
+    indexFormat: "risu.index.regex" | "risu.index.triggers" | "risu.index.lorebooks"
+    fileFormat: "risu.regex" | "risu.trigger" | "risu.lorebook"
+    fallbackPrefix: string
+    now: number
+}) {
+    const grouped = groupResourceChanges(arg.changes)
+    for(const botId of arg.indexOnlyBotIds){
+        if(!grouped.has(botId)){
+            grouped.set(botId, new Set())
+        }
+    }
+
+    for(const [botId, resourceIds] of grouped){
+        const character = findWorkspaceCharacter(database, botId)
+        if(!character){
+            continue
+        }
+
+        const values = arg.getValues(character)
+        await writeWorkspaceResourceIndex(workspaceRoot, {
+            botId,
+            values,
+            indexPath: arg.indexPath(botId),
+            getFilePath: arg.getFilePath,
+            format: arg.indexFormat,
+            fallbackPrefix: arg.fallbackPrefix,
+            now: arg.now
+        })
+
+        for(const resourceId of resourceIds){
+            const value = findWorkspaceResource(values, resourceId, arg.fallbackPrefix)
+            if(!value){
+                continue
+            }
+
+            await writeWorkspaceJsonFile(
+                workspaceRoot,
+                arg.getFilePath(botId, resourceId),
+                createWorkspaceDataFile({
+                    format: arg.fileFormat,
+                    id: resourceId,
+                    data: value,
+                    now: arg.now
+                })
+            )
+        }
+    }
+}
+
+async function writeWorkspaceResourceIndex(workspaceRoot: FileSystemDirectoryHandle, arg: {
+    botId: string
+    values: any[]
+    indexPath: string
+    getFilePath: (botId: string, resourceId: string) => string
+    format: "risu.index.chats" | "risu.index.regex" | "risu.index.triggers" | "risu.index.lorebooks"
+    fallbackPrefix: string
+    now: number
+}) {
+    const items: WorkspaceIndexItem[] = arg.values.map((value, index) => {
+        const id = getWorkspaceResourceId(value, index, arg.fallbackPrefix)
         return {
             id,
-            name: getWorkspaceResourceName(chat),
-            path: getWorkspaceChatFilePath(botId, id),
-            updatedAt: now
+            name: getWorkspaceResourceName(value),
+            path: arg.getFilePath(arg.botId, id),
+            updatedAt: arg.now
         }
     })
 
     await writeWorkspaceJsonFile(
         workspaceRoot,
-        getWorkspaceChatIndexPath(botId),
+        arg.indexPath,
         createWorkspaceDataFile({
-            format: "risu.index.chats",
+            format: arg.format,
             data: { items },
-            now
+            now: arg.now
         })
     )
+}
+
+async function writeChangedWorkspaceSections(
+    workspaceRoot: FileSystemDirectoryHandle,
+    database: Database,
+    changes: WorkspaceDirectSaveType,
+    now: number
+) {
+    await writeChangedWorkspaceBotSections(workspaceRoot, database, changes.asset ?? [], getWorkspaceAssetFilePath, "risu.bot.asset", botAssetKeys, now)
+    await writeChangedWorkspaceBotSections(workspaceRoot, database, changes.tts ?? [], getWorkspaceTtsFilePath, "risu.bot.tts", botTtsKeys, now)
+    await writeChangedWorkspaceBotSections(workspaceRoot, database, changes.scriptBackground ?? [], getWorkspaceScriptBackgroundFilePath, "risu.bot.script.background", botBackgroundScriptKeys, now)
+    await writeChangedWorkspaceBotSections(workspaceRoot, database, changes.scriptVirtual ?? [], getWorkspaceScriptVirtualFilePath, "risu.bot.script.virtual", botVirtualScriptKeys, now)
+    await writeChangedWorkspaceBotSections(workspaceRoot, database, changes.advanced ?? [], getWorkspaceAdvancedFilePath, "risu.bot.advanced", botAdvancedKeys, now)
+}
+
+async function writeChangedWorkspaceBotSections(
+    workspaceRoot: FileSystemDirectoryHandle,
+    database: Database,
+    botIds: string[],
+    getPath: (botId: string) => string,
+    format: "risu.bot.asset" | "risu.bot.tts" | "risu.bot.script.background" | "risu.bot.script.virtual" | "risu.bot.advanced",
+    keys: readonly string[],
+    now: number
+) {
+    for(const botId of uniqueStrings(botIds)){
+        const character = findWorkspaceCharacter(database, botId)
+        if(!character){
+            continue
+        }
+
+        await writeWorkspaceBotSection(workspaceRoot, getPath(botId), format, pickWorkspaceFields(character, keys), now)
+    }
 }
 
 async function writeWorkspaceBot(workspaceRoot: FileSystemDirectoryHandle, character: any, now: number) {
@@ -477,7 +651,7 @@ async function writeWorkspaceBotSection(
     )
 }
 
-function groupChatChanges(changes: [string, string][]) {
+function groupResourceChanges(changes: [string, string][]) {
     const grouped = new Map<string, Set<string>>()
 
     for(const [botId, chatId] of changes){
@@ -490,7 +664,7 @@ function groupChatChanges(changes: [string, string][]) {
         grouped.get(botId)?.add(chatId)
     }
 
-    return [...grouped.entries()].map(([botId, chatIds]) => [botId, [...chatIds]] as const)
+    return grouped
 }
 
 function uniqueStrings(values: string[]) {
@@ -500,6 +674,10 @@ function uniqueStrings(values: string[]) {
 function findWorkspaceCharacter(database: Database, botId: string) {
     const characters = Array.isArray((database as any).characters) ? (database as any).characters : []
     return characters.find((character: any, index: number) => getWorkspaceCharacterId(character, index) === botId)
+}
+
+function findWorkspaceResource(values: any[], resourceId: string, fallbackPrefix: string) {
+    return values.find((value, index) => getWorkspaceResourceId(value, index, fallbackPrefix) === resourceId)
 }
 
 function getWorkspaceRootSettings(database: Database): Record<string, unknown> {
