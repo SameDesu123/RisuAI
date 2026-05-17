@@ -26,6 +26,7 @@ import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from
 import { loadRisuAccountData } from "./drive/accounter";
 import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder, type toSaveType } from "./storage/risuSave";
 import { AutoStorage } from "./storage/autoStorage";
+import { WorkspaceDirectoryStorage } from "./storage/workspaceDirectoryStorage";
 import { updateAnimationSpeed } from "./gui/animation";
 import { updateColorScheme, updateTextThemeAndCSS } from "./gui/colorscheme";
 import { autoServerBackup, saveDbKei } from "./kei/backup";
@@ -322,9 +323,24 @@ export async function saveDb() {
     }
 
     let encoder = new RisuSaveEncoder()
-    await encoder.init(getDatabase(), {
-        compression: forageStorage.isAccount
-    })
+    let encoderReady = false
+    const useWorkspaceDirectSave = async () => {
+        await forageStorage.Init()
+        return !forageStorage.isAccount && forageStorage.realStorage instanceof WorkspaceDirectoryStorage
+    }
+    const ensureEncoderReady = async (skipRemoteSavingOnCharacters = true) => {
+        if (encoderReady) {
+            return
+        }
+        await encoder.init(getDatabase(), {
+            compression: forageStorage.isAccount,
+            skipRemoteSavingOnCharacters
+        })
+        encoderReady = true
+    }
+    if (!(await useWorkspaceDirectSave())) {
+        await ensureEncoderReady()
+    }
 
     $effect.root(() => {
 
@@ -417,10 +433,10 @@ export async function saveDb() {
 
             if (requiresFullEncoderReload.state) {
                 encoder = new RisuSaveEncoder()
-                await encoder.init(getDatabase(), {
-                    compression: forageStorage.isAccount,
-                    skipRemoteSavingOnCharacters: false
-                })
+                encoderReady = false
+                if (!(await useWorkspaceDirectSave())) {
+                    await ensureEncoderReady(false)
+                }
                 requiresFullEncoderReload.state = false
             }
 
@@ -443,25 +459,31 @@ export async function saveDb() {
                 continue
             }
 
-            await encoder.set(db, toSave)
-            const encoded = encoder.encode()
-            if (!encoded) {
-                await sleep(1000)
-                continue
-            }
-            const dbData = new Uint8Array(encoded)
-            if (isTauri) {
-                await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
-                await writeFile(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData, { baseDir: BaseDirectory.AppData });
+            if (await useWorkspaceDirectSave()) {
+                await (forageStorage.realStorage as WorkspaceDirectoryStorage).saveDatabaseDirect(db, toSave)
             }
             else {
-
-                await forageStorage.setItem('database/database.bin', dbData)
-                if (!forageStorage.isAccount) {
-                    await forageStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData)
+                await ensureEncoderReady()
+                await encoder.set(db, toSave)
+                const encoded = encoder.encode()
+                if (!encoded) {
+                    await sleep(1000)
+                    continue
                 }
-                if (forageStorage.isAccount) {
-                    await sleep(3000)
+                const dbData = new Uint8Array(encoded)
+                if (isTauri) {
+                    await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
+                    await writeFile(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData, { baseDir: BaseDirectory.AppData });
+                }
+                else {
+
+                    await forageStorage.setItem('database/database.bin', dbData)
+                    if (!forageStorage.isAccount) {
+                        await forageStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData)
+                    }
+                    if (forageStorage.isAccount) {
+                        await sleep(3000)
+                    }
                 }
             }
             if (!forageStorage.isAccount) {
