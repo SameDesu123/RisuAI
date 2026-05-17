@@ -16,14 +16,24 @@ export const workspaceDirectoryNames = {
 
 export const workspaceBotDirectoryNames = {
     chats: "chats",
-    regex: "regex",
-    lorebooks: "lorebooks"
+    lorebooks: "lorebooks",
+    asset: "asset",
+    tts: "tts",
+    script: "script",
+    scriptRegex: "regex",
+    scriptTriggers: "triggers",
+    advanced: "advanced"
 } as const
 
 export const workspaceFileNames = {
     databaseSnapshot: "source.database.bin",
     rootSettings: "root.risuset",
     bot: "bot.risubot",
+    botAsset: "asset.risuasset",
+    botTts: "tts.risutts",
+    botScriptBackground: "background.risubg",
+    botScriptVirtual: "virtual.risuscript",
+    botAdvanced: "advanced.risuadv",
     botPresets: "botPresets.risupreset",
     modules: "modules.risumodule",
     plugins: "plugins.risuplug",
@@ -31,6 +41,7 @@ export const workspaceFileNames = {
     botsIndex: "bots.risuindex",
     chatsIndex: "chats.risuindex",
     regexIndex: "regex.risuindex",
+    triggersIndex: "triggers.risuindex",
     lorebooksIndex: "lorebooks.risuindex"
 } as const
 
@@ -38,8 +49,14 @@ export type WorkspaceFormatName =
     | "risu.workspace"
     | "risu.settings.root"
     | "risu.bot"
+    | "risu.bot.asset"
+    | "risu.bot.tts"
+    | "risu.bot.script.background"
+    | "risu.bot.script.virtual"
+    | "risu.bot.advanced"
     | "risu.chat"
     | "risu.regex"
+    | "risu.trigger"
     | "risu.lorebook"
     | "risu.botPresets"
     | "risu.modules"
@@ -51,6 +68,7 @@ export type WorkspaceIndexFormatName =
     | "risu.index.bots"
     | "risu.index.chats"
     | "risu.index.regex"
+    | "risu.index.triggers"
     | "risu.index.lorebooks"
 
 export type WorkspaceManifest = {
@@ -166,8 +184,16 @@ export function getWorkspaceBotResourceDirectoryPath(botId: string, resourceDire
     return joinWorkspacePath(getWorkspaceBotDirectoryPath(botId), resourceDirectoryName)
 }
 
+export function getWorkspaceNestedBotResourceDirectoryPath(botId: string, firstDirectoryName: string, secondDirectoryName: string) {
+    return joinWorkspacePath(getWorkspaceBotDirectoryPath(botId), firstDirectoryName, secondDirectoryName)
+}
+
 export function getWorkspaceBotResourceIndexPath(botId: string, resourceDirectoryName: string, indexFileName: string) {
     return joinWorkspacePath(getWorkspaceBotResourceDirectoryPath(botId, resourceDirectoryName), indexFileName)
+}
+
+export function getWorkspaceNestedBotResourceIndexPath(botId: string, firstDirectoryName: string, secondDirectoryName: string, indexFileName: string) {
+    return joinWorkspacePath(getWorkspaceNestedBotResourceDirectoryPath(botId, firstDirectoryName, secondDirectoryName), indexFileName)
 }
 
 export function getWorkspaceChatIndexPath(botId: string) {
@@ -182,14 +208,49 @@ export function getWorkspaceChatFilePath(botId: string, chatId: string) {
 }
 
 export function getWorkspaceRegexIndexPath(botId: string) {
-    return getWorkspaceBotResourceIndexPath(botId, workspaceBotDirectoryNames.regex, workspaceFileNames.regexIndex)
+    return getWorkspaceNestedBotResourceIndexPath(botId, workspaceBotDirectoryNames.script, workspaceBotDirectoryNames.scriptRegex, workspaceFileNames.regexIndex)
+}
+
+export function getWorkspaceLegacyRegexIndexPath(botId: string) {
+    return getWorkspaceBotResourceIndexPath(botId, "regex", workspaceFileNames.regexIndex)
 }
 
 export function getWorkspaceRegexFilePath(botId: string, regexId: string) {
     return joinWorkspacePath(
-        getWorkspaceBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.regex),
+        getWorkspaceNestedBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.script, workspaceBotDirectoryNames.scriptRegex),
         `${toWorkspacePathSegment(regexId)}.risuregex`
     )
+}
+
+export function getWorkspaceTriggersIndexPath(botId: string) {
+    return getWorkspaceNestedBotResourceIndexPath(botId, workspaceBotDirectoryNames.script, workspaceBotDirectoryNames.scriptTriggers, workspaceFileNames.triggersIndex)
+}
+
+export function getWorkspaceTriggerFilePath(botId: string, triggerId: string) {
+    return joinWorkspacePath(
+        getWorkspaceNestedBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.script, workspaceBotDirectoryNames.scriptTriggers),
+        `${toWorkspacePathSegment(triggerId)}.risutrigger`
+    )
+}
+
+export function getWorkspaceScriptBackgroundFilePath(botId: string) {
+    return joinWorkspacePath(getWorkspaceBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.script), workspaceFileNames.botScriptBackground)
+}
+
+export function getWorkspaceScriptVirtualFilePath(botId: string) {
+    return joinWorkspacePath(getWorkspaceBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.script), workspaceFileNames.botScriptVirtual)
+}
+
+export function getWorkspaceAssetFilePath(botId: string) {
+    return joinWorkspacePath(getWorkspaceBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.asset), workspaceFileNames.botAsset)
+}
+
+export function getWorkspaceTtsFilePath(botId: string) {
+    return joinWorkspacePath(getWorkspaceBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.tts), workspaceFileNames.botTts)
+}
+
+export function getWorkspaceAdvancedFilePath(botId: string) {
+    return joinWorkspacePath(getWorkspaceBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.advanced), workspaceFileNames.botAdvanced)
 }
 
 export function getWorkspaceLorebookIndexPath(botId: string) {
