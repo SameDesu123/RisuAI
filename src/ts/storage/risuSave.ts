@@ -81,6 +81,7 @@ export async function encodeRisuSaveCompressionStream(data:any) {
 }
 
 export type toSaveType = {
+    root?: boolean;
     character: string[];
     chat: [string, string][];
     botPreset: boolean;

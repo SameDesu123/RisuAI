@@ -313,6 +313,7 @@ export async function saveDb() {
     }
 
     const changeTracker: toSaveType = {
+        root: false,
         character: [],
         chat: [],
         botPreset: false,
@@ -397,23 +398,50 @@ export async function saveDb() {
                     $state.snapshot(DBState.db[key])
                 }
             }
-            if (DBState?.db?.characters?.[selIdState]) {
-                for (const key in DBState.db.characters[selIdState]) {
-                    if (key !== 'chats') {
-                        $state.snapshot(DBState.db.characters[selIdState][key])
-                    }
-                }
-                $state.snapshot(DBState.db.characters[selIdState].chats)
-                if (changeTracker.character[0] !== DBState.db.characters[selIdState]?.chaId) {
-                    changeTracker.character.unshift(DBState.db.characters[selIdState]?.chaId)
-                }
-                if (
-                    changeTracker.chat[0]?.[0] !== DBState.db.characters[selIdState]?.chaId ||
-                    changeTracker.chat[0]?.[1] !== DBState.db.characters[selIdState]?.chats[DBState.db.characters[selIdState]?.chatPage].id
-                ) {
-                    changeTracker.chat.unshift([DBState.db.characters[selIdState]?.chaId, DBState.db.characters[selIdState]?.chats[DBState.db.characters[selIdState]?.chatPage].id])
+
+            changeTracker.root = true
+            saveTimeoutExecute()
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) {
+                return
+            }
+
+            for (const key in character) {
+                if (key !== 'chats') {
+                    $state.snapshot(character[key])
                 }
             }
+
+            if (changeTracker.character[0] !== character.chaId) {
+                changeTracker.character.unshift(character.chaId)
+            }
+
+            saveTimeoutExecute()
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) {
+                return
+            }
+
+            const chat = character.chats?.[character.chatPage]
+            if (!chat) {
+                return
+            }
+
+            $state.snapshot(chat)
+
+            if (
+                changeTracker.chat[0]?.[0] !== character.chaId ||
+                changeTracker.chat[0]?.[1] !== chat.id
+            ) {
+                changeTracker.chat.unshift([character.chaId, chat.id])
+            }
+
             saveTimeoutExecute()
         })
     })
@@ -441,10 +469,14 @@ export async function saveDb() {
             }
 
             let toSave = safeStructuredClone(changeTracker)
-            changeTracker.character = changeTracker.character.length === 0 ? [] : [changeTracker.character[0]]
-            changeTracker.chat = changeTracker.chat.length === 0 ? [] : [changeTracker.chat[0]]
+            changeTracker.root = false
+            changeTracker.character = []
+            changeTracker.chat = []
             changeTracker.botPreset = false
             changeTracker.modules = false
+            changeTracker.loadouts = false
+            changeTracker.plugins = false
+            changeTracker.pluginCustomStorage = false
             if (gotChannel) {
                 //Data is saved in other tab
                 await sleep(1000)
