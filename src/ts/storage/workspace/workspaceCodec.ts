@@ -332,7 +332,7 @@ async function readWorkspaceTextFile(workspaceRoot: FileSystemDirectoryHandle, p
 async function writeWorkspaceBinaryFile(workspaceRoot: FileSystemDirectoryHandle, path: string, value: Uint8Array) {
     const handle = await getWorkspaceFileHandleByPath(workspaceRoot, path, true)
     const writable = await handle.createWritable()
-    await writable.write(value)
+    await writable.write(toWritableArrayBuffer(value))
     await writable.close()
 }
 
@@ -393,6 +393,12 @@ function toUint8Array(data: Uint8Array | ArrayBuffer): Uint8Array {
         return data
     }
     return new Uint8Array(data)
+}
+
+function toWritableArrayBuffer(data: Uint8Array): ArrayBuffer {
+    const buffer = new ArrayBuffer(data.byteLength)
+    new Uint8Array(buffer).set(data)
+    return buffer
 }
 
 function isNotFoundError(error: unknown) {
