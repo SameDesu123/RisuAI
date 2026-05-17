@@ -1,6 +1,6 @@
 export type RisuStorageKey = string
 
-export type RisuStorageReadableValue = Buffer | null
+export type RisuStorageReadableValue = unknown
 
 export type RisuStorageWritableValue = Uint8Array
 
