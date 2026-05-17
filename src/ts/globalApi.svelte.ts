@@ -346,6 +346,9 @@ export async function saveDb() {
     $effect.root(() => {
 
         let selIdState = $state(0)
+        let rootWatcherReady = false
+        let characterWatcherReadyFor = ''
+        let chatWatcherReadyFor = ''
 
         const debounceTime = 500; // 500 milliseconds
         let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -399,6 +402,11 @@ export async function saveDb() {
                 }
             }
 
+            if (!rootWatcherReady) {
+                rootWatcherReady = true
+                return
+            }
+
             changeTracker.root = true
             saveTimeoutExecute()
         })
@@ -413,6 +421,11 @@ export async function saveDb() {
                 if (key !== 'chats') {
                     $state.snapshot(character[key])
                 }
+            }
+
+            if (characterWatcherReadyFor !== character.chaId) {
+                characterWatcherReadyFor = character.chaId
+                return
             }
 
             if (changeTracker.character[0] !== character.chaId) {
@@ -434,6 +447,12 @@ export async function saveDb() {
             }
 
             $state.snapshot(chat)
+
+            const chatWatcherKey = `${character.chaId}:${chat.id}`
+            if (chatWatcherReadyFor !== chatWatcherKey) {
+                chatWatcherReadyFor = chatWatcherKey
+                return
+            }
 
             if (
                 changeTracker.chat[0]?.[0] !== character.chaId ||
