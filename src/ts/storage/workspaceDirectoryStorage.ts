@@ -1,3 +1,5 @@
+import type { Database } from "./database.svelte"
+import type { toSaveType } from "./risuSave"
 import type { RisuRawStorage } from "./storageTypes"
 import {
     decodeStandardDatabaseBin,
@@ -97,6 +99,12 @@ export class WorkspaceDirectoryStorage implements RisuRawStorage{
 
         await removeWorkspaceRawFile(this.workspaceRoot, key)
         return null
+    }
+
+    async saveDatabaseDirect(database: Database, _changes?: toSaveType) {
+        await writeWorkspaceDatabase(this.workspaceRoot, database, {
+            workspaceId: await this.getWorkspaceId()
+        })
     }
 
     async getManifest(): Promise<WorkspaceManifest | null> {
