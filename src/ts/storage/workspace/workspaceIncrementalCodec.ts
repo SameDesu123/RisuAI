@@ -28,8 +28,12 @@ import { readWorkspaceManifest, writeWorkspaceDatabase } from "./workspaceCodec"
 
 export type WorkspaceIncrementalWriteOptions = {
     workspaceId: string
-    changes?: toSaveType
+    changes?: WorkspaceDirectSaveType
     now?: number
+}
+
+type WorkspaceDirectSaveType = toSaveType & {
+    root?: boolean
 }
 
 const rootDatabaseKeys = new Set([
@@ -120,7 +124,7 @@ export async function writeWorkspaceDatabaseIncremental(
     database: Database,
     options: WorkspaceIncrementalWriteOptions
 ): Promise<WorkspaceManifest> {
-    if(!options.changes){
+    if(!options.changes || !hasWorkspaceScopedChanges(options.changes)){
         return await writeWorkspaceDatabase(workspaceRoot, database, {
             workspaceId: options.workspaceId,
             now: options.now
@@ -130,12 +134,18 @@ export async function writeWorkspaceDatabaseIncremental(
     const now = options.now ?? Date.now()
     await ensureWorkspaceDirectories(workspaceRoot)
 
-    const manifest = await readOrCreateManifest(workspaceRoot, options.workspaceId, now)
-    manifest.updatedAt = now
-    await writeWorkspaceJsonFile(workspaceRoot, workspaceManifestFileName, manifest)
+    const { manifest, created } = await readOrCreateManifest(workspaceRoot, options.workspaceId, now)
+    if(created){
+        await writeWorkspaceJsonFile(workspaceRoot, workspaceManifestFileName, manifest)
+    }
 
-    await writeWorkspaceRootSettings(workspaceRoot, manifest, database, now)
-    await writeWorkspaceIndexes(workspaceRoot, manifest, database, now)
+    if(options.changes.root){
+        await writeWorkspaceRootSettings(workspaceRoot, manifest, database, now)
+    }
+
+    if(options.changes.character.length > 0){
+        await writeWorkspaceIndexes(workspaceRoot, manifest, database, now)
+    }
 
     if(options.changes.botPreset){
         await writeWorkspaceJsonFile(
@@ -185,8 +195,9 @@ export async function writeWorkspaceDatabaseIncremental(
         )
     }
 
-    const changedBotIds = getChangedBotIds(options.changes)
-    for(const botId of changedBotIds){
+    await writeChangedWorkspaceChats(workspaceRoot, database, options.changes, now)
+
+    for(const botId of uniqueStrings(options.changes.character)){
         const character = findWorkspaceCharacter(database, botId)
         if(character){
             await writeWorkspaceBot(workspaceRoot, character, now)
@@ -196,15 +207,37 @@ export async function writeWorkspaceDatabaseIncremental(
     return manifest
 }
 
-async function readOrCreateManifest(workspaceRoot: FileSystemDirectoryHandle, workspaceId: string, now: number) {
+function hasWorkspaceScopedChanges(changes: WorkspaceDirectSaveType) {
+    return Boolean(
+        changes.root ||
+        changes.character.length > 0 ||
+        changes.chat.length > 0 ||
+        changes.botPreset ||
+        changes.modules ||
+        changes.loadouts ||
+        changes.plugins ||
+        changes.pluginCustomStorage
+    )
+}
+
+async function readOrCreateManifest(workspaceRoot: FileSystemDirectoryHandle, workspaceId: string, now: number): Promise<{
+    manifest: WorkspaceManifest
+    created: boolean
+}> {
     try {
-        return await readWorkspaceManifest(workspaceRoot)
+        return {
+            manifest: await readWorkspaceManifest(workspaceRoot),
+            created: false
+        }
     } catch (error) {
         if(isNotFoundError(error)){
-            return createWorkspaceManifest({
-                id: workspaceId,
-                now
-            })
+            return {
+                manifest: createWorkspaceManifest({
+                    id: workspaceId,
+                    now
+                }),
+                created: true
+            }
         }
         throw error
     }
@@ -253,6 +286,65 @@ async function writeWorkspaceIndexes(
         createWorkspaceDataFile({
             format: "risu.index.bots",
             data: { items: botIndexItems },
+            now
+        })
+    )
+}
+
+async function writeChangedWorkspaceChats(
+    workspaceRoot: FileSystemDirectoryHandle,
+    database: Database,
+    changes: WorkspaceDirectSaveType,
+    now: number
+) {
+    const grouped = groupChatChanges(changes.chat)
+
+    for(const [botId, chatIds] of grouped){
+        const character = findWorkspaceCharacter(database, botId)
+        if(!character){
+            continue
+        }
+
+        const chats = Array.isArray(character?.chats) ? character.chats : []
+        await writeWorkspaceChatIndex(workspaceRoot, botId, chats, now)
+
+        for(const chatId of chatIds){
+            const chat = chats.find((item: any, index: number) => getWorkspaceResourceId(item, index, "chat") === chatId)
+            if(!chat){
+                continue
+            }
+
+            await writeWorkspaceJsonFile(
+                workspaceRoot,
+                getWorkspaceChatFilePath(botId, chatId),
+                createWorkspaceDataFile({
+                    format: "risu.chat",
+                    id: chatId,
+                    data: chat,
+                    now
+                })
+            )
+        }
+    }
+}
+
+async function writeWorkspaceChatIndex(workspaceRoot: FileSystemDirectoryHandle, botId: string, chats: any[], now: number) {
+    const items: WorkspaceIndexItem[] = chats.map((chat, index) => {
+        const id = getWorkspaceResourceId(chat, index, "chat")
+        return {
+            id,
+            name: getWorkspaceResourceName(chat),
+            path: getWorkspaceChatFilePath(botId, id),
+            updatedAt: now
+        }
+    })
+
+    await writeWorkspaceJsonFile(
+        workspaceRoot,
+        getWorkspaceChatIndexPath(botId),
+        createWorkspaceDataFile({
+            format: "risu.index.chats",
+            data: { items },
             now
         })
     )
@@ -386,22 +478,24 @@ async function writeWorkspaceBotSection(
     )
 }
 
-function getChangedBotIds(changes: toSaveType) {
-    const ids = new Set<string>()
+function groupChatChanges(changes: [string, string][]) {
+    const grouped = new Map<string, Set<string>>()
 
-    for(const id of changes.character){
-        if(id){
-            ids.add(id)
+    for(const [botId, chatId] of changes){
+        if(!botId || !chatId){
+            continue
         }
+        if(!grouped.has(botId)){
+            grouped.set(botId, new Set())
+        }
+        grouped.get(botId)?.add(chatId)
     }
 
-    for(const [botId] of changes.chat){
-        if(botId){
-            ids.add(botId)
-        }
-    }
+    return [...grouped.entries()].map(([botId, chatIds]) => [botId, [...chatIds]] as const)
+}
 
-    return ids
+function uniqueStrings(values: string[]) {
+    return [...new Set(values.filter(Boolean))]
 }
 
 function findWorkspaceCharacter(database: Database, botId: string) {
