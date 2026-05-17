@@ -25,6 +25,10 @@ export const workspaceBotDirectoryNames = {
     advanced: "advanced"
 } as const
 
+export const workspacePluginDirectoryNames = {
+    storage: "storage"
+} as const
+
 export const workspaceFileNames = {
     databaseSnapshot: "source.database.bin",
     rootSettings: "root.risuset",
@@ -38,6 +42,8 @@ export const workspaceFileNames = {
     modules: "modules.risumodule",
     plugins: "plugins.risuplug",
     pluginStorage: "pluginStorage.risuplugstore",
+    pluginsIndex: "plugins.risuindex",
+    pluginStorageIndex: "pluginStorage.risuindex",
     botsIndex: "bots.risuindex",
     chatsIndex: "chats.risuindex",
     regexIndex: "regex.risuindex",
@@ -60,7 +66,9 @@ export type WorkspaceFormatName =
     | "risu.lorebook"
     | "risu.botPresets"
     | "risu.modules"
+    | "risu.plugin"
     | "risu.plugins"
+    | "risu.pluginStorage.entry"
     | "risu.pluginStorage"
     | WorkspaceIndexFormatName
 
@@ -70,6 +78,8 @@ export type WorkspaceIndexFormatName =
     | "risu.index.regex"
     | "risu.index.triggers"
     | "risu.index.lorebooks"
+    | "risu.index.plugins"
+    | "risu.index.pluginStorage"
 
 export type WorkspaceManifest = {
     format: "risu.workspace"
@@ -166,8 +176,8 @@ export function createWorkspaceManifestPaths(): WorkspaceManifestPaths {
         bots: workspaceDirectoryNames.bots,
         botPresets: joinWorkspacePath(workspaceDirectoryNames.presets, workspaceFileNames.botPresets),
         modules: joinWorkspacePath(workspaceDirectoryNames.modules, workspaceFileNames.modules),
-        plugins: joinWorkspacePath(workspaceDirectoryNames.plugins, workspaceFileNames.plugins),
-        pluginStorage: joinWorkspacePath(workspaceDirectoryNames.plugins, workspaceFileNames.pluginStorage),
+        plugins: joinWorkspacePath(workspaceDirectoryNames.plugins, workspaceFileNames.pluginsIndex),
+        pluginStorage: joinWorkspacePath(workspaceDirectoryNames.plugins, workspaceFileNames.pluginStorageIndex),
         botsIndex: joinWorkspacePath(workspaceDirectoryNames.indexes, workspaceFileNames.botsIndex)
     }
 }
@@ -257,6 +267,24 @@ export function getWorkspaceLorebookFilePath(botId: string, lorebookId: string) 
     return joinWorkspacePath(
         getWorkspaceBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.lorebooks),
         `${toWorkspacePathSegment(lorebookId)}.risulore`
+    )
+}
+
+export function getWorkspacePluginFilePath(pluginId: string) {
+    return joinWorkspacePath(
+        workspaceDirectoryNames.plugins,
+        `${toWorkspacePathSegment(pluginId)}.risuplug`
+    )
+}
+
+export function getWorkspacePluginStorageDirectoryPath() {
+    return joinWorkspacePath(workspaceDirectoryNames.plugins, workspacePluginDirectoryNames.storage)
+}
+
+export function getWorkspacePluginStorageFilePath(pluginId: string) {
+    return joinWorkspacePath(
+        getWorkspacePluginStorageDirectoryPath(),
+        `${toWorkspacePathSegment(pluginId)}.risuplugstore`
     )
 }
 
