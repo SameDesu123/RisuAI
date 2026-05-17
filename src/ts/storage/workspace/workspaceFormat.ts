@@ -211,10 +211,6 @@ export function getWorkspaceRegexIndexPath(botId: string) {
     return getWorkspaceNestedBotResourceIndexPath(botId, workspaceBotDirectoryNames.script, workspaceBotDirectoryNames.scriptRegex, workspaceFileNames.regexIndex)
 }
 
-export function getWorkspaceLegacyRegexIndexPath(botId: string) {
-    return getWorkspaceBotResourceIndexPath(botId, "regex", workspaceFileNames.regexIndex)
-}
-
 export function getWorkspaceRegexFilePath(botId: string, regexId: string) {
     return joinWorkspacePath(
         getWorkspaceNestedBotResourceDirectoryPath(botId, workspaceBotDirectoryNames.script, workspaceBotDirectoryNames.scriptRegex),
