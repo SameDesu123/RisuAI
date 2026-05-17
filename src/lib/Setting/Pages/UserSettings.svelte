@@ -44,6 +44,10 @@
         storageMode = readStorageConfig().mode
     }
 
+    function alertWorkspaceError(error: unknown) {
+        alertError(error instanceof Error ? error : String(error))
+    }
+
     async function enableWorkspaceDirectoryStorage() {
         if(workspaceBusy){
             return
@@ -73,7 +77,7 @@
             if(error instanceof DOMException && error.name === 'AbortError'){
                 return
             }
-            alertError(error)
+            alertWorkspaceError(error)
             return
         }
 
@@ -86,7 +90,7 @@
             alertNormal('Workspace folder storage has been enabled. Risu will reload now.')
             location.reload()
         } catch (error) {
-            alertError(error)
+            alertWorkspaceError(error)
         } finally {
             workspaceBusy = false
             workspaceStatus = ''
@@ -115,7 +119,7 @@
             const result = await previewWorkspaceToStandardDatabase(workspaceHandle)
             alertNormal(`Workspace check passed. Characters: ${result.database.characters?.length ?? 0}`)
         } catch (error) {
-            alertError(error)
+            alertWorkspaceError(error)
         } finally {
             workspaceBusy = false
             workspaceStatus = ''
@@ -151,7 +155,7 @@
             alertNormal('Standard database storage has been restored. Risu will reload now.')
             location.reload()
         } catch (error) {
-            alertError(error)
+            alertWorkspaceError(error)
         } finally {
             workspaceBusy = false
             workspaceStatus = ''
