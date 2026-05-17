@@ -44,6 +44,16 @@
         storageMode = readStorageConfig().mode
     }
 
+    function workspaceModeLabel() {
+        return storageMode === 'workspace-directory'
+            ? language.workspaceStorage.workspaceFolderMode
+            : language.workspaceStorage.standardDatabaseMode
+    }
+
+    function formatWorkspaceMessage(message: string, value: string | number) {
+        return message.replace('{0}', String(value))
+    }
+
     function alertWorkspaceError(error: unknown) {
         alertError(error instanceof Error ? error : String(error))
     }
@@ -53,18 +63,18 @@
             return
         }
         if(!canUseWorkspaceDirectoryStorage()){
-            alertError('Workspace folder storage is only available in browsers that support directory access.')
+            alertError(language.workspaceStorage.unavailableError)
             return
         }
         if(isWorkspaceDirectoryStorage(readStorageConfig())){
-            alertNormal('Workspace folder storage is already enabled.')
+            alertNormal(language.workspaceStorage.alreadyEnabled)
             return
         }
         if(forageStorage.isAccount || DBState.db.account?.useSync){
-            alertError('Disable account sync before switching to workspace folder storage.')
+            alertError(language.workspaceStorage.disableAccountSync)
             return
         }
-        if(!(await alertConfirm('Convert the current standard database storage into a workspace folder? The selected folder will contain Risu workspace files.'))){
+        if(!(await alertConfirm(language.workspaceStorage.convertConfirm))){
             return
         }
 
@@ -82,12 +92,12 @@
         }
 
         workspaceBusy = true
-        workspaceStatus = 'Converting standard database storage to workspace folder...'
+        workspaceStatus = language.workspaceStorage.convertStatus
         try {
             const result = await convertStandardDatabaseToWorkspace(forageStorage, workspaceHandle)
             await setWorkspaceDirectoryStorageMode(result.workspaceId, workspaceHandle)
             refreshStorageMode()
-            alertNormal('Workspace folder storage has been enabled. Risu will reload now.')
+            alertNormal(language.workspaceStorage.convertSuccessReload)
             location.reload()
         } catch (error) {
             alertWorkspaceError(error)
@@ -103,21 +113,21 @@
         }
         const config = readStorageConfig()
         if(!isWorkspaceDirectoryStorage(config)){
-            alertNormal('Workspace folder storage is not enabled.')
+            alertNormal(language.workspaceStorage.notEnabled)
             return
         }
 
         const workspaceHandle = await getWorkspaceDirectoryHandle(config.workspaceId)
         if(!workspaceHandle){
-            alertError('Workspace folder handle was not found. Select the workspace folder again by converting from standard storage.')
+            alertError(language.workspaceStorage.handleMissing)
             return
         }
 
         workspaceBusy = true
-        workspaceStatus = 'Checking workspace folder storage...'
+        workspaceStatus = language.workspaceStorage.checkStatus
         try {
             const result = await previewWorkspaceToStandardDatabase(workspaceHandle)
-            alertNormal(`Workspace check passed. Characters: ${result.database.characters?.length ?? 0}`)
+            alertNormal(language.workspaceStorage.checkPassed(result.database.characters?.length ?? 0))
         } catch (error) {
             alertWorkspaceError(error)
         } finally {
@@ -132,27 +142,27 @@
         }
         const config = readStorageConfig()
         if(!isWorkspaceDirectoryStorage(config)){
-            alertNormal('Workspace folder storage is not enabled.')
+            alertNormal(language.workspaceStorage.notEnabled)
             return
         }
-        if(!(await alertConfirm('Convert the workspace folder back into standard database storage? The workspace folder will be kept, but Risu will switch back to database.bin storage.'))){
+        if(!(await alertConfirm(language.workspaceStorage.revertConfirm))){
             return
         }
 
         const workspaceHandle = await getWorkspaceDirectoryHandle(config.workspaceId)
         if(!workspaceHandle){
-            alertError('Workspace folder handle was not found. Cannot revert automatically.')
+            alertError(language.workspaceStorage.handleMissingRevert)
             return
         }
 
         workspaceBusy = true
-        workspaceStatus = 'Converting workspace folder back to standard database storage...'
+        workspaceStatus = language.workspaceStorage.revertStatus
         try {
             const targetStorage = getStandardDatabaseTargetStorage()
             await convertWorkspaceToStandardDatabase(workspaceHandle, targetStorage)
             await setStandardDatabaseStorageMode()
             refreshStorageMode()
-            alertNormal('Standard database storage has been restored. Risu will reload now.')
+            alertNormal(language.workspaceStorage.revertSuccessReload)
             location.reload()
         } catch (error) {
             alertWorkspaceError(error)
@@ -293,26 +303,26 @@
 
 <div class="bg-darkbg p-3 rounded-md mb-2 flex flex-col items-start mt-2 gap-2">
     <div class="w-full">
-        <h1 class="text-3xl font-black min-w-0">Risu Workspace Storage</h1>
+        <h1 class="text-3xl font-black min-w-0">{language.workspaceStorage.title}</h1>
     </div>
-    <span class="text-textcolor2">Current storage mode: {storageMode === 'workspace-directory' ? 'Workspace folder' : 'Standard database'}</span>
-    <span class="text-textcolor2 text-sm">Workspace folder storage splits Risu data into a selected local folder. Standard database storage keeps using database.bin.</span>
+    <span class="text-textcolor2">{formatWorkspaceMessage(language.workspaceStorage.currentMode, workspaceModeLabel())}</span>
+    <span class="text-textcolor2 text-sm">{language.workspaceStorage.description}</span>
     {#if workspaceStatus}
         <span class="text-textcolor2 text-sm">{workspaceStatus}</span>
     {/if}
     <div class="flex flex-wrap gap-2">
         <Button onclick={enableWorkspaceDirectoryStorage} disabled={workspaceBusy || storageMode === 'workspace-directory' || !canUseWorkspaceDirectoryStorage()}>
-            Convert to Workspace Folder
+            {language.workspaceStorage.convertButton}
         </Button>
         <Button onclick={checkWorkspaceDirectoryStorage} disabled={workspaceBusy || storageMode !== 'workspace-directory'} styled="outlined">
-            Check Workspace
+            {language.workspaceStorage.checkButton}
         </Button>
         <Button onclick={revertWorkspaceDirectoryStorage} disabled={workspaceBusy || storageMode !== 'workspace-directory'} styled="danger">
-            Revert to Standard Database
+            {language.workspaceStorage.revertButton}
         </Button>
     </div>
     {#if !canUseWorkspaceDirectoryStorage()}
-        <span class="text-textcolor2 text-sm">Workspace folder storage requires browser directory access support.</span>
+        <span class="text-textcolor2 text-sm">{language.workspaceStorage.unavailable}</span>
     {/if}
 </div>
 
