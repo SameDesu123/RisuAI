@@ -39,6 +39,12 @@ import {
     saveSectionChatMessageKeys,
     saveSectionChatMetaKeys,
     saveSectionChatVariableKeys,
+    saveSectionModuleAssetKeys,
+    saveSectionModuleInfoKeys,
+    saveSectionModuleLorebookKeys,
+    saveSectionModuleRegexKeys,
+    saveSectionModuleScriptKeys,
+    saveSectionModuleTriggerKeys,
     saveSectionTtsKeys,
     saveSectionVirtualScriptKeys,
 } from "./storage/saveSections/sectionChangeDetection";
@@ -358,6 +364,12 @@ export async function saveDb() {
         let chatLoreWatcherReadyFor = ''
         let chatMemoryWatcherReadyFor = ''
         let chatMetaWatcherReadyFor = ''
+        const moduleInfoWatchersReady = new Set<string>()
+        const moduleLorebookWatchersReady = new Set<string>()
+        const moduleRegexWatchersReady = new Set<string>()
+        const moduleTriggerWatchersReady = new Set<string>()
+        const moduleAssetWatchersReady = new Set<string>()
+        const moduleScriptWatchersReady = new Set<string>()
         const regexSignatures = new Map<string, Map<string, string>>()
         const triggerSignatures = new Map<string, Map<string, string>>()
         const lorebookSignatures = new Map<string, Map<string, string>>()
@@ -452,6 +464,29 @@ export async function saveDb() {
             saveTimeoutExecute()
         }
 
+        function getModuleTrackingId(module: any, index: number) {
+            return getSaveSectionTrackedResourceId(module, index, 'module')
+        }
+
+        function trackSaveModuleSection(
+            module: any,
+            moduleIndex: number,
+            keys: readonly string[],
+            readyModuleIds: Set<string>,
+            changedModuleIds: string[]
+        ) {
+            snapshotSaveSectionKeys(module, keys)
+
+            const moduleId = getModuleTrackingId(module, moduleIndex)
+            if (!readyModuleIds.has(moduleId)) {
+                readyModuleIds.add(moduleId)
+                return
+            }
+
+            pushSaveSectionChange(changedModuleIds, moduleId)
+            saveTimeoutExecute()
+        }
+
         $effect(() => {
             DBState.db.botPresetsId
             DBState.db.botPresets.length
@@ -462,6 +497,78 @@ export async function saveDb() {
             $state.snapshot(DBState.db.modules)
             changeTracker.modules = true
             saveTimeoutExecute()
+        })
+        $effect(() => {
+            const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
+            for (let i = 0; i < modules.length; i++) {
+                trackSaveModuleSection(
+                    modules[i],
+                    i,
+                    saveSectionModuleInfoKeys,
+                    moduleInfoWatchersReady,
+                    changeTracker.moduleInfo ??= []
+                )
+            }
+        })
+        $effect(() => {
+            const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
+            for (let i = 0; i < modules.length; i++) {
+                trackSaveModuleSection(
+                    modules[i],
+                    i,
+                    saveSectionModuleLorebookKeys,
+                    moduleLorebookWatchersReady,
+                    changeTracker.moduleLorebook ??= []
+                )
+            }
+        })
+        $effect(() => {
+            const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
+            for (let i = 0; i < modules.length; i++) {
+                trackSaveModuleSection(
+                    modules[i],
+                    i,
+                    saveSectionModuleRegexKeys,
+                    moduleRegexWatchersReady,
+                    changeTracker.moduleRegex ??= []
+                )
+            }
+        })
+        $effect(() => {
+            const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
+            for (let i = 0; i < modules.length; i++) {
+                trackSaveModuleSection(
+                    modules[i],
+                    i,
+                    saveSectionModuleTriggerKeys,
+                    moduleTriggerWatchersReady,
+                    changeTracker.moduleTrigger ??= []
+                )
+            }
+        })
+        $effect(() => {
+            const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
+            for (let i = 0; i < modules.length; i++) {
+                trackSaveModuleSection(
+                    modules[i],
+                    i,
+                    saveSectionModuleAssetKeys,
+                    moduleAssetWatchersReady,
+                    changeTracker.moduleAssets ??= []
+                )
+            }
+        })
+        $effect(() => {
+            const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
+            for (let i = 0; i < modules.length; i++) {
+                trackSaveModuleSection(
+                    modules[i],
+                    i,
+                    saveSectionModuleScriptKeys,
+                    moduleScriptWatchersReady,
+                    changeTracker.moduleScript ??= []
+                )
+            }
         })
         $effect(() => {
             $state.snapshot(DBState.db.loadouts)
@@ -702,6 +809,12 @@ export async function saveDb() {
             changeTracker.chatLore = changeTracker.chatLore?.length ? [changeTracker.chatLore[0]] : []
             changeTracker.chatMemory = changeTracker.chatMemory?.length ? [changeTracker.chatMemory[0]] : []
             changeTracker.chatMeta = changeTracker.chatMeta?.length ? [changeTracker.chatMeta[0]] : []
+            changeTracker.moduleInfo = changeTracker.moduleInfo?.length ? [changeTracker.moduleInfo[0]] : []
+            changeTracker.moduleLorebook = changeTracker.moduleLorebook?.length ? [changeTracker.moduleLorebook[0]] : []
+            changeTracker.moduleRegex = changeTracker.moduleRegex?.length ? [changeTracker.moduleRegex[0]] : []
+            changeTracker.moduleTrigger = changeTracker.moduleTrigger?.length ? [changeTracker.moduleTrigger[0]] : []
+            changeTracker.moduleAssets = changeTracker.moduleAssets?.length ? [changeTracker.moduleAssets[0]] : []
+            changeTracker.moduleScript = changeTracker.moduleScript?.length ? [changeTracker.moduleScript[0]] : []
             changeTracker.regex = changeTracker.regex?.length ? [changeTracker.regex[0]] : []
             changeTracker.regexIndex = changeTracker.regexIndex?.length ? [changeTracker.regexIndex[0]] : []
             changeTracker.trigger = changeTracker.trigger?.length ? [changeTracker.trigger[0]] : []

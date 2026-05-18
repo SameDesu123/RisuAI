@@ -7,6 +7,12 @@ export type SectionSaveChangeTracker = toSaveType & {
     chatLore?: [string, string][]
     chatMemory?: [string, string][]
     chatMeta?: [string, string][]
+    moduleInfo?: string[]
+    moduleLorebook?: string[]
+    moduleRegex?: string[]
+    moduleTrigger?: string[]
+    moduleAssets?: string[]
+    moduleScript?: string[]
     regex?: [string, string][]
     regexIndex?: string[]
     trigger?: [string, string][]
@@ -122,6 +128,38 @@ export const saveSectionChatMetaKeys = [
     "lastDate",
     "bookmarks",
     "bookmarkNames",
+] as const
+
+export const saveSectionModuleInfoKeys = [
+    "name",
+    "description",
+    "id",
+    "lowLevelAccess",
+    "hideIcon",
+    "namespace",
+    "mcp",
+] as const
+
+export const saveSectionModuleLorebookKeys = [
+    "lorebook",
+] as const
+
+export const saveSectionModuleRegexKeys = [
+    "regex",
+] as const
+
+export const saveSectionModuleTriggerKeys = [
+    "trigger",
+] as const
+
+export const saveSectionModuleAssetKeys = [
+    "assets",
+] as const
+
+export const saveSectionModuleScriptKeys = [
+    "cjs",
+    "customModuleToggle",
+    "backgroundEmbedding",
 ] as const
 
 export function pushSaveSectionChange(values: string[], value: string) {
