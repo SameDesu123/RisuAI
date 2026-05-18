@@ -555,6 +555,8 @@ export async function saveDb() {
             }
 
             let changedSection = arg.signatures.size !== next.size
+            const previousOrder = [...arg.signatures.keys()].join('\0')
+            const nextOrder = [...next.keys()].join('\0')
 
             for (const [id, signature] of next) {
                 if (arg.signatures.get(id) !== signature) {
@@ -568,6 +570,11 @@ export async function saveDb() {
                     pushSaveSectionChange(arg.changedIds, id)
                     changedSection = true
                 }
+            }
+
+            if (arg.signatures.size === next.size && previousOrder !== nextOrder) {
+                pushSaveSectionChange(arg.changedIds, '__order')
+                changedSection = true
             }
 
             replaceSaveSectionSignatures(arg.signatures, next)
@@ -1215,52 +1222,52 @@ export async function saveDb() {
             changeTracker.loadouts = false
             changeTracker.plugins = false
             changeTracker.pluginCustomStorage = false
-            changeTracker.rootUser = changeTracker.rootUser?.length ? [changeTracker.rootUser[0]] : []
-            changeTracker.rootUi = changeTracker.rootUi?.length ? [changeTracker.rootUi[0]] : []
-            changeTracker.rootProvider = changeTracker.rootProvider?.length ? [changeTracker.rootProvider[0]] : []
-            changeTracker.rootPrompt = changeTracker.rootPrompt?.length ? [changeTracker.rootPrompt[0]] : []
-            changeTracker.rootMemory = changeTracker.rootMemory?.length ? [changeTracker.rootMemory[0]] : []
-            changeTracker.rootStorage = changeTracker.rootStorage?.length ? [changeTracker.rootStorage[0]] : []
-            changeTracker.presetInfo = changeTracker.presetInfo?.length ? [changeTracker.presetInfo[0]] : []
-            changeTracker.presetPrompt = changeTracker.presetPrompt?.length ? [changeTracker.presetPrompt[0]] : []
-            changeTracker.presetModel = changeTracker.presetModel?.length ? [changeTracker.presetModel[0]] : []
-            changeTracker.presetProvider = changeTracker.presetProvider?.length ? [changeTracker.presetProvider[0]] : []
-            changeTracker.presetSchema = changeTracker.presetSchema?.length ? [changeTracker.presetSchema[0]] : []
-            changeTracker.presetExtras = changeTracker.presetExtras?.length ? [changeTracker.presetExtras[0]] : []
-            changeTracker.characterProfile = changeTracker.characterProfile?.length ? [changeTracker.characterProfile[0]] : []
-            changeTracker.characterPrompt = changeTracker.characterPrompt?.length ? [changeTracker.characterPrompt[0]] : []
-            changeTracker.characterGreeting = changeTracker.characterGreeting?.length ? [changeTracker.characterGreeting[0]] : []
-            changeTracker.characterChatConfig = changeTracker.characterChatConfig?.length ? [changeTracker.characterChatConfig[0]] : []
-            changeTracker.chatMessage = changeTracker.chatMessage?.length ? [changeTracker.chatMessage[0]] : []
-            changeTracker.chatVariables = changeTracker.chatVariables?.length ? [changeTracker.chatVariables[0]] : []
-            changeTracker.chatLore = changeTracker.chatLore?.length ? [changeTracker.chatLore[0]] : []
-            changeTracker.chatMemory = changeTracker.chatMemory?.length ? [changeTracker.chatMemory[0]] : []
-            changeTracker.chatMeta = changeTracker.chatMeta?.length ? [changeTracker.chatMeta[0]] : []
-            changeTracker.moduleInfo = changeTracker.moduleInfo?.length ? [changeTracker.moduleInfo[0]] : []
-            changeTracker.moduleLorebook = changeTracker.moduleLorebook?.length ? [changeTracker.moduleLorebook[0]] : []
-            changeTracker.moduleRegex = changeTracker.moduleRegex?.length ? [changeTracker.moduleRegex[0]] : []
-            changeTracker.moduleTrigger = changeTracker.moduleTrigger?.length ? [changeTracker.moduleTrigger[0]] : []
-            changeTracker.moduleAssets = changeTracker.moduleAssets?.length ? [changeTracker.moduleAssets[0]] : []
-            changeTracker.moduleScript = changeTracker.moduleScript?.length ? [changeTracker.moduleScript[0]] : []
-            changeTracker.pluginInfo = changeTracker.pluginInfo?.length ? [changeTracker.pluginInfo[0]] : []
-            changeTracker.pluginArguments = changeTracker.pluginArguments?.length ? [changeTracker.pluginArguments[0]] : []
-            changeTracker.pluginLinks = changeTracker.pluginLinks?.length ? [changeTracker.pluginLinks[0]] : []
-            changeTracker.pluginCode = changeTracker.pluginCode?.length ? [changeTracker.pluginCode[0]] : []
-            changeTracker.pluginStorage = changeTracker.pluginStorage?.length ? [changeTracker.pluginStorage[0]] : []
-            changeTracker.loadoutInfo = changeTracker.loadoutInfo?.length ? [changeTracker.loadoutInfo[0]] : []
-            changeTracker.loadoutScope = changeTracker.loadoutScope?.length ? [changeTracker.loadoutScope[0]] : []
-            changeTracker.loadoutState = changeTracker.loadoutState?.length ? [changeTracker.loadoutState[0]] : []
-            changeTracker.regex = changeTracker.regex?.length ? [changeTracker.regex[0]] : []
-            changeTracker.regexIndex = changeTracker.regexIndex?.length ? [changeTracker.regexIndex[0]] : []
-            changeTracker.trigger = changeTracker.trigger?.length ? [changeTracker.trigger[0]] : []
-            changeTracker.triggerIndex = changeTracker.triggerIndex?.length ? [changeTracker.triggerIndex[0]] : []
-            changeTracker.lorebook = changeTracker.lorebook?.length ? [changeTracker.lorebook[0]] : []
-            changeTracker.lorebookIndex = changeTracker.lorebookIndex?.length ? [changeTracker.lorebookIndex[0]] : []
-            changeTracker.asset = changeTracker.asset?.length ? [changeTracker.asset[0]] : []
-            changeTracker.tts = changeTracker.tts?.length ? [changeTracker.tts[0]] : []
-            changeTracker.scriptBackground = changeTracker.scriptBackground?.length ? [changeTracker.scriptBackground[0]] : []
-            changeTracker.scriptVirtual = changeTracker.scriptVirtual?.length ? [changeTracker.scriptVirtual[0]] : []
-            changeTracker.advanced = changeTracker.advanced?.length ? [changeTracker.advanced[0]] : []
+            changeTracker.rootUser = []
+            changeTracker.rootUi = []
+            changeTracker.rootProvider = []
+            changeTracker.rootPrompt = []
+            changeTracker.rootMemory = []
+            changeTracker.rootStorage = []
+            changeTracker.presetInfo = []
+            changeTracker.presetPrompt = []
+            changeTracker.presetModel = []
+            changeTracker.presetProvider = []
+            changeTracker.presetSchema = []
+            changeTracker.presetExtras = []
+            changeTracker.characterProfile = []
+            changeTracker.characterPrompt = []
+            changeTracker.characterGreeting = []
+            changeTracker.characterChatConfig = []
+            changeTracker.chatMessage = []
+            changeTracker.chatVariables = []
+            changeTracker.chatLore = []
+            changeTracker.chatMemory = []
+            changeTracker.chatMeta = []
+            changeTracker.moduleInfo = []
+            changeTracker.moduleLorebook = []
+            changeTracker.moduleRegex = []
+            changeTracker.moduleTrigger = []
+            changeTracker.moduleAssets = []
+            changeTracker.moduleScript = []
+            changeTracker.pluginInfo = []
+            changeTracker.pluginArguments = []
+            changeTracker.pluginLinks = []
+            changeTracker.pluginCode = []
+            changeTracker.pluginStorage = []
+            changeTracker.loadoutInfo = []
+            changeTracker.loadoutScope = []
+            changeTracker.loadoutState = []
+            changeTracker.regex = []
+            changeTracker.regexIndex = []
+            changeTracker.trigger = []
+            changeTracker.triggerIndex = []
+            changeTracker.lorebook = []
+            changeTracker.lorebookIndex = []
+            changeTracker.asset = []
+            changeTracker.tts = []
+            changeTracker.scriptBackground = []
+            changeTracker.scriptVirtual = []
+            changeTracker.advanced = []
             if (gotChannel) {
                 //Data is saved in other tab
                 await sleep(1000)
