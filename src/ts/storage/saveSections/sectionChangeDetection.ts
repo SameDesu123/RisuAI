@@ -2,6 +2,12 @@ import type { toSaveType } from "../risuSave"
 
 export type SectionSaveChangeTracker = toSaveType & {
     root?: boolean
+    presetInfo?: string[]
+    presetPrompt?: string[]
+    presetModel?: string[]
+    presetProvider?: string[]
+    presetSchema?: string[]
+    presetExtras?: string[]
     chatMessage?: [string, string][]
     chatVariables?: [string, string][]
     chatLore?: [string, string][]
@@ -189,6 +195,105 @@ export const saveSectionPluginLinkKeys = [
 export const saveSectionPluginCodeKeys = [
     "script",
     "allowedIPC",
+] as const
+
+export const saveSectionPresetInfoKeys = [
+    "name",
+    "image",
+] as const
+
+export const saveSectionPresetPromptKeys = [
+    "mainPrompt",
+    "jailbreak",
+    "globalNote",
+    "formatingOrder",
+    "promptPreprocess",
+    "promptTemplate",
+    "promptSettings",
+    "useInstructPrompt",
+    "customPromptTemplateToggle",
+    "templateDefaultVariables",
+    "instructChatTemplate",
+    "JinjaTemplate",
+    "groupTemplate",
+    "groupOtherBotRole",
+    "systemContentReplacement",
+    "systemRoleReplacement",
+] as const
+
+export const saveSectionPresetModelKeys = [
+    "apiType",
+    "aiModel",
+    "subModel",
+    "currentPluginProvider",
+    "temperature",
+    "maxContext",
+    "maxResponse",
+    "frequencyPenalty",
+    "PresensePenalty",
+    "top_p",
+    "repetition_penalty",
+    "min_p",
+    "top_a",
+    "top_k",
+    "reasonEffort",
+    "thinkingTokens",
+    "thinkingType",
+    "deepseekThinkingType",
+    "adaptiveThinkingEffort",
+    "deepseekReasoningEffort",
+    "verbosity",
+    "dynamicOutput",
+    "modelTools",
+    "fallbackModels",
+    "fallbackWhenBlankResponse",
+] as const
+
+export const saveSectionPresetProviderKeys = [
+    "openAIKey",
+    "localNetworkMode",
+    "localNetworkTimeoutSec",
+    "textgenWebUIStreamURL",
+    "textgenWebUIBlockingURL",
+    "forceReplaceUrl",
+    "forceReplaceUrl2",
+    "proxyRequestModel",
+    "openrouterRequestModel",
+    "proxyKey",
+    "ooba",
+    "ainconfig",
+    "koboldURL",
+    "NAISettings",
+    "customProxyRequestModel",
+    "reverseProxyOobaArgs",
+    "openrouterProvider",
+    "customAPIFormat",
+    "enableCustomFlags",
+    "customFlags",
+    "seperateParametersEnabled",
+    "seperateParameters",
+    "seperateModelsForAxModels",
+    "seperateModels",
+] as const
+
+export const saveSectionPresetSchemaKeys = [
+    "jsonSchemaEnabled",
+    "jsonSchema",
+    "strictJsonSchema",
+    "extractJson",
+] as const
+
+export const saveSectionPresetExtrasKeys = [
+    "bias",
+    "autoSuggestPrompt",
+    "autoSuggestPrefix",
+    "autoSuggestClean",
+    "NAIadventure",
+    "NAIappendName",
+    "localStopStrings",
+    "moduleIntergration",
+    "outputImageModal",
+    "regex",
 ] as const
 
 export function pushSaveSectionChange(values: string[], value: string) {

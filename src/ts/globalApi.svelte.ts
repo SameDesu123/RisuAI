@@ -49,6 +49,12 @@ import {
     saveSectionPluginCodeKeys,
     saveSectionPluginInfoKeys,
     saveSectionPluginLinkKeys,
+    saveSectionPresetExtrasKeys,
+    saveSectionPresetInfoKeys,
+    saveSectionPresetModelKeys,
+    saveSectionPresetPromptKeys,
+    saveSectionPresetProviderKeys,
+    saveSectionPresetSchemaKeys,
     saveSectionTtsKeys,
     saveSectionVirtualScriptKeys,
 } from "./storage/saveSections/sectionChangeDetection";
@@ -368,6 +374,12 @@ export async function saveDb() {
         let chatLoreWatcherReadyFor = ''
         let chatMemoryWatcherReadyFor = ''
         let chatMetaWatcherReadyFor = ''
+        const presetInfoWatchersReady = new Set<string>()
+        const presetPromptWatchersReady = new Set<string>()
+        const presetModelWatchersReady = new Set<string>()
+        const presetProviderWatchersReady = new Set<string>()
+        const presetSchemaWatchersReady = new Set<string>()
+        const presetExtraWatchersReady = new Set<string>()
         const moduleInfoWatchersReady = new Set<string>()
         const moduleLorebookWatchersReady = new Set<string>()
         const moduleRegexWatchersReady = new Set<string>()
@@ -419,6 +431,29 @@ export async function saveDb() {
             }
 
             pushSaveSectionChange(changedBotIds, character.chaId)
+            saveTimeoutExecute()
+        }
+
+        function getPresetTrackingId(preset: any, index: number) {
+            return getSaveSectionTrackedResourceId(preset, index, 'preset')
+        }
+
+        function trackSavePresetSection(
+            preset: any,
+            presetIndex: number,
+            keys: readonly string[],
+            readyPresetIds: Set<string>,
+            changedPresetIds: string[]
+        ) {
+            snapshotSaveSectionKeys(preset, keys)
+
+            const presetId = getPresetTrackingId(preset, presetIndex)
+            if (!readyPresetIds.has(presetId)) {
+                readyPresetIds.add(presetId)
+                return
+            }
+
+            pushSaveSectionChange(changedPresetIds, presetId)
             saveTimeoutExecute()
         }
 
@@ -557,6 +592,42 @@ export async function saveDb() {
             DBState.db.botPresets.length
             changeTracker.botPreset = true
             saveTimeoutExecute()
+        })
+        $effect(() => {
+            const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
+            for (let i = 0; i < presets.length; i++) {
+                trackSavePresetSection(presets[i], i, saveSectionPresetInfoKeys, presetInfoWatchersReady, changeTracker.presetInfo ??= [])
+            }
+        })
+        $effect(() => {
+            const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
+            for (let i = 0; i < presets.length; i++) {
+                trackSavePresetSection(presets[i], i, saveSectionPresetPromptKeys, presetPromptWatchersReady, changeTracker.presetPrompt ??= [])
+            }
+        })
+        $effect(() => {
+            const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
+            for (let i = 0; i < presets.length; i++) {
+                trackSavePresetSection(presets[i], i, saveSectionPresetModelKeys, presetModelWatchersReady, changeTracker.presetModel ??= [])
+            }
+        })
+        $effect(() => {
+            const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
+            for (let i = 0; i < presets.length; i++) {
+                trackSavePresetSection(presets[i], i, saveSectionPresetProviderKeys, presetProviderWatchersReady, changeTracker.presetProvider ??= [])
+            }
+        })
+        $effect(() => {
+            const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
+            for (let i = 0; i < presets.length; i++) {
+                trackSavePresetSection(presets[i], i, saveSectionPresetSchemaKeys, presetSchemaWatchersReady, changeTracker.presetSchema ??= [])
+            }
+        })
+        $effect(() => {
+            const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
+            for (let i = 0; i < presets.length; i++) {
+                trackSavePresetSection(presets[i], i, saveSectionPresetExtrasKeys, presetExtraWatchersReady, changeTracker.presetExtras ??= [])
+            }
         })
         $effect(() => {
             $state.snapshot(DBState.db.modules)
@@ -921,6 +992,12 @@ export async function saveDb() {
             changeTracker.loadouts = false
             changeTracker.plugins = false
             changeTracker.pluginCustomStorage = false
+            changeTracker.presetInfo = changeTracker.presetInfo?.length ? [changeTracker.presetInfo[0]] : []
+            changeTracker.presetPrompt = changeTracker.presetPrompt?.length ? [changeTracker.presetPrompt[0]] : []
+            changeTracker.presetModel = changeTracker.presetModel?.length ? [changeTracker.presetModel[0]] : []
+            changeTracker.presetProvider = changeTracker.presetProvider?.length ? [changeTracker.presetProvider[0]] : []
+            changeTracker.presetSchema = changeTracker.presetSchema?.length ? [changeTracker.presetSchema[0]] : []
+            changeTracker.presetExtras = changeTracker.presetExtras?.length ? [changeTracker.presetExtras[0]] : []
             changeTracker.chatMessage = changeTracker.chatMessage?.length ? [changeTracker.chatMessage[0]] : []
             changeTracker.chatVariables = changeTracker.chatVariables?.length ? [changeTracker.chatVariables[0]] : []
             changeTracker.chatLore = changeTracker.chatLore?.length ? [changeTracker.chatLore[0]] : []
