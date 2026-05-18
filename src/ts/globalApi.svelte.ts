@@ -45,6 +45,10 @@ import {
     saveSectionModuleRegexKeys,
     saveSectionModuleScriptKeys,
     saveSectionModuleTriggerKeys,
+    saveSectionPluginArgumentKeys,
+    saveSectionPluginCodeKeys,
+    saveSectionPluginInfoKeys,
+    saveSectionPluginLinkKeys,
     saveSectionTtsKeys,
     saveSectionVirtualScriptKeys,
 } from "./storage/saveSections/sectionChangeDetection";
@@ -370,6 +374,11 @@ export async function saveDb() {
         const moduleTriggerWatchersReady = new Set<string>()
         const moduleAssetWatchersReady = new Set<string>()
         const moduleScriptWatchersReady = new Set<string>()
+        const pluginInfoWatchersReady = new Set<string>()
+        const pluginArgumentWatchersReady = new Set<string>()
+        const pluginLinkWatchersReady = new Set<string>()
+        const pluginCodeWatchersReady = new Set<string>()
+        const pluginStorageSignatures = new Map<string, string>()
         const regexSignatures = new Map<string, Map<string, string>>()
         const triggerSignatures = new Map<string, Map<string, string>>()
         const lorebookSignatures = new Map<string, Map<string, string>>()
@@ -487,6 +496,62 @@ export async function saveDb() {
             saveTimeoutExecute()
         }
 
+        function getPluginTrackingId(plugin: any, index: number) {
+            return getSaveSectionTrackedResourceId(plugin, index, 'plugin')
+        }
+
+        function trackSavePluginSection(
+            plugin: any,
+            pluginIndex: number,
+            keys: readonly string[],
+            readyPluginIds: Set<string>,
+            changedPluginIds: string[]
+        ) {
+            snapshotSaveSectionKeys(plugin, keys)
+
+            const pluginId = getPluginTrackingId(plugin, pluginIndex)
+            if (!readyPluginIds.has(pluginId)) {
+                readyPluginIds.add(pluginId)
+                return
+            }
+
+            pushSaveSectionChange(changedPluginIds, pluginId)
+            saveTimeoutExecute()
+        }
+
+        function trackPluginStorageKeys(storage: Record<string, any>, changedKeys: string[]) {
+            const next = new Map<string, string>()
+            for (const key of Object.keys(storage ?? {})) {
+                $state.snapshot(storage[key])
+                next.set(key, JSON.stringify(storage[key]))
+            }
+
+            let changedStorage = pluginStorageSignatures.size !== next.size
+
+            for (const [key, signature] of next) {
+                if (pluginStorageSignatures.get(key) !== signature) {
+                    pushSaveSectionChange(changedKeys, key)
+                    changedStorage = true
+                }
+            }
+
+            for (const key of pluginStorageSignatures.keys()) {
+                if (!next.has(key)) {
+                    pushSaveSectionChange(changedKeys, key)
+                    changedStorage = true
+                }
+            }
+
+            pluginStorageSignatures.clear()
+            for (const [key, signature] of next) {
+                pluginStorageSignatures.set(key, signature)
+            }
+
+            if (changedStorage) {
+                saveTimeoutExecute()
+            }
+        }
+
         $effect(() => {
             DBState.db.botPresetsId
             DBState.db.botPresets.length
@@ -581,9 +646,61 @@ export async function saveDb() {
             saveTimeoutExecute()
         })
         $effect(() => {
+            const plugins = Array.isArray(DBState.db.plugins) ? DBState.db.plugins : []
+            for (let i = 0; i < plugins.length; i++) {
+                trackSavePluginSection(
+                    plugins[i],
+                    i,
+                    saveSectionPluginInfoKeys,
+                    pluginInfoWatchersReady,
+                    changeTracker.pluginInfo ??= []
+                )
+            }
+        })
+        $effect(() => {
+            const plugins = Array.isArray(DBState.db.plugins) ? DBState.db.plugins : []
+            for (let i = 0; i < plugins.length; i++) {
+                trackSavePluginSection(
+                    plugins[i],
+                    i,
+                    saveSectionPluginArgumentKeys,
+                    pluginArgumentWatchersReady,
+                    changeTracker.pluginArguments ??= []
+                )
+            }
+        })
+        $effect(() => {
+            const plugins = Array.isArray(DBState.db.plugins) ? DBState.db.plugins : []
+            for (let i = 0; i < plugins.length; i++) {
+                trackSavePluginSection(
+                    plugins[i],
+                    i,
+                    saveSectionPluginLinkKeys,
+                    pluginLinkWatchersReady,
+                    changeTracker.pluginLinks ??= []
+                )
+            }
+        })
+        $effect(() => {
+            const plugins = Array.isArray(DBState.db.plugins) ? DBState.db.plugins : []
+            for (let i = 0; i < plugins.length; i++) {
+                trackSavePluginSection(
+                    plugins[i],
+                    i,
+                    saveSectionPluginCodeKeys,
+                    pluginCodeWatchersReady,
+                    changeTracker.pluginCode ??= []
+                )
+            }
+        })
+        $effect(() => {
             $state.snapshot(DBState.db.pluginCustomStorage)
             changeTracker.pluginCustomStorage = true
             saveTimeoutExecute()
+        })
+        $effect(() => {
+            const storage = DBState.db.pluginCustomStorage ?? {}
+            trackPluginStorageKeys(storage, changeTracker.pluginStorage ??= [])
         })
         $effect(() => {
             for (const key in DBState.db) {
@@ -815,6 +932,11 @@ export async function saveDb() {
             changeTracker.moduleTrigger = changeTracker.moduleTrigger?.length ? [changeTracker.moduleTrigger[0]] : []
             changeTracker.moduleAssets = changeTracker.moduleAssets?.length ? [changeTracker.moduleAssets[0]] : []
             changeTracker.moduleScript = changeTracker.moduleScript?.length ? [changeTracker.moduleScript[0]] : []
+            changeTracker.pluginInfo = changeTracker.pluginInfo?.length ? [changeTracker.pluginInfo[0]] : []
+            changeTracker.pluginArguments = changeTracker.pluginArguments?.length ? [changeTracker.pluginArguments[0]] : []
+            changeTracker.pluginLinks = changeTracker.pluginLinks?.length ? [changeTracker.pluginLinks[0]] : []
+            changeTracker.pluginCode = changeTracker.pluginCode?.length ? [changeTracker.pluginCode[0]] : []
+            changeTracker.pluginStorage = changeTracker.pluginStorage?.length ? [changeTracker.pluginStorage[0]] : []
             changeTracker.regex = changeTracker.regex?.length ? [changeTracker.regex[0]] : []
             changeTracker.regexIndex = changeTracker.regexIndex?.length ? [changeTracker.regexIndex[0]] : []
             changeTracker.trigger = changeTracker.trigger?.length ? [changeTracker.trigger[0]] : []

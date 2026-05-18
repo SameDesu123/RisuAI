@@ -13,6 +13,11 @@ export type SectionSaveChangeTracker = toSaveType & {
     moduleTrigger?: string[]
     moduleAssets?: string[]
     moduleScript?: string[]
+    pluginInfo?: string[]
+    pluginArguments?: string[]
+    pluginLinks?: string[]
+    pluginCode?: string[]
+    pluginStorage?: string[]
     regex?: [string, string][]
     regexIndex?: string[]
     trigger?: [string, string][]
@@ -160,6 +165,30 @@ export const saveSectionModuleScriptKeys = [
     "cjs",
     "customModuleToggle",
     "backgroundEmbedding",
+] as const
+
+export const saveSectionPluginInfoKeys = [
+    "name",
+    "displayName",
+    "version",
+    "versionOfPlugin",
+    "updateURL",
+    "enabled",
+] as const
+
+export const saveSectionPluginArgumentKeys = [
+    "arguments",
+    "realArg",
+    "argMeta",
+] as const
+
+export const saveSectionPluginLinkKeys = [
+    "customLink",
+] as const
+
+export const saveSectionPluginCodeKeys = [
+    "script",
+    "allowedIPC",
 ] as const
 
 export function pushSaveSectionChange(values: string[], value: string) {
