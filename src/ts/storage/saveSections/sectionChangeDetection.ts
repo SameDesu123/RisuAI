@@ -2,6 +2,11 @@ import type { toSaveType } from "../risuSave"
 
 export type SectionSaveChangeTracker = toSaveType & {
     root?: boolean
+    chatMessage?: [string, string][]
+    chatVariables?: [string, string][]
+    chatLore?: [string, string][]
+    chatMemory?: [string, string][]
+    chatMeta?: [string, string][]
     regex?: [string, string][]
     regexIndex?: string[]
     trigger?: [string, string][]
@@ -83,6 +88,40 @@ export const saveSectionAdvancedKeys = [
     "coldStoragedChats",
     "depth_prompt",
     "lorePlus",
+] as const
+
+export const saveSectionChatMessageKeys = [
+    "message",
+] as const
+
+export const saveSectionChatVariableKeys = [
+    "scriptstate",
+] as const
+
+export const saveSectionChatLoreKeys = [
+    "localLore",
+] as const
+
+export const saveSectionChatMemoryKeys = [
+    "supaMemoryData",
+    "hypaV2Data",
+    "hypaV3Data",
+    "lastMemory",
+    "suggestMessages",
+] as const
+
+export const saveSectionChatMetaKeys = [
+    "note",
+    "name",
+    "sdData",
+    "isStreaming",
+    "modules",
+    "bindedPersona",
+    "fmIndex",
+    "folderId",
+    "lastDate",
+    "bookmarks",
+    "bookmarkNames",
 ] as const
 
 export function pushSaveSectionChange(values: string[], value: string) {
