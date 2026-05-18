@@ -334,6 +334,39 @@ export let saving = $state({
 export let requiresFullEncoderReload = $state({
     state: false
 })
+
+function getChangedSaveSections(changeTracker: SectionSaveChangeTracker) {
+    const sections: Record<string, unknown> = {}
+
+    for (const [key, value] of Object.entries(changeTracker)) {
+        if (Array.isArray(value)) {
+            if (value.length > 0) {
+                sections[key] = value
+            }
+            continue
+        }
+
+        if (value === true) {
+            sections[key] = value
+        }
+    }
+
+    return sections
+}
+
+function logChangedSaveSections(changeTracker: SectionSaveChangeTracker) {
+    if (!import.meta.env.DEV) {
+        return
+    }
+
+    const sections = getChangedSaveSections(changeTracker)
+    if (Object.keys(sections).length === 0) {
+        return
+    }
+
+    console.info('[RisuAI save sections]', sections)
+}
+
 export async function saveDb() {
     let changed = false
     syncDrive()
@@ -1133,6 +1166,7 @@ export async function saveDb() {
             }
 
             let toSave = safeStructuredClone(changeTracker)
+            logChangedSaveSections(toSave)
             changeTracker.root = false
             changeTracker.character = changeTracker.character.length === 0 ? [] : [changeTracker.character[0]]
             changeTracker.chat = changeTracker.chat.length === 0 ? [] : [changeTracker.chat[0]]
