@@ -43,6 +43,9 @@ import {
     saveSectionCharacterGreetingKeys,
     saveSectionCharacterProfileKeys,
     saveSectionCharacterPromptKeys,
+    saveSectionLoadoutInfoKeys,
+    saveSectionLoadoutScopeKeys,
+    saveSectionLoadoutStateKeys,
     saveSectionModuleAssetKeys,
     saveSectionModuleInfoKeys,
     saveSectionModuleLorebookKeys,
@@ -59,6 +62,12 @@ import {
     saveSectionPresetPromptKeys,
     saveSectionPresetProviderKeys,
     saveSectionPresetSchemaKeys,
+    saveSectionRootMemoryKeys,
+    saveSectionRootPromptKeys,
+    saveSectionRootProviderKeys,
+    saveSectionRootStorageKeys,
+    saveSectionRootUiKeys,
+    saveSectionRootUserKeys,
     saveSectionTtsKeys,
     saveSectionVirtualScriptKeys,
 } from "./storage/saveSections/sectionChangeDetection";
@@ -368,6 +377,12 @@ export async function saveDb() {
 
         let selIdState = $state(0)
         let rootWatcherReady = false
+        let rootUserWatcherReady = false
+        let rootUiWatcherReady = false
+        let rootProviderWatcherReady = false
+        let rootPromptWatcherReady = false
+        let rootMemoryWatcherReady = false
+        let rootStorageWatcherReady = false
         let assetWatcherReadyFor = ''
         let ttsWatcherReadyFor = ''
         let backgroundWatcherReadyFor = ''
@@ -399,6 +414,9 @@ export async function saveDb() {
         const pluginLinkWatchersReady = new Set<string>()
         const pluginCodeWatchersReady = new Set<string>()
         const pluginStorageSignatures = new Map<string, string>()
+        const loadoutInfoWatchersReady = new Set<string>()
+        const loadoutScopeWatchersReady = new Set<string>()
+        const loadoutStateWatchersReady = new Set<string>()
         const regexSignatures = new Map<string, Map<string, string>>()
         const triggerSignatures = new Map<string, Map<string, string>>()
         const lorebookSignatures = new Map<string, Map<string, string>>()
@@ -462,6 +480,22 @@ export async function saveDb() {
             }
 
             pushSaveSectionChange(changedPresetIds, presetId)
+            saveTimeoutExecute()
+        }
+
+        function trackSaveRootSection(
+            keys: readonly string[],
+            ready: boolean,
+            setReady: (value: boolean) => void,
+            changedRoots: string[]
+        ) {
+            snapshotSaveSectionKeys(DBState.db, keys)
+            if (!ready) {
+                setReady(true)
+                return
+            }
+
+            pushSaveSectionChange(changedRoots, 'root')
             saveTimeoutExecute()
         }
 
@@ -543,6 +577,10 @@ export async function saveDb() {
             return getSaveSectionTrackedResourceId(plugin, index, 'plugin')
         }
 
+        function getLoadoutTrackingId(loadout: any, index: number) {
+            return getSaveSectionTrackedResourceId(loadout, index, 'loadout')
+        }
+
         function trackSavePluginSection(
             plugin: any,
             pluginIndex: number,
@@ -559,6 +597,25 @@ export async function saveDb() {
             }
 
             pushSaveSectionChange(changedPluginIds, pluginId)
+            saveTimeoutExecute()
+        }
+
+        function trackSaveLoadoutSection(
+            loadout: any,
+            loadoutIndex: number,
+            keys: readonly string[],
+            readyLoadoutIds: Set<string>,
+            changedLoadoutIds: string[]
+        ) {
+            snapshotSaveSectionKeys(loadout, keys)
+
+            const loadoutId = getLoadoutTrackingId(loadout, loadoutIndex)
+            if (!readyLoadoutIds.has(loadoutId)) {
+                readyLoadoutIds.add(loadoutId)
+                return
+            }
+
+            pushSaveSectionChange(changedLoadoutIds, loadoutId)
             saveTimeoutExecute()
         }
 
@@ -720,6 +777,24 @@ export async function saveDb() {
             saveTimeoutExecute()
         })
         $effect(() => {
+            const loadouts = Array.isArray(DBState.db.loadouts) ? DBState.db.loadouts : []
+            for (let i = 0; i < loadouts.length; i++) {
+                trackSaveLoadoutSection(loadouts[i], i, saveSectionLoadoutInfoKeys, loadoutInfoWatchersReady, changeTracker.loadoutInfo ??= [])
+            }
+        })
+        $effect(() => {
+            const loadouts = Array.isArray(DBState.db.loadouts) ? DBState.db.loadouts : []
+            for (let i = 0; i < loadouts.length; i++) {
+                trackSaveLoadoutSection(loadouts[i], i, saveSectionLoadoutScopeKeys, loadoutScopeWatchersReady, changeTracker.loadoutScope ??= [])
+            }
+        })
+        $effect(() => {
+            const loadouts = Array.isArray(DBState.db.loadouts) ? DBState.db.loadouts : []
+            for (let i = 0; i < loadouts.length; i++) {
+                trackSaveLoadoutSection(loadouts[i], i, saveSectionLoadoutStateKeys, loadoutStateWatchersReady, changeTracker.loadoutState ??= [])
+            }
+        })
+        $effect(() => {
             $state.snapshot(DBState.db.plugins)
             changeTracker.plugins = true
             saveTimeoutExecute()
@@ -798,6 +873,24 @@ export async function saveDb() {
 
             changeTracker.root = true
             saveTimeoutExecute()
+        })
+        $effect(() => {
+            trackSaveRootSection(saveSectionRootUserKeys, rootUserWatcherReady, (value) => rootUserWatcherReady = value, changeTracker.rootUser ??= [])
+        })
+        $effect(() => {
+            trackSaveRootSection(saveSectionRootUiKeys, rootUiWatcherReady, (value) => rootUiWatcherReady = value, changeTracker.rootUi ??= [])
+        })
+        $effect(() => {
+            trackSaveRootSection(saveSectionRootProviderKeys, rootProviderWatcherReady, (value) => rootProviderWatcherReady = value, changeTracker.rootProvider ??= [])
+        })
+        $effect(() => {
+            trackSaveRootSection(saveSectionRootPromptKeys, rootPromptWatcherReady, (value) => rootPromptWatcherReady = value, changeTracker.rootPrompt ??= [])
+        })
+        $effect(() => {
+            trackSaveRootSection(saveSectionRootMemoryKeys, rootMemoryWatcherReady, (value) => rootMemoryWatcherReady = value, changeTracker.rootMemory ??= [])
+        })
+        $effect(() => {
+            trackSaveRootSection(saveSectionRootStorageKeys, rootStorageWatcherReady, (value) => rootStorageWatcherReady = value, changeTracker.rootStorage ??= [])
         })
         $effect(() => {
             if (DBState?.db?.characters?.[selIdState]) {
@@ -1048,6 +1141,12 @@ export async function saveDb() {
             changeTracker.loadouts = false
             changeTracker.plugins = false
             changeTracker.pluginCustomStorage = false
+            changeTracker.rootUser = changeTracker.rootUser?.length ? [changeTracker.rootUser[0]] : []
+            changeTracker.rootUi = changeTracker.rootUi?.length ? [changeTracker.rootUi[0]] : []
+            changeTracker.rootProvider = changeTracker.rootProvider?.length ? [changeTracker.rootProvider[0]] : []
+            changeTracker.rootPrompt = changeTracker.rootPrompt?.length ? [changeTracker.rootPrompt[0]] : []
+            changeTracker.rootMemory = changeTracker.rootMemory?.length ? [changeTracker.rootMemory[0]] : []
+            changeTracker.rootStorage = changeTracker.rootStorage?.length ? [changeTracker.rootStorage[0]] : []
             changeTracker.presetInfo = changeTracker.presetInfo?.length ? [changeTracker.presetInfo[0]] : []
             changeTracker.presetPrompt = changeTracker.presetPrompt?.length ? [changeTracker.presetPrompt[0]] : []
             changeTracker.presetModel = changeTracker.presetModel?.length ? [changeTracker.presetModel[0]] : []
@@ -1074,6 +1173,9 @@ export async function saveDb() {
             changeTracker.pluginLinks = changeTracker.pluginLinks?.length ? [changeTracker.pluginLinks[0]] : []
             changeTracker.pluginCode = changeTracker.pluginCode?.length ? [changeTracker.pluginCode[0]] : []
             changeTracker.pluginStorage = changeTracker.pluginStorage?.length ? [changeTracker.pluginStorage[0]] : []
+            changeTracker.loadoutInfo = changeTracker.loadoutInfo?.length ? [changeTracker.loadoutInfo[0]] : []
+            changeTracker.loadoutScope = changeTracker.loadoutScope?.length ? [changeTracker.loadoutScope[0]] : []
+            changeTracker.loadoutState = changeTracker.loadoutState?.length ? [changeTracker.loadoutState[0]] : []
             changeTracker.regex = changeTracker.regex?.length ? [changeTracker.regex[0]] : []
             changeTracker.regexIndex = changeTracker.regexIndex?.length ? [changeTracker.regexIndex[0]] : []
             changeTracker.trigger = changeTracker.trigger?.length ? [changeTracker.trigger[0]] : []

@@ -28,6 +28,15 @@ export type SectionSaveChangeTracker = toSaveType & {
     pluginLinks?: string[]
     pluginCode?: string[]
     pluginStorage?: string[]
+    loadoutInfo?: string[]
+    loadoutScope?: string[]
+    loadoutState?: string[]
+    rootUser?: string[]
+    rootUi?: string[]
+    rootProvider?: string[]
+    rootPrompt?: string[]
+    rootMemory?: string[]
+    rootStorage?: string[]
     regex?: [string, string][]
     regexIndex?: string[]
     trigger?: [string, string][]
@@ -340,6 +349,135 @@ export const saveSectionCharacterChatConfigKeys = [
     "suggestMessages",
     "orderByOrder",
     "oneAtTime",
+] as const
+
+export const saveSectionLoadoutInfoKeys = [
+    "name",
+    "id",
+    "lastUsed",
+    "favorite",
+] as const
+
+export const saveSectionLoadoutScopeKeys = [
+    "characterIds",
+    "modules",
+    "presetName",
+    "personaId",
+] as const
+
+export const saveSectionLoadoutStateKeys = [
+    "globalVariables",
+] as const
+
+export const saveSectionRootUserKeys = [
+    "username",
+    "userIcon",
+    "userNote",
+    "selectedPersona",
+    "personas",
+    "globalChatVariables",
+] as const
+
+export const saveSectionRootUiKeys = [
+    "language",
+    "theme",
+    "translator",
+    "zoomsize",
+    "customBackground",
+    "fullScreen",
+    "playMessage",
+    "iconsize",
+    "waifuWidth",
+    "waifuWidth2",
+    "promptTextInfoInsideChat",
+    "showFirstMessagePages",
+    "settingsCloseButtonSize",
+    "enableBookmark",
+    "hideAllImages",
+    "autoScrollToNewMessage",
+    "alwaysScrollToNewMessage",
+    "newMessageButtonStyle",
+    "createFolderOnBranch",
+    "hamburgerButtonBottom",
+    "blockquoteStyling",
+    "longPressToPopupEditor",
+] as const
+
+export const saveSectionRootProviderKeys = [
+    "apiType",
+    "openAIKey",
+    "proxyKey",
+    "aiModel",
+    "subModel",
+    "currentPluginProvider",
+    "textgenWebUIStreamURL",
+    "textgenWebUIBlockingURL",
+    "forceReplaceUrl",
+    "requestLocation",
+    "localNetworkMode",
+    "localNetworkTimeoutSec",
+    "hubServerType",
+    "ImagenModel",
+    "ImagenImageSize",
+    "ImagenAspectRatio",
+    "ImagenPersonGeneration",
+    "openaiCompatImage",
+    "wavespeedImage",
+    "dynamicModelRegistry",
+] as const
+
+export const saveSectionRootPromptKeys = [
+    "mainPrompt",
+    "jailbreak",
+    "globalNote",
+    "temperature",
+    "askRemoval",
+    "maxContext",
+    "maxResponse",
+    "frequencyPenalty",
+    "PresensePenalty",
+    "formatingOrder",
+    "jailbreakToggle",
+    "additionalPrompt",
+    "descriptionPrefix",
+    "emotionPrompt",
+    "promptPreprocess",
+    "bias",
+    "verbosity",
+    "dynamicOutput",
+] as const
+
+export const saveSectionRootMemoryKeys = [
+    "loreBookDepth",
+    "loreBookToken",
+    "loreBook",
+    "loreBookPage",
+    "supaMemoryPrompt",
+    "claudeBatching",
+    "claude1HourCaching",
+    "rememberToolUsage",
+    "simplifiedToolUse",
+    "streamGeminiThoughts",
+    "seperateParametersByModel",
+    "disableSeperateParameterChangeOnPresetChange",
+] as const
+
+export const saveSectionRootStorageKeys = [
+    "cipherChat",
+    "formatversion",
+    "swipe",
+    "enableScrollToActiveChar",
+    "promptDiffPrefs",
+    "pluginDevelopMode",
+    "echoMessage",
+    "echoDelay",
+    "enableRemoteSaving",
+    "enableRisuaiProTools",
+    "epEnabled",
+    "saveSignatures",
+    "keepSessionAlive",
+    "customSidebarItems",
+    "lastLoadedLoadoutName",
 ] as const
 
 export function pushSaveSectionChange(values: string[], value: string) {
