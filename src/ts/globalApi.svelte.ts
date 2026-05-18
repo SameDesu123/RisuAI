@@ -39,6 +39,10 @@ import {
     saveSectionChatMessageKeys,
     saveSectionChatMetaKeys,
     saveSectionChatVariableKeys,
+    saveSectionCharacterChatConfigKeys,
+    saveSectionCharacterGreetingKeys,
+    saveSectionCharacterProfileKeys,
+    saveSectionCharacterPromptKeys,
     saveSectionModuleAssetKeys,
     saveSectionModuleInfoKeys,
     saveSectionModuleLorebookKeys,
@@ -369,6 +373,10 @@ export async function saveDb() {
         let backgroundWatcherReadyFor = ''
         let virtualScriptWatcherReadyFor = ''
         let advancedWatcherReadyFor = ''
+        let characterProfileWatcherReadyFor = ''
+        let characterPromptWatcherReadyFor = ''
+        let characterGreetingWatcherReadyFor = ''
+        let characterChatConfigWatcherReadyFor = ''
         let chatMessageWatcherReadyFor = ''
         let chatVariableWatcherReadyFor = ''
         let chatLoreWatcherReadyFor = ''
@@ -817,6 +825,54 @@ export async function saveDb() {
             if (!character) return
             trackSaveSection(
                 character,
+                saveSectionCharacterProfileKeys,
+                characterProfileWatcherReadyFor,
+                (value) => characterProfileWatcherReadyFor = value,
+                changeTracker.characterProfile ??= []
+            )
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackSaveSection(
+                character,
+                saveSectionCharacterPromptKeys,
+                characterPromptWatcherReadyFor,
+                (value) => characterPromptWatcherReadyFor = value,
+                changeTracker.characterPrompt ??= []
+            )
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackSaveSection(
+                character,
+                saveSectionCharacterGreetingKeys,
+                characterGreetingWatcherReadyFor,
+                (value) => characterGreetingWatcherReadyFor = value,
+                changeTracker.characterGreeting ??= []
+            )
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackSaveSection(
+                character,
+                saveSectionCharacterChatConfigKeys,
+                characterChatConfigWatcherReadyFor,
+                (value) => characterChatConfigWatcherReadyFor = value,
+                changeTracker.characterChatConfig ??= []
+            )
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackSaveSection(
+                character,
                 saveSectionAssetKeys,
                 assetWatcherReadyFor,
                 (value) => assetWatcherReadyFor = value,
@@ -998,6 +1054,10 @@ export async function saveDb() {
             changeTracker.presetProvider = changeTracker.presetProvider?.length ? [changeTracker.presetProvider[0]] : []
             changeTracker.presetSchema = changeTracker.presetSchema?.length ? [changeTracker.presetSchema[0]] : []
             changeTracker.presetExtras = changeTracker.presetExtras?.length ? [changeTracker.presetExtras[0]] : []
+            changeTracker.characterProfile = changeTracker.characterProfile?.length ? [changeTracker.characterProfile[0]] : []
+            changeTracker.characterPrompt = changeTracker.characterPrompt?.length ? [changeTracker.characterPrompt[0]] : []
+            changeTracker.characterGreeting = changeTracker.characterGreeting?.length ? [changeTracker.characterGreeting[0]] : []
+            changeTracker.characterChatConfig = changeTracker.characterChatConfig?.length ? [changeTracker.characterChatConfig[0]] : []
             changeTracker.chatMessage = changeTracker.chatMessage?.length ? [changeTracker.chatMessage[0]] : []
             changeTracker.chatVariables = changeTracker.chatVariables?.length ? [changeTracker.chatVariables[0]] : []
             changeTracker.chatLore = changeTracker.chatLore?.length ? [changeTracker.chatLore[0]] : []

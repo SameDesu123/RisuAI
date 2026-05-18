@@ -8,6 +8,10 @@ export type SectionSaveChangeTracker = toSaveType & {
     presetProvider?: string[]
     presetSchema?: string[]
     presetExtras?: string[]
+    characterProfile?: string[]
+    characterPrompt?: string[]
+    characterGreeting?: string[]
+    characterChatConfig?: string[]
     chatMessage?: [string, string][]
     chatVariables?: [string, string][]
     chatLore?: [string, string][]
@@ -294,6 +298,48 @@ export const saveSectionPresetExtrasKeys = [
     "moduleIntergration",
     "outputImageModal",
     "regex",
+] as const
+
+export const saveSectionCharacterProfileKeys = [
+    "name",
+    "nickname",
+    "desc",
+    "personality",
+    "scenario",
+    "notes",
+    "tags",
+    "creator",
+    "characterVersion",
+    "creatorNotes",
+    "additionalText",
+    "additionalData",
+    "license",
+] as const
+
+export const saveSectionCharacterPromptKeys = [
+    "systemPrompt",
+    "postHistoryInstructions",
+    "exampleMessage",
+    "replaceGlobalNote",
+    "defaultVariables",
+] as const
+
+export const saveSectionCharacterGreetingKeys = [
+    "firstMessage",
+    "alternateGreetings",
+    "firstMsgIndex",
+    "group_only_greetings",
+] as const
+
+export const saveSectionCharacterChatConfigKeys = [
+    "chatFolders",
+    "chatPage",
+    "viewScreen",
+    "bias",
+    "newGenData",
+    "suggestMessages",
+    "orderByOrder",
+    "oneAtTime",
 ] as const
 
 export function pushSaveSectionChange(values: string[], value: string) {
