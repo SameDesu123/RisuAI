@@ -430,26 +430,28 @@ export async function saveDb() {
         let chatLoreWatcherReadyFor = ''
         let chatMemoryWatcherReadyFor = ''
         let chatMetaWatcherReadyFor = ''
-        const presetInfoWatchersReady = new Set<string>()
-        const presetPromptWatchersReady = new Set<string>()
-        const presetModelWatchersReady = new Set<string>()
-        const presetProviderWatchersReady = new Set<string>()
-        const presetSchemaWatchersReady = new Set<string>()
-        const presetExtraWatchersReady = new Set<string>()
-        const moduleInfoWatchersReady = new Set<string>()
-        const moduleLorebookWatchersReady = new Set<string>()
-        const moduleRegexWatchersReady = new Set<string>()
-        const moduleTriggerWatchersReady = new Set<string>()
-        const moduleAssetWatchersReady = new Set<string>()
-        const moduleScriptWatchersReady = new Set<string>()
-        const pluginInfoWatchersReady = new Set<string>()
-        const pluginArgumentWatchersReady = new Set<string>()
-        const pluginLinkWatchersReady = new Set<string>()
-        const pluginCodeWatchersReady = new Set<string>()
+        const initializedListSections = new Set<string>()
+        const presetInfoSignatures = new Map<string, string>()
+        const presetPromptSignatures = new Map<string, string>()
+        const presetModelSignatures = new Map<string, string>()
+        const presetProviderSignatures = new Map<string, string>()
+        const presetSchemaSignatures = new Map<string, string>()
+        const presetExtraSignatures = new Map<string, string>()
+        const moduleInfoSignatures = new Map<string, string>()
+        const moduleLorebookSignatures = new Map<string, string>()
+        const moduleRegexSignatures = new Map<string, string>()
+        const moduleTriggerSignatures = new Map<string, string>()
+        const moduleAssetSignatures = new Map<string, string>()
+        const moduleScriptSignatures = new Map<string, string>()
+        const pluginInfoSignatures = new Map<string, string>()
+        const pluginArgumentSignatures = new Map<string, string>()
+        const pluginLinkSignatures = new Map<string, string>()
+        const pluginCodeSignatures = new Map<string, string>()
+        let pluginStorageSignaturesReady = false
         const pluginStorageSignatures = new Map<string, string>()
-        const loadoutInfoWatchersReady = new Set<string>()
-        const loadoutScopeWatchersReady = new Set<string>()
-        const loadoutStateWatchersReady = new Set<string>()
+        const loadoutInfoSignatures = new Map<string, string>()
+        const loadoutScopeSignatures = new Map<string, string>()
+        const loadoutStateSignatures = new Map<string, string>()
         const regexSignatures = new Map<string, Map<string, string>>()
         const triggerSignatures = new Map<string, Map<string, string>>()
         const lorebookSignatures = new Map<string, Map<string, string>>()
@@ -481,7 +483,8 @@ export async function saveDb() {
             keys: readonly string[],
             readyFor: string,
             setReadyFor: (value: string) => void,
-            changedBotIds: string[]
+            changedBotIds: string[],
+            markLegacyDirty: () => void = () => pushSaveSectionChange(changeTracker.character, character.chaId)
         ) {
             snapshotSaveSectionKeys(character, keys)
             if (readyFor !== character.chaId) {
@@ -490,29 +493,7 @@ export async function saveDb() {
             }
 
             pushSaveSectionChange(changedBotIds, character.chaId)
-            saveTimeoutExecute()
-        }
-
-        function getPresetTrackingId(preset: any, index: number) {
-            return getSaveSectionTrackedResourceId(preset, index, 'preset')
-        }
-
-        function trackSavePresetSection(
-            preset: any,
-            presetIndex: number,
-            keys: readonly string[],
-            readyPresetIds: Set<string>,
-            changedPresetIds: string[]
-        ) {
-            snapshotSaveSectionKeys(preset, keys)
-
-            const presetId = getPresetTrackingId(preset, presetIndex)
-            if (!readyPresetIds.has(presetId)) {
-                readyPresetIds.add(presetId)
-                return
-            }
-
-            pushSaveSectionChange(changedPresetIds, presetId)
+            markLegacyDirty()
             saveTimeoutExecute()
         }
 
@@ -529,7 +510,74 @@ export async function saveDb() {
             }
 
             pushSaveSectionChange(changedRoots, 'root')
+            changeTracker.root = true
             saveTimeoutExecute()
+        }
+
+        function createSaveSectionSignature(source: any, keys: readonly string[]) {
+            const values: Record<string, unknown> = {}
+            for (const key of keys) {
+                values[key] = source?.[key]
+            }
+            return JSON.stringify(values)
+        }
+
+        function replaceSaveSectionSignatures(target: Map<string, string>, next: Map<string, string>) {
+            target.clear()
+            for (const [id, signature] of next) {
+                target.set(id, signature)
+            }
+        }
+
+        function trackSaveListSection(arg: {
+            values: any[]
+            keys: readonly string[]
+            sectionKey: string
+            signatures: Map<string, string>
+            changedIds: string[]
+            fallbackPrefix: string
+            markLegacyDirty: () => void
+        }) {
+            const next = new Map<string, string>()
+            for (let i = 0; i < arg.values.length; i++) {
+                const value = arg.values[i]
+                snapshotSaveSectionKeys(value, arg.keys)
+                next.set(
+                    getSaveSectionTrackedResourceId(value, i, arg.fallbackPrefix),
+                    createSaveSectionSignature(value, arg.keys)
+                )
+            }
+
+            if (!initializedListSections.has(arg.sectionKey)) {
+                replaceSaveSectionSignatures(arg.signatures, next)
+                initializedListSections.add(arg.sectionKey)
+                return
+            }
+
+            let changedSection = arg.signatures.size !== next.size
+
+            for (const [id, signature] of next) {
+                if (arg.signatures.get(id) !== signature) {
+                    pushSaveSectionChange(arg.changedIds, id)
+                    changedSection = true
+                }
+            }
+
+            for (const id of arg.signatures.keys()) {
+                if (!next.has(id)) {
+                    pushSaveSectionChange(arg.changedIds, id)
+                    changedSection = true
+                }
+            }
+
+            replaceSaveSectionSignatures(arg.signatures, next)
+
+            if (changedSection) {
+                // Granular tracking is observational until RisuSaveEncoder consumes these sections.
+                // Keep the legacy dirty flag as the source of truth for compatible database.bin writes.
+                arg.markLegacyDirty()
+                saveTimeoutExecute()
+            }
         }
 
         function getChatTrackingId(character: any, chat: any) {
@@ -558,6 +606,7 @@ export async function saveDb() {
             })
             signatures.set(character.chaId, result.next)
             if (result.changed) {
+                pushSaveSectionChange(changeTracker.character, character.chaId)
                 saveTimeoutExecute()
             }
         }
@@ -580,75 +629,8 @@ export async function saveDb() {
             }
 
             pushSaveSectionPairChange(changedChats, [character.chaId, chatId])
-            saveTimeoutExecute()
-        }
-
-        function getModuleTrackingId(module: any, index: number) {
-            return getSaveSectionTrackedResourceId(module, index, 'module')
-        }
-
-        function trackSaveModuleSection(
-            module: any,
-            moduleIndex: number,
-            keys: readonly string[],
-            readyModuleIds: Set<string>,
-            changedModuleIds: string[]
-        ) {
-            snapshotSaveSectionKeys(module, keys)
-
-            const moduleId = getModuleTrackingId(module, moduleIndex)
-            if (!readyModuleIds.has(moduleId)) {
-                readyModuleIds.add(moduleId)
-                return
-            }
-
-            pushSaveSectionChange(changedModuleIds, moduleId)
-            saveTimeoutExecute()
-        }
-
-        function getPluginTrackingId(plugin: any, index: number) {
-            return getSaveSectionTrackedResourceId(plugin, index, 'plugin')
-        }
-
-        function getLoadoutTrackingId(loadout: any, index: number) {
-            return getSaveSectionTrackedResourceId(loadout, index, 'loadout')
-        }
-
-        function trackSavePluginSection(
-            plugin: any,
-            pluginIndex: number,
-            keys: readonly string[],
-            readyPluginIds: Set<string>,
-            changedPluginIds: string[]
-        ) {
-            snapshotSaveSectionKeys(plugin, keys)
-
-            const pluginId = getPluginTrackingId(plugin, pluginIndex)
-            if (!readyPluginIds.has(pluginId)) {
-                readyPluginIds.add(pluginId)
-                return
-            }
-
-            pushSaveSectionChange(changedPluginIds, pluginId)
-            saveTimeoutExecute()
-        }
-
-        function trackSaveLoadoutSection(
-            loadout: any,
-            loadoutIndex: number,
-            keys: readonly string[],
-            readyLoadoutIds: Set<string>,
-            changedLoadoutIds: string[]
-        ) {
-            snapshotSaveSectionKeys(loadout, keys)
-
-            const loadoutId = getLoadoutTrackingId(loadout, loadoutIndex)
-            if (!readyLoadoutIds.has(loadoutId)) {
-                readyLoadoutIds.add(loadoutId)
-                return
-            }
-
-            pushSaveSectionChange(changedLoadoutIds, loadoutId)
+            pushSaveSectionChange(changeTracker.character, character.chaId)
+            pushSaveSectionPairChange(changeTracker.chat, [character.chaId, chatId])
             saveTimeoutExecute()
         }
 
@@ -660,6 +642,12 @@ export async function saveDb() {
             }
 
             let changedStorage = pluginStorageSignatures.size !== next.size
+
+            if (!pluginStorageSignaturesReady) {
+                replaceSaveSectionSignatures(pluginStorageSignatures, next)
+                pluginStorageSignaturesReady = true
+                return
+            }
 
             for (const [key, signature] of next) {
                 if (pluginStorageSignatures.get(key) !== signature) {
@@ -675,12 +663,10 @@ export async function saveDb() {
                 }
             }
 
-            pluginStorageSignatures.clear()
-            for (const [key, signature] of next) {
-                pluginStorageSignatures.set(key, signature)
-            }
+            replaceSaveSectionSignatures(pluginStorageSignatures, next)
 
             if (changedStorage) {
+                changeTracker.pluginCustomStorage = true
                 saveTimeoutExecute()
             }
         }
@@ -693,39 +679,75 @@ export async function saveDb() {
         })
         $effect(() => {
             const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
-            for (let i = 0; i < presets.length; i++) {
-                trackSavePresetSection(presets[i], i, saveSectionPresetInfoKeys, presetInfoWatchersReady, changeTracker.presetInfo ??= [])
-            }
+            trackSaveListSection({
+                values: presets,
+                keys: saveSectionPresetInfoKeys,
+                sectionKey: 'presetInfo',
+                signatures: presetInfoSignatures,
+                changedIds: changeTracker.presetInfo ??= [],
+                fallbackPrefix: 'preset',
+                markLegacyDirty: () => changeTracker.botPreset = true
+            })
         })
         $effect(() => {
             const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
-            for (let i = 0; i < presets.length; i++) {
-                trackSavePresetSection(presets[i], i, saveSectionPresetPromptKeys, presetPromptWatchersReady, changeTracker.presetPrompt ??= [])
-            }
+            trackSaveListSection({
+                values: presets,
+                keys: saveSectionPresetPromptKeys,
+                sectionKey: 'presetPrompt',
+                signatures: presetPromptSignatures,
+                changedIds: changeTracker.presetPrompt ??= [],
+                fallbackPrefix: 'preset',
+                markLegacyDirty: () => changeTracker.botPreset = true
+            })
         })
         $effect(() => {
             const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
-            for (let i = 0; i < presets.length; i++) {
-                trackSavePresetSection(presets[i], i, saveSectionPresetModelKeys, presetModelWatchersReady, changeTracker.presetModel ??= [])
-            }
+            trackSaveListSection({
+                values: presets,
+                keys: saveSectionPresetModelKeys,
+                sectionKey: 'presetModel',
+                signatures: presetModelSignatures,
+                changedIds: changeTracker.presetModel ??= [],
+                fallbackPrefix: 'preset',
+                markLegacyDirty: () => changeTracker.botPreset = true
+            })
         })
         $effect(() => {
             const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
-            for (let i = 0; i < presets.length; i++) {
-                trackSavePresetSection(presets[i], i, saveSectionPresetProviderKeys, presetProviderWatchersReady, changeTracker.presetProvider ??= [])
-            }
+            trackSaveListSection({
+                values: presets,
+                keys: saveSectionPresetProviderKeys,
+                sectionKey: 'presetProvider',
+                signatures: presetProviderSignatures,
+                changedIds: changeTracker.presetProvider ??= [],
+                fallbackPrefix: 'preset',
+                markLegacyDirty: () => changeTracker.botPreset = true
+            })
         })
         $effect(() => {
             const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
-            for (let i = 0; i < presets.length; i++) {
-                trackSavePresetSection(presets[i], i, saveSectionPresetSchemaKeys, presetSchemaWatchersReady, changeTracker.presetSchema ??= [])
-            }
+            trackSaveListSection({
+                values: presets,
+                keys: saveSectionPresetSchemaKeys,
+                sectionKey: 'presetSchema',
+                signatures: presetSchemaSignatures,
+                changedIds: changeTracker.presetSchema ??= [],
+                fallbackPrefix: 'preset',
+                markLegacyDirty: () => changeTracker.botPreset = true
+            })
         })
         $effect(() => {
             const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
-            for (let i = 0; i < presets.length; i++) {
-                trackSavePresetSection(presets[i], i, saveSectionPresetExtrasKeys, presetExtraWatchersReady, changeTracker.presetExtras ??= [])
-            }
+            trackSaveListSection({
+                values: presets,
+                keys: saveSectionPresetExtrasKeys,
+                sectionKey: 'presetExtras',
+                signatures: presetExtraSignatures,
+                changedIds: changeTracker.presetExtras ??= [],
+                fallbackPrefix: 'preset',
+                markLegacyDirty: () => changeTracker.botPreset = true
+            })
         })
         $effect(() => {
             $state.snapshot(DBState.db.modules)
@@ -734,75 +756,75 @@ export async function saveDb() {
         })
         $effect(() => {
             const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
-            for (let i = 0; i < modules.length; i++) {
-                trackSaveModuleSection(
-                    modules[i],
-                    i,
-                    saveSectionModuleInfoKeys,
-                    moduleInfoWatchersReady,
-                    changeTracker.moduleInfo ??= []
-                )
-            }
+            trackSaveListSection({
+                values: modules,
+                keys: saveSectionModuleInfoKeys,
+                sectionKey: 'moduleInfo',
+                signatures: moduleInfoSignatures,
+                changedIds: changeTracker.moduleInfo ??= [],
+                fallbackPrefix: 'module',
+                markLegacyDirty: () => changeTracker.modules = true
+            })
         })
         $effect(() => {
             const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
-            for (let i = 0; i < modules.length; i++) {
-                trackSaveModuleSection(
-                    modules[i],
-                    i,
-                    saveSectionModuleLorebookKeys,
-                    moduleLorebookWatchersReady,
-                    changeTracker.moduleLorebook ??= []
-                )
-            }
+            trackSaveListSection({
+                values: modules,
+                keys: saveSectionModuleLorebookKeys,
+                sectionKey: 'moduleLorebook',
+                signatures: moduleLorebookSignatures,
+                changedIds: changeTracker.moduleLorebook ??= [],
+                fallbackPrefix: 'module',
+                markLegacyDirty: () => changeTracker.modules = true
+            })
         })
         $effect(() => {
             const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
-            for (let i = 0; i < modules.length; i++) {
-                trackSaveModuleSection(
-                    modules[i],
-                    i,
-                    saveSectionModuleRegexKeys,
-                    moduleRegexWatchersReady,
-                    changeTracker.moduleRegex ??= []
-                )
-            }
+            trackSaveListSection({
+                values: modules,
+                keys: saveSectionModuleRegexKeys,
+                sectionKey: 'moduleRegex',
+                signatures: moduleRegexSignatures,
+                changedIds: changeTracker.moduleRegex ??= [],
+                fallbackPrefix: 'module',
+                markLegacyDirty: () => changeTracker.modules = true
+            })
         })
         $effect(() => {
             const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
-            for (let i = 0; i < modules.length; i++) {
-                trackSaveModuleSection(
-                    modules[i],
-                    i,
-                    saveSectionModuleTriggerKeys,
-                    moduleTriggerWatchersReady,
-                    changeTracker.moduleTrigger ??= []
-                )
-            }
+            trackSaveListSection({
+                values: modules,
+                keys: saveSectionModuleTriggerKeys,
+                sectionKey: 'moduleTrigger',
+                signatures: moduleTriggerSignatures,
+                changedIds: changeTracker.moduleTrigger ??= [],
+                fallbackPrefix: 'module',
+                markLegacyDirty: () => changeTracker.modules = true
+            })
         })
         $effect(() => {
             const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
-            for (let i = 0; i < modules.length; i++) {
-                trackSaveModuleSection(
-                    modules[i],
-                    i,
-                    saveSectionModuleAssetKeys,
-                    moduleAssetWatchersReady,
-                    changeTracker.moduleAssets ??= []
-                )
-            }
+            trackSaveListSection({
+                values: modules,
+                keys: saveSectionModuleAssetKeys,
+                sectionKey: 'moduleAssets',
+                signatures: moduleAssetSignatures,
+                changedIds: changeTracker.moduleAssets ??= [],
+                fallbackPrefix: 'module',
+                markLegacyDirty: () => changeTracker.modules = true
+            })
         })
         $effect(() => {
             const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
-            for (let i = 0; i < modules.length; i++) {
-                trackSaveModuleSection(
-                    modules[i],
-                    i,
-                    saveSectionModuleScriptKeys,
-                    moduleScriptWatchersReady,
-                    changeTracker.moduleScript ??= []
-                )
-            }
+            trackSaveListSection({
+                values: modules,
+                keys: saveSectionModuleScriptKeys,
+                sectionKey: 'moduleScript',
+                signatures: moduleScriptSignatures,
+                changedIds: changeTracker.moduleScript ??= [],
+                fallbackPrefix: 'module',
+                markLegacyDirty: () => changeTracker.modules = true
+            })
         })
         $effect(() => {
             $state.snapshot(DBState.db.loadouts)
@@ -811,21 +833,39 @@ export async function saveDb() {
         })
         $effect(() => {
             const loadouts = Array.isArray(DBState.db.loadouts) ? DBState.db.loadouts : []
-            for (let i = 0; i < loadouts.length; i++) {
-                trackSaveLoadoutSection(loadouts[i], i, saveSectionLoadoutInfoKeys, loadoutInfoWatchersReady, changeTracker.loadoutInfo ??= [])
-            }
+            trackSaveListSection({
+                values: loadouts,
+                keys: saveSectionLoadoutInfoKeys,
+                sectionKey: 'loadoutInfo',
+                signatures: loadoutInfoSignatures,
+                changedIds: changeTracker.loadoutInfo ??= [],
+                fallbackPrefix: 'loadout',
+                markLegacyDirty: () => changeTracker.loadouts = true
+            })
         })
         $effect(() => {
             const loadouts = Array.isArray(DBState.db.loadouts) ? DBState.db.loadouts : []
-            for (let i = 0; i < loadouts.length; i++) {
-                trackSaveLoadoutSection(loadouts[i], i, saveSectionLoadoutScopeKeys, loadoutScopeWatchersReady, changeTracker.loadoutScope ??= [])
-            }
+            trackSaveListSection({
+                values: loadouts,
+                keys: saveSectionLoadoutScopeKeys,
+                sectionKey: 'loadoutScope',
+                signatures: loadoutScopeSignatures,
+                changedIds: changeTracker.loadoutScope ??= [],
+                fallbackPrefix: 'loadout',
+                markLegacyDirty: () => changeTracker.loadouts = true
+            })
         })
         $effect(() => {
             const loadouts = Array.isArray(DBState.db.loadouts) ? DBState.db.loadouts : []
-            for (let i = 0; i < loadouts.length; i++) {
-                trackSaveLoadoutSection(loadouts[i], i, saveSectionLoadoutStateKeys, loadoutStateWatchersReady, changeTracker.loadoutState ??= [])
-            }
+            trackSaveListSection({
+                values: loadouts,
+                keys: saveSectionLoadoutStateKeys,
+                sectionKey: 'loadoutState',
+                signatures: loadoutStateSignatures,
+                changedIds: changeTracker.loadoutState ??= [],
+                fallbackPrefix: 'loadout',
+                markLegacyDirty: () => changeTracker.loadouts = true
+            })
         })
         $effect(() => {
             $state.snapshot(DBState.db.plugins)
@@ -834,51 +874,51 @@ export async function saveDb() {
         })
         $effect(() => {
             const plugins = Array.isArray(DBState.db.plugins) ? DBState.db.plugins : []
-            for (let i = 0; i < plugins.length; i++) {
-                trackSavePluginSection(
-                    plugins[i],
-                    i,
-                    saveSectionPluginInfoKeys,
-                    pluginInfoWatchersReady,
-                    changeTracker.pluginInfo ??= []
-                )
-            }
+            trackSaveListSection({
+                values: plugins,
+                keys: saveSectionPluginInfoKeys,
+                sectionKey: 'pluginInfo',
+                signatures: pluginInfoSignatures,
+                changedIds: changeTracker.pluginInfo ??= [],
+                fallbackPrefix: 'plugin',
+                markLegacyDirty: () => changeTracker.plugins = true
+            })
         })
         $effect(() => {
             const plugins = Array.isArray(DBState.db.plugins) ? DBState.db.plugins : []
-            for (let i = 0; i < plugins.length; i++) {
-                trackSavePluginSection(
-                    plugins[i],
-                    i,
-                    saveSectionPluginArgumentKeys,
-                    pluginArgumentWatchersReady,
-                    changeTracker.pluginArguments ??= []
-                )
-            }
+            trackSaveListSection({
+                values: plugins,
+                keys: saveSectionPluginArgumentKeys,
+                sectionKey: 'pluginArguments',
+                signatures: pluginArgumentSignatures,
+                changedIds: changeTracker.pluginArguments ??= [],
+                fallbackPrefix: 'plugin',
+                markLegacyDirty: () => changeTracker.plugins = true
+            })
         })
         $effect(() => {
             const plugins = Array.isArray(DBState.db.plugins) ? DBState.db.plugins : []
-            for (let i = 0; i < plugins.length; i++) {
-                trackSavePluginSection(
-                    plugins[i],
-                    i,
-                    saveSectionPluginLinkKeys,
-                    pluginLinkWatchersReady,
-                    changeTracker.pluginLinks ??= []
-                )
-            }
+            trackSaveListSection({
+                values: plugins,
+                keys: saveSectionPluginLinkKeys,
+                sectionKey: 'pluginLinks',
+                signatures: pluginLinkSignatures,
+                changedIds: changeTracker.pluginLinks ??= [],
+                fallbackPrefix: 'plugin',
+                markLegacyDirty: () => changeTracker.plugins = true
+            })
         })
         $effect(() => {
             const plugins = Array.isArray(DBState.db.plugins) ? DBState.db.plugins : []
-            for (let i = 0; i < plugins.length; i++) {
-                trackSavePluginSection(
-                    plugins[i],
-                    i,
-                    saveSectionPluginCodeKeys,
-                    pluginCodeWatchersReady,
-                    changeTracker.pluginCode ??= []
-                )
-            }
+            trackSaveListSection({
+                values: plugins,
+                keys: saveSectionPluginCodeKeys,
+                sectionKey: 'pluginCode',
+                signatures: pluginCodeSignatures,
+                changedIds: changeTracker.pluginCode ??= [],
+                fallbackPrefix: 'plugin',
+                markLegacyDirty: () => changeTracker.plugins = true
+            })
         })
         $effect(() => {
             $state.snapshot(DBState.db.pluginCustomStorage)
