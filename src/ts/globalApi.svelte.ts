@@ -24,7 +24,17 @@ import { hasher } from "./parser/parser.svelte";
 import { characterURLImport, hubURL } from "./characterCards";
 import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
 import { loadRisuAccountData } from "./drive/accounter";
-import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder, type toSaveType } from "./storage/risuSave";
+import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder } from "./storage/risuSave";
+import {
+    collectSaveSectionResourceListChanges,
+    pushSaveSectionChange,
+    type SectionSaveChangeTracker,
+    saveSectionAdvancedKeys,
+    saveSectionAssetKeys,
+    saveSectionBackgroundKeys,
+    saveSectionTtsKeys,
+    saveSectionVirtualScriptKeys,
+} from "./storage/saveSections/sectionChangeDetection";
 import { AutoStorage } from "./storage/autoStorage";
 import { updateAnimationSpeed } from "./gui/animation";
 import { updateColorScheme, updateTextThemeAndCSS } from "./gui/colorscheme";
@@ -311,7 +321,8 @@ export async function saveDb() {
         }
     }
 
-    const changeTracker: toSaveType = {
+    const changeTracker: SectionSaveChangeTracker = {
+        root: false,
         character: [],
         chat: [],
         botPreset: false,
@@ -329,6 +340,15 @@ export async function saveDb() {
     $effect.root(() => {
 
         let selIdState = $state(0)
+        let rootWatcherReady = false
+        let assetWatcherReadyFor = ''
+        let ttsWatcherReadyFor = ''
+        let backgroundWatcherReadyFor = ''
+        let virtualScriptWatcherReadyFor = ''
+        let advancedWatcherReadyFor = ''
+        const regexSignatures = new Map<string, Map<string, string>>()
+        const triggerSignatures = new Map<string, Map<string, string>>()
+        const lorebookSignatures = new Map<string, Map<string, string>>()
 
         const debounceTime = 500; // 500 milliseconds
         let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -344,6 +364,54 @@ export async function saveDb() {
             saveTimeout = setTimeout(() => {
                 changed = true;
             }, debounceTime);
+        }
+
+        function snapshotSaveSectionKeys(source: any, keys: readonly string[]) {
+            for (const key of keys) {
+                $state.snapshot(source?.[key])
+            }
+        }
+
+        function trackSaveSection(
+            character: any,
+            keys: readonly string[],
+            readyFor: string,
+            setReadyFor: (value: string) => void,
+            changedBotIds: string[]
+        ) {
+            snapshotSaveSectionKeys(character, keys)
+            if (readyFor !== character.chaId) {
+                setReadyFor(character.chaId)
+                return
+            }
+
+            pushSaveSectionChange(changedBotIds, character.chaId)
+            saveTimeoutExecute()
+        }
+
+        function trackSaveSectionResourceList(
+            character: any,
+            key: string,
+            fallbackPrefix: string,
+            signatures: Map<string, Map<string, string>>,
+            changedItems: [string, string][],
+            changedIndexes: string[]
+        ) {
+            const values = Array.isArray(character?.[key]) ? character[key] : []
+            $state.snapshot(values)
+
+            const result = collectSaveSectionResourceListChanges({
+                characterId: character.chaId,
+                values,
+                fallbackPrefix,
+                previous: signatures.get(character.chaId),
+                changedItems,
+                changedIndexes,
+            })
+            signatures.set(character.chaId, result.next)
+            if (result.changed) {
+                saveTimeoutExecute()
+            }
         }
 
         $effect(() => {
@@ -381,6 +449,16 @@ export async function saveDb() {
                     $state.snapshot(DBState.db[key])
                 }
             }
+
+            if (!rootWatcherReady) {
+                rootWatcherReady = true
+                return
+            }
+
+            changeTracker.root = true
+            saveTimeoutExecute()
+        })
+        $effect(() => {
             if (DBState?.db?.characters?.[selIdState]) {
                 for (const key in DBState.db.characters[selIdState]) {
                     if (key !== 'chats') {
@@ -399,6 +477,84 @@ export async function saveDb() {
                 }
             }
             saveTimeoutExecute()
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackSaveSection(
+                character,
+                saveSectionAssetKeys,
+                assetWatcherReadyFor,
+                (value) => assetWatcherReadyFor = value,
+                changeTracker.asset ??= []
+            )
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackSaveSection(
+                character,
+                saveSectionTtsKeys,
+                ttsWatcherReadyFor,
+                (value) => ttsWatcherReadyFor = value,
+                changeTracker.tts ??= []
+            )
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackSaveSection(
+                character,
+                saveSectionBackgroundKeys,
+                backgroundWatcherReadyFor,
+                (value) => backgroundWatcherReadyFor = value,
+                changeTracker.scriptBackground ??= []
+            )
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackSaveSection(
+                character,
+                saveSectionVirtualScriptKeys,
+                virtualScriptWatcherReadyFor,
+                (value) => virtualScriptWatcherReadyFor = value,
+                changeTracker.scriptVirtual ??= []
+            )
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackSaveSection(
+                character,
+                saveSectionAdvancedKeys,
+                advancedWatcherReadyFor,
+                (value) => advancedWatcherReadyFor = value,
+                changeTracker.advanced ??= []
+            )
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackSaveSectionResourceList(character, 'customscript', 'regex', regexSignatures, changeTracker.regex ??= [], changeTracker.regexIndex ??= [])
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackSaveSectionResourceList(character, 'triggerscript', 'trigger', triggerSignatures, changeTracker.trigger ??= [], changeTracker.triggerIndex ??= [])
+        })
+
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            if (!character) return
+            trackSaveSectionResourceList(character, 'globalLore', 'lorebook', lorebookSignatures, changeTracker.lorebook ??= [], changeTracker.lorebookIndex ??= [])
         })
     })
 
@@ -425,10 +581,25 @@ export async function saveDb() {
             }
 
             let toSave = safeStructuredClone(changeTracker)
+            changeTracker.root = false
             changeTracker.character = changeTracker.character.length === 0 ? [] : [changeTracker.character[0]]
             changeTracker.chat = changeTracker.chat.length === 0 ? [] : [changeTracker.chat[0]]
             changeTracker.botPreset = false
             changeTracker.modules = false
+            changeTracker.loadouts = false
+            changeTracker.plugins = false
+            changeTracker.pluginCustomStorage = false
+            changeTracker.regex = changeTracker.regex?.length ? [changeTracker.regex[0]] : []
+            changeTracker.regexIndex = changeTracker.regexIndex?.length ? [changeTracker.regexIndex[0]] : []
+            changeTracker.trigger = changeTracker.trigger?.length ? [changeTracker.trigger[0]] : []
+            changeTracker.triggerIndex = changeTracker.triggerIndex?.length ? [changeTracker.triggerIndex[0]] : []
+            changeTracker.lorebook = changeTracker.lorebook?.length ? [changeTracker.lorebook[0]] : []
+            changeTracker.lorebookIndex = changeTracker.lorebookIndex?.length ? [changeTracker.lorebookIndex[0]] : []
+            changeTracker.asset = changeTracker.asset?.length ? [changeTracker.asset[0]] : []
+            changeTracker.tts = changeTracker.tts?.length ? [changeTracker.tts[0]] : []
+            changeTracker.scriptBackground = changeTracker.scriptBackground?.length ? [changeTracker.scriptBackground[0]] : []
+            changeTracker.scriptVirtual = changeTracker.scriptVirtual?.length ? [changeTracker.scriptVirtual[0]] : []
+            changeTracker.advanced = changeTracker.advanced?.length ? [changeTracker.advanced[0]] : []
             if (gotChannel) {
                 //Data is saved in other tab
                 await sleep(1000)
