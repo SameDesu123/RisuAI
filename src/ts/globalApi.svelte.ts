@@ -364,7 +364,7 @@ function logChangedSaveSections(changeTracker: SectionSaveChangeTracker) {
         return
     }
 
-    console.info('[RisuAI save sections]', sections)
+    console.info('[RisuAI save sections]', JSON.parse(JSON.stringify(sections)))
 }
 
 export async function saveDb() {
