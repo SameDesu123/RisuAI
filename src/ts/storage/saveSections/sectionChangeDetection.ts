@@ -542,6 +542,8 @@ export function collectSaveSectionResourceListChanges(arg: {
     }
 
     let indexChanged = arg.previous.size !== next.size
+    const previousOrder = [...arg.previous.keys()].join('\0')
+    const nextOrder = [...next.keys()].join('\0')
 
     for(const [id, signature] of next){
         if(arg.previous.get(id) !== signature){
@@ -554,6 +556,11 @@ export function collectSaveSectionResourceListChanges(arg: {
         if(!next.has(id)){
             indexChanged = true
         }
+    }
+
+    if(arg.previous.size === next.size && previousOrder !== nextOrder){
+        pushSaveSectionPairChange(arg.changedItems, [arg.characterId, '__order'])
+        indexChanged = true
     }
 
     if(indexChanged){
