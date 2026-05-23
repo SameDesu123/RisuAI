@@ -177,6 +177,8 @@ export const languageEnglish = {
             "If enabled, it will use the old translation method, which preprocess markdown and quotes before translations instead of postprocessing after translations.",
         luaHelp:
             "You can use Lua scripts as a trigger script. You can define onInput, onOutput, onStart functions. onInput is called when user sends a message, onOutput is called when character sends a message, onStart is called when the chat starts. For more information, see the documentation.",
+        botUiLua:
+            "Lua code for a per-character overlay UI. Define renderUI(state) to return sanitized HTML, and optionally onUIEvent(event, state) for elements with risu-ui-action. It re-renders only when uiState changes; inline JavaScript is not allowed.",
         claudeCachingExperimental:
             "Caching in Claude is experimental feature that can reduce the cost of the model, but it can also increase the cost if you use it without reroll. Since this is a experimental feature, it can be unstable and behavior can be changed in the future.",
         urllora:
@@ -1035,6 +1037,7 @@ export const languageEnglish = {
     additionalText: "Additional Description",
     seed: "Seed",
     charjs: "CharacterJS",
+    botUiLua: "Bot UI Lua",
     depthPrompt: "Depth Prompt",
     largePortrait: "Portrait",
     lorePlus: "LoreBook+",

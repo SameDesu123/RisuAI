@@ -713,6 +713,9 @@
         <span class="text-textcolor mt-4">{language.triggerScript} <Help key="triggerScript"/></span>
         <TriggerList bind:value={(DBState.db.characters[$selectedCharID] as character).triggerscript} lowLevelAble={DBState.db.characters[$selectedCharID].lowLevelAccess} />
 
+        <span class="text-textcolor mt-4">{language.botUiLua} <Help key="botUiLua"/></span>
+        <TextAreaInput margin="both" autocomplete="off" bind:value={(DBState.db.characters[$selectedCharID] as character).botUiLua} popupLanguage="lua"></TextAreaInput>
+
 
         {#if DBState.db.characters[$selectedCharID].virtualscript || DBState.db.showUnrecommended}
             <span class="text-textcolor mt-4">{language.charjs} <Help key="charjs" unrecommended/></span>
