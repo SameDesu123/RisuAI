@@ -36,6 +36,7 @@
     import IrisModal from './lib/Others/IrisModal.svelte';
     import Legal from './lib/Others/Legal.svelte';
     import CustomSidebarConfig from './lib/Others/CustomSidebarConfig.svelte';
+    import BotUiOverlay from './lib/Others/BotUiOverlay.svelte';
 
 
   
@@ -216,6 +217,7 @@
     {#if $alertStore.type !== 'none'}
         <AlertComp />
     {/if}
+    <BotUiOverlay />
     {#if $showRealmInfoStore}
         <RealmPopUp bind:openedData={$showRealmInfoStore} />
     {/if}
