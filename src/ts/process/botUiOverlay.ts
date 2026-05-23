@@ -3,6 +3,19 @@ import css from "@adobe/css-tools";
 import cssSelectorParser from "postcss-selector-parser";
 
 const styleTagRegex = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+let sanitizeHookInstalled = false;
+
+function ensureSanitizeHook(): void {
+    if(sanitizeHookInstalled){
+        return;
+    }
+    DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {
+        if(data.attrName.toLowerCase().startsWith('on')){
+            (data as any).keepAttr = false;
+        }
+    });
+    sanitizeHookInstalled = true;
+}
 
 function prefixClassSelectors(selector: string): string {
     const parser = cssSelectorParser((root) => {
@@ -50,9 +63,25 @@ export function scopeBotUiStyles(html: string, scopeSelector = '.bot-ui-overlay-
 }
 
 export function sanitizeBotUiHtml(html: string): string {
-    return DOMPurify.sanitize(scopeBotUiStyles(html), {
+    ensureSanitizeHook();
+    const sanitized = DOMPurify.sanitize(scopeBotUiStyles(html), {
         ADD_TAGS: ['style'],
         ADD_ATTR: ['risu-ui-action', 'risu-ui-id', 'risu-ui-value'],
         FORBID_TAGS: ['script', 'iframe', 'object', 'embed'],
+        FORBID_ATTR: ['onclick', 'onload', 'onerror', 'onmouseover', 'onmouseenter', 'onmouseleave', 'oninput', 'onchange', 'onsubmit'],
     });
+    if(typeof document === 'undefined'){
+        return sanitized;
+    }
+
+    const template = document.createElement('template');
+    template.innerHTML = sanitized;
+    for(const element of Array.from(template.content.querySelectorAll('*'))){
+        for(const attr of Array.from(element.attributes)){
+            if(attr.name.toLowerCase().startsWith('on')){
+                element.removeAttribute(attr.name);
+            }
+        }
+    }
+    return template.innerHTML;
 }
