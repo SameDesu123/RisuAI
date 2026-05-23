@@ -18,10 +18,12 @@ import { tokenize } from "../tokenizer";
 import { fetchNative, readImage } from "../globalApi.svelte";
 import { loadLoreBookV3Prompt } from './lorebook.svelte';
 import { getPersonaPrompt, getUserName, getUserIcon } from '../util';
+import { getBotUiStateSnapshot, getBotUiStateValue, setBotUiStateValue } from './botUiState.svelte';
 let luaFactory:LuaFactory
 let ScriptingSafeIds = new Set<string>()
 let ScriptingEditDisplayIds = new Set<string>()
 let ScriptingLowLevelIds = new Set<string>()
+let ScriptingUIIds = new Set<string>()
 let lastRequestResetTime = 0
 let lastRequestsCount = 0
 
@@ -52,13 +54,15 @@ let pendingEngineCreations = new Map<string, Promise<ScriptingEngineState>>();
 export async function runScripted(code:string, arg:{
     char?:character|groupChat|simpleCharacterArgument,
     chat?:Chat
-    data?: string|OpenAIChat[],
+    data?: string|OpenAIChat[]|Record<string, string>,
     setVar?: (key:string, value:string) => void,
     getVar?: (key:string) => string,
     lowLevelAccess?: boolean,
     meta?: object,
     mode?: string,
-    type?: 'lua'|'py'
+    type?: 'lua'|'py',
+    engineKey?: string,
+    apiMode?: 'full'|'ui'
 }){
     const type: 'lua'|'py' = arg.type ?? 'lua'
     const char = arg.char ?? getCurrentCharacter()
@@ -67,6 +71,8 @@ export async function runScripted(code:string, arg:{
     const getVar = arg.getVar ?? getChatVar
     const meta = arg.meta ?? {}
     const mode = arg.mode ?? 'manual'
+    const engineKey = arg.engineKey ?? mode
+    const apiMode = arg.apiMode ?? 'full'
 
     let chat = arg.chat ?? getCurrentChat()
     let stopSending = false
@@ -75,7 +81,7 @@ export async function runScripted(code:string, arg:{
     if(type === 'lua'){
         await ensureLuaFactory()
     }
-    let ScriptingEngineState = await getOrCreateEngineState(mode, type);
+    let ScriptingEngineState = await getOrCreateEngineState(engineKey, type);
     
     return await ScriptingEngineState.mutex.runExclusive(async () => {
         ScriptingEngineState.chat = chat
@@ -85,7 +91,7 @@ export async function runScripted(code:string, arg:{
             let declareAPI:(name: string, func:Function) => void
 
             if(ScriptingEngineState.type === 'lua'){
-                console.log('Creating new Lua engine for mode:', mode)
+                console.log('Creating new Lua engine for mode:', engineKey)
                 ScriptingEngineState.engine?.global.close()
                 ScriptingEngineState.code = code
                 ScriptingEngineState.engine = await luaFactory.createEngine({injectObjects: true})
@@ -110,6 +116,18 @@ export async function runScripted(code:string, arg:{
                     return
                 }
                 ScriptingEngineState.setVar(key, value)
+            })
+            declareAPI('getUIStateMain', (id:string, key:string) => {
+                if(!ScriptingSafeIds.has(id) && !ScriptingEditDisplayIds.has(id) && !ScriptingUIIds.has(id)){
+                    return 'null'
+                }
+                return getBotUiStateValue(ScriptingEngineState.chat!, key)
+            })
+            declareAPI('setUIStateMain', (id:string, key:string, value:string) => {
+                if(!ScriptingSafeIds.has(id) && !ScriptingEditDisplayIds.has(id) && !ScriptingUIIds.has(id)){
+                    return false
+                }
+                return setBotUiStateValue(ScriptingEngineState.chat!, key, value)
             })
             declareAPI('getGlobalVar', (id:string, key:string) => {
                 return getGlobalChatVar(key)
@@ -1034,7 +1052,10 @@ export async function runScripted(code:string, arg:{
             ScriptingEngineState.code = code
         }
         let accessKey = v4()
-        if(mode === 'editDisplay'){
+        if(apiMode === 'ui' || mode === 'renderUI' || mode === 'onUIEvent'){
+            ScriptingUIIds.add(accessKey)
+        }
+        else if(mode === 'editDisplay'){
             ScriptingEditDisplayIds.add(accessKey)
         }
         else{
@@ -1087,6 +1108,20 @@ export async function runScripted(code:string, arg:{
                         }
                         break
                     }
+                    case 'renderUI':{
+                        const func = luaEngine.global.get('callRenderUI')
+                        if(func){
+                            res = await func(accessKey, JSON.stringify(getBotUiStateSnapshot(chat)))
+                        }
+                        break
+                    }
+                    case 'onUIEvent':{
+                        const func = luaEngine.global.get('callUIEvent')
+                        if(func){
+                            res = await func(accessKey, JSON.stringify(data), JSON.stringify(getBotUiStateSnapshot(chat)))
+                        }
+                        break
+                    }
                     default:{
                         const func = luaEngine.global.get(mode)
                         if(func){
@@ -1135,7 +1170,9 @@ export async function runScripted(code:string, arg:{
             }
         }
         ScriptingSafeIds.delete(accessKey)
+        ScriptingEditDisplayIds.delete(accessKey)
         ScriptingLowLevelIds.delete(accessKey)
+        ScriptingUIIds.delete(accessKey)
         chat = ScriptingEngineState.chat
 
         return {
@@ -1303,6 +1340,14 @@ function setState(id, name, value)
     setChatVar(id, escapedName, json.encode(value))
 end
 
+function getUIState(id, name)
+    return json.decode(getUIStateMain(id, name))
+end
+
+function setUIState(id, name, value)
+    return setUIStateMain(id, name, json.encode(value))
+end
+
 function async(callback)
     return function(...)
         local co = coroutine.create(callback)
@@ -1364,6 +1409,23 @@ callListenMain = async(function(type, id, value, meta)
     return json.encode(realValue)
 end)
 
+function callRenderUI(id, state)
+    if renderUI == nil then
+        return ''
+    end
+
+    local html = renderUI(json.decode(state))
+    return html or ''
+end
+
+function callUIEvent(id, event, state)
+    if onUIEvent == nil then
+        return nil
+    end
+
+    return onUIEvent(json.decode(event), json.decode(state))
+end
+
 ${code}
 `
 }
@@ -1409,6 +1471,39 @@ export async function runLuaEditTrigger<T extends string|OpenAIChat[]>(char:char
     } catch (error) {
         return content
     }
+}
+
+export async function renderBotUiLua(char:character, chat:Chat):Promise<string>{
+    const code = char.botUiLua?.trim()
+    if(!code){
+        return ''
+    }
+
+    const runResult = await runScripted(code, {
+        char,
+        chat,
+        mode: 'renderUI',
+        engineKey: `lua:char:${char.chaId}:ui`,
+        apiMode: 'ui',
+    })
+
+    return typeof runResult.res === 'string' ? runResult.res : ''
+}
+
+export async function dispatchBotUiLuaEvent(char:character, chat:Chat, event:Record<string, string>):Promise<void>{
+    const code = char.botUiLua?.trim()
+    if(!code){
+        return
+    }
+
+    await runScripted(code, {
+        char,
+        chat,
+        data: event,
+        mode: 'onUIEvent',
+        engineKey: `lua:char:${char.chaId}:ui`,
+        apiMode: 'ui',
+    })
 }
 
 export async function runLuaButtonTrigger(char:character|groupChat|simpleCharacterArgument, data:string):Promise<any>{
