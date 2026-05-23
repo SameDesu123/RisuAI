@@ -358,6 +358,7 @@ async function checkNewFormat(): Promise<void> {
             v.tags ??= [];
             v.systemPrompt ??= '';
             v.scenario ??= '';
+            v.botUiLua ??= '';
         }
         return v;
     }).filter((v) => {

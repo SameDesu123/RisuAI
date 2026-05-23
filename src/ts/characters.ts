@@ -562,6 +562,7 @@ export function characterFormatUpdate(indexOrCharacter:number|character, arg:{
             cha.utilityBot = false
         }
         cha.triggerscript = cha.triggerscript ?? []
+        cha.botUiLua ??= ''
         cha.alternateGreetings = cha.alternateGreetings ?? []
         cha.exampleMessage = cha.exampleMessage ?? ''
         cha.creatorNotes = cha.creatorNotes ?? ''
@@ -714,6 +715,7 @@ export function createBlankChar():character{
             conditions: [],
             effect: []
         }],
+        botUiLua: '',
         additionalText: ''
     }
 }

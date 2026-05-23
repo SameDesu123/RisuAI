@@ -1417,6 +1417,7 @@ export interface character{
         format?: 'mp3' | 'opus' | 'aac' | 'flac' | 'wav' | 'pcm'
     }
     virtualscript?:string
+    botUiLua?:string
     scriptstate?:{[key:string]:string|number|boolean}
     depth_prompt?: { depth: number, prompt: string }
     extentions?:{[key:string]:any}
@@ -1785,6 +1786,7 @@ export interface Chat{
     suggestMessages?:string[]
     isStreaming?:boolean
     scriptstate?:{[key:string]:string|number|boolean}
+    uiState?:Record<string, unknown>
     modules?:string[]
     id?:string
     bindedPersona?:string

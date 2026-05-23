@@ -989,6 +989,7 @@ async function importCharacterCardSpec(card:CharacterCardV2Risu|CharacterCardV3,
         backgroundHTML: data?.extensions?.risuai?.backgroundHTML,
         license: data?.extensions?.risuai?.license,
         triggerscript: data?.extensions?.risuai?.triggerscript ?? [],
+        botUiLua: data?.extensions?.risuai?.botUiLua ?? '',
         private: data?.extensions?.risuai?.private ?? false,
         additionalText: data?.extensions?.risuai?.additionalText ?? '',
         virtualscript: '', //removed dude to security issue
@@ -1206,6 +1207,7 @@ function createBaseV2(char:character) {
                     backgroundHTML: char.backgroundHTML,
                     license: char.license,
                     triggerscript: char.triggerscript,
+                    botUiLua: char.botUiLua ?? '',
                     additionalText: char.additionalText,
                     virtualscript: '', //removed dude to security issue
                     largePortrait: char.largePortrait,
@@ -1628,6 +1630,7 @@ export function createBaseV3(char:character){
                     backgroundHTML: char.backgroundHTML,
                     license: char.license,
                     triggerscript: char.triggerscript,
+                    botUiLua: char.botUiLua ?? '',
                     additionalText: char.additionalText,
                     virtualscript: '', //removed dude to security issue
                     largePortrait: char.largePortrait,
@@ -1918,6 +1921,7 @@ type CharacterCardV2Risu = {
                 backgroundHTML?:string,
                 license?:string,
                 triggerscript?:triggerscript[]
+                botUiLua?:string
                 private?:boolean
                 additionalText?:string
                 virtualscript?:string
