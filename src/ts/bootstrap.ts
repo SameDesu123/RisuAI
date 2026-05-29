@@ -192,9 +192,14 @@ export async function loadData() {
                     return
                 }
                 LoadingStatusState.text = "Checking Service Worker..."
-                if (navigator.serviceWorker) {
-                    setUsingSw(true)
-                    await registerSw()
+                if (canUseServiceWorkerCache()) {
+                    try {
+                        await registerSw()
+                        setUsingSw(true)
+                    } catch (error) {
+                        console.warn("Failed to register service worker cache:", error)
+                        setUsingSw(false)
+                    }
                 }
                 else {
                     setUsingSw(false)
@@ -279,6 +284,11 @@ async function registerSw() {
     if (!(da.status >= 200 && da.status < 300)) {
         location.reload();
     }
+}
+
+function canUseServiceWorkerCache() {
+    // Android Tauri can expose navigator.serviceWorker while failing to fetch /sw.js from tauri.localhost.
+    return !isTauriAndroid && !!navigator.serviceWorker
 }
 
 /**
