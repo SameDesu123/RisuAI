@@ -1,0 +1,104 @@
+name: Android Tauri Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+      - 'fix/**'
+      - 'refactor/**'
+    paths:
+      - '.github/workflows/android-build.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'vite.config.*'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/android-build.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'vite.config.*'
+
+env:
+  CARGO_TERM_COLOR: always
+  ANDROID_NDK_VERSION: 29.0.14206865
+
+jobs:
+  android-build:
+    name: Build Android debug APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Setup Rust Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          yes | "$SDKMANAGER" --licenses
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;$ANDROID_NDK_VERSION"
+          yes | "$SDKMANAGER" --licenses
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Initialize Tauri Android project
+        if: ${{ hashFiles('src-tauri/gen/android/**') == '' }}
+        run: pnpm tauri android init --ci --skip-targets-install
+
+      - name: Build Android debug APK
+        env:
+          VITE_RISU_LEGAL_CONFIGURED: 'TRUE'
+        run: pnpm tauri android build --debug --apk --target aarch64 x86_64
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: risuai-android-debug-apk
+          if-no-files-found: error
+          path: |
+            src-tauri/gen/android/app/build/outputs/**/*.apk
