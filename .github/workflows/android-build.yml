@@ -79,9 +79,18 @@ jobs:
           if [ -z "$SDKMANAGER" ]; then
             SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           fi
-          yes | "$SDKMANAGER" --licenses
-          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;$ANDROID_NDK_VERSION"
-          yes | "$SDKMANAGER" --licenses
+
+          run_sdkmanager_with_yes() {
+            set +o pipefail
+            yes | "$SDKMANAGER" "$@"
+            local status=$?
+            set -o pipefail
+            return "$status"
+          }
+
+          run_sdkmanager_with_yes --licenses
+          run_sdkmanager_with_yes "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;$ANDROID_NDK_VERSION"
+          run_sdkmanager_with_yes --licenses
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
