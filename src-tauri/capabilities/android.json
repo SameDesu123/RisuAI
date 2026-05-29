@@ -1,0 +1,64 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "android-capability",
+  "description": "Android MVP permissions for the main RisuAI webview.",
+  "local": true,
+  "platforms": [
+    "android"
+  ],
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-fullscreen",
+    "core:app:allow-app-show",
+    "core:app:allow-app-hide",
+    "fs:default",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-read-dir",
+    "fs:allow-mkdir",
+    "fs:allow-remove",
+    "fs:allow-exists",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        "$APPDATA",
+        "$APPDATA/*",
+        "$APPDATA/**/*",
+        "$DOWNLOAD/*"
+      ]
+    },
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "dialog:allow-ask",
+    "dialog:allow-confirm",
+    {
+      "identifier": "http:default",
+      "allow": [
+        {
+          "url": "https://*/*"
+        },
+        {
+          "url": "https://*/**/*"
+        },
+        {
+          "url": "http://*/*"
+        },
+        {
+          "url": "http://*/**/*"
+        },
+        {
+          "url": "http://*:**"
+        }
+      ]
+    },
+    "os:allow-os-type",
+    "os:allow-version",
+    "os:allow-platform",
+    "shell:allow-open"
+  ]
+}
