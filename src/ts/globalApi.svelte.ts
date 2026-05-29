@@ -40,7 +40,7 @@ import { fetch as TauriHTTPFetch } from '@tauri-apps/plugin-http';
 import { moduleUpdate } from "./process/modules";
 import type { AccountStorage } from "./storage/accountStorage";
 import { makeColdData } from "./process/coldstorage.svelte";
-import { isTauri, isNodeServer } from "./platform";
+import { isTauri, isNodeServer, isTauriAndroid } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
@@ -112,7 +112,7 @@ let checkedPaths: string[] = []
  * @returns {Promise<string>} - A promise that resolves to the source URL of the file.
  */
 export async function getFileSrc(loc: string) {
-    if (isTauri) {
+    if (isTauri && !isTauriAndroid) {
         if (loc.startsWith('assets')) {
             if (appDataDirPath === '') {
                 appDataDirPath = await appDataDir();
@@ -206,7 +206,7 @@ let appDataDirPath = ''
  * @returns {Promise<Uint8Array>} - A promise that resolves to the data of the image file.
  */
 export async function readImage(data: string) {
-    if (isTauri) {
+    if (isTauri && !isTauriAndroid) {
         if (data.startsWith('assets')) {
             if (appDataDirPath === '') {
                 appDataDirPath = await appDataDir();
@@ -244,7 +244,7 @@ export async function saveAsset(data: Uint8Array, customId: string = '', fileNam
     if (fileName && fileName.split('.').length > 0) {
         fileExtension = fileName.split('.').pop()
     }
-    if (isTauri) {
+    if (isTauri && !isTauriAndroid) {
         await writeFile(`assets/${id}.${fileExtension}`, data, {
             baseDir: BaseDirectory.AppData
         });
@@ -267,7 +267,7 @@ export async function saveAsset(data: Uint8Array, customId: string = '', fileNam
  * @returns {Promise<Uint8Array>} - A promise that resolves to the data of the loaded asset file.
  */
 export async function loadAsset(id: string) {
-    if (isTauri) {
+    if (isTauri && !isTauriAndroid) {
         return await readFile(id, { baseDir: BaseDirectory.AppData })
     }
     else {
@@ -450,7 +450,7 @@ export async function saveDb() {
                 continue
             }
             const dbData = new Uint8Array(encoded)
-            if (isTauri) {
+            if (isTauri && !isTauriAndroid) {
                 await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
                 await writeFile(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData, { baseDir: BaseDirectory.AppData });
             }
@@ -494,7 +494,7 @@ export async function getDbBackups() {
     if (db?.account?.useSync && !isTauri && !isNodeServer) {
         return []
     }
-    if (isTauri) {
+    if (isTauri && !isTauriAndroid) {
         const keys = await readDir('database', { baseDir: BaseDirectory.AppData })
         let backups: number[] = []
         for (const key of keys) {
@@ -1994,7 +1994,7 @@ export class BlankWriter {
 
 export async function loadInternalBackup() {
 
-    const keys = isTauri ? (await readDir('database', { baseDir: BaseDirectory.AppData })).map((v) => {
+    const keys = (isTauri && !isTauriAndroid) ? (await readDir('database', { baseDir: BaseDirectory.AppData })).map((v) => {
         return v.name
     }) : (await forageStorage.keys())
     let internalBackups: string[] = []
@@ -2021,7 +2021,7 @@ export async function loadInternalBackup() {
 
     const selectedBackup = internalBackups[alertResult]
 
-    const data = isTauri ? (
+    const data = (isTauri && !isTauriAndroid) ? (
         await readFile('database/' + selectedBackup, { baseDir: BaseDirectory.AppData })
     ) : (await forageStorage.getItem(selectedBackup))
 

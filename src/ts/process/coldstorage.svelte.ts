@@ -8,7 +8,7 @@ import {
     readDir
 } from "@tauri-apps/plugin-fs"
 import { forageStorage } from "../globalApi.svelte"
-import { isTauri, isNodeServer } from "src/ts/platform"
+import { isTauri, isNodeServer, isTauriAndroid } from "src/ts/platform"
 import { DBState } from "../stores.svelte"
 import type { NodeStorage } from "../storage/nodeStorage"
 import { compress as fflateCompress, decompress as fflateDecompress } from "fflate"
@@ -58,6 +58,18 @@ export async function getColdStorageItem(key:string) {
             return JSON.parse(text)
         }
         catch (error) {
+            return null
+        }
+    }
+    else if(isTauriAndroid){
+        try {
+            const f = await forageStorage.getItem('coldstorage/' + key)
+            if(!f){
+                return null
+            }
+            const text = new TextDecoder().decode(await decompress(new Uint8Array(f)))
+            return JSON.parse(text)
+        } catch (error) {
             return null
         }
     }
@@ -143,6 +155,15 @@ export async function setColdStorageItem(key:string, value:any):Promise<boolean>
         }
     }
 
+    else if(isTauriAndroid){
+        try {
+            await forageStorage.setItem('coldstorage/' + key, compressed)
+            return true
+        } catch (error) {
+            console.error('Cold storage Android Tauri write failed:', error)
+            return false
+        }
+    }
     else if(isTauri){
         try {
             if(!(await exists('./coldstorage'))){
@@ -194,6 +215,12 @@ export async function listColdStorageItems():Promise<{items:string[]}> {
         }
     }
 
+    else if(isTauriAndroid){
+        const fullKeys = await forageStorage.keys()
+        return {
+            items: fullKeys.filter(k => k.startsWith('coldstorage/')).map(k => k.replace('coldstorage/', ''))
+        }
+    }
     else if(isTauri){
         const entries = await readDir('./coldstorage', { baseDir: BaseDirectory.AppData })
         const keys = entries.filter(e => e.name.endsWith('.json')).map(e => e.name.slice(0, -5))
@@ -260,6 +287,15 @@ async function removeColdStorageItems(keys:string[]) {
             const storage = forageStorage.realStorage as NodeStorage
             const deleteKeys = keys.map(k => 'coldstorage/' + k);
             (storage as NodeStorage).removeItem(deleteKeys)
+        } catch (error) {
+            console.error(error)
+        }
+    }
+    else if(isTauriAndroid){
+        try {
+            for(let i=0;i<keys.length;i++){
+                await forageStorage.removeItem('coldstorage/' + keys[i])
+            }
         } catch (error) {
             console.error(error)
         }

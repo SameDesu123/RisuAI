@@ -41,7 +41,7 @@ import {
     setUsingSw,
     checkCharOrder
 } from "./globalApi.svelte";
-import { isTauri } from "./platform";
+import { isTauri, isTauriAndroid } from "./platform";
 import { registerModelDynamic } from "./model/modellist";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
@@ -55,7 +55,7 @@ export async function loadData() {
     const loaded = get(loadedStore)
     if (!loaded) {
         try {
-            if (isTauri) {
+            if (isTauri && !isTauriAndroid) {
                 LoadingStatusState.text = "Checking Files..."
                 appWindow.maximize()
                 if (!await exists('', { baseDir: BaseDirectory.AppData })) {
@@ -514,7 +514,7 @@ async function cleanChunks() {
     }
 
     const uncleanable = new Set(getUncleanables(db))
-    if (isTauri) {
+    if (isTauri && !isTauriAndroid) {
         const assets = await readDir('assets', { baseDir: BaseDirectory.AppData })
         console.log(assets)
         for (const asset of assets) {
