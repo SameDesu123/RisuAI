@@ -149,17 +149,10 @@ export async function importCharacterProcess(f:{
     let pngChunks = 0
     let readedPngChunks = 0
 
-    {
+    if(!(f.data instanceof ReadableStream)){
 
         let readData:File | Uint8Array | ReadableStream<Uint8Array>
-        if(f.data instanceof ReadableStream){
-            const tee = f.data.tee()
-            f.data = tee[0]
-            readData = tee[1]
-        }
-        else{
-            readData = f.data
-        }
+        readData = f.data
 
         const prereader = PngChunk.readGenerator(readData, {
 
