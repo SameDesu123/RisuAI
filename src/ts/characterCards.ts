@@ -29,6 +29,12 @@ export const hubURL = isNodeServer
     ? NIGHTLY_HUB_URL 
     : EXTERNAL_HUB_URL;
 
+const importDebugLog = (...args: unknown[]) => {
+    if(localStorage.getItem('risu_import_debug') === 'true'){
+        console.info(...args)
+    }
+}
+
 function decodeBase64Ascii(data: Uint8Array): Uint8Array {
     let validLength = 0
     let padding = 0
@@ -235,6 +241,32 @@ export async function importCharacterProcess(f:{
     let queueFetch:Promise<Response>[] = []
     let queueFetchKey:string[] = []
     let queueFetchData:Uint8Array[] = []
+    let lastAssetProgressUpdate = 0
+    const pendingPngAssetSaves = new Set<Promise<void>>()
+    const maxConcurrentPngAssetSaves = 3
+    const queuePngAssetSave = async (assetIndex: string, assetData: Uint8Array) => {
+        const task = (async () => {
+            importDebugLog('[character-import] saving png asset', {
+                assetIndex,
+                decodedBytes: assetData.length
+            })
+            const assetId = await saveAsset(assetData)
+            assets[assetIndex] = assetId
+            importDebugLog('[character-import] saved png asset', {
+                assetIndex,
+                assetId
+            })
+        })()
+        pendingPngAssetSaves.add(task)
+        task.then(
+            () => pendingPngAssetSaves.delete(task),
+            () => pendingPngAssetSaves.delete(task)
+        )
+        if(pendingPngAssetSaves.size >= maxConcurrentPngAssetSaves){
+            await Promise.race(pendingPngAssetSaves)
+        }
+    }
+
     for await (const chunk of readGenerator){
         if(!chunk){
             continue
@@ -258,27 +290,30 @@ export async function importCharacterProcess(f:{
         }
         if(chunk.key.startsWith('chara-ext-asset_')){
             const assetIndex = chunk.key.replace('chara-ext-asset_:', '').replace('chara-ext-asset_', '')
-            console.info('[character-import] png asset chunk found', {
+            importDebugLog('[character-import] png asset chunk found', {
                 assetIndex,
                 base64Bytes: chunk.rawValue?.length ?? chunk.value.length,
                 readedPngChunks
             })
             const assetData = chunk.rawValue ? decodeBase64Ascii(chunk.rawValue) : Buffer.from(chunk.value, 'base64')
-            console.info('[character-import] png asset loaded', {
+            importDebugLog('[character-import] png asset loaded', {
                 assetIndex,
                 base64Bytes: chunk.rawValue?.length ?? chunk.value.length,
                 decodedBytes: assetData.length,
                 readedPngChunks
             })
-            if(pngChunks === 0){
+            const now = performance.now()
+            if(pngChunks === 0 && now - lastAssetProgressUpdate > 250){
                 alertWait('Loading... (Loaded ' + readedPngChunks + ' Assets)')
+                lastAssetProgressUpdate = now
             }
-            else{
+            else if(pngChunks > 0 && now - lastAssetProgressUpdate > 250){
                 alertStore.set({
                     type: 'progress',
                     msg: 'Loading... (Loading Assets)',
                     submsg: (readedPngChunks / pngChunks * 100).toFixed(2)
                 })
+                lastAssetProgressUpdate = now
             }
 
             readedPngChunks++
@@ -309,17 +344,12 @@ export async function importCharacterProcess(f:{
             }
 
 
-            console.info('[character-import] saving png asset', {
-                assetIndex,
-                decodedBytes: assetData.length
-            })
-            const assetId = await saveAsset(assetData)
-            assets[assetIndex] = assetId
-            console.info('[character-import] saved png asset', {
-                assetIndex,
-                assetId
-            })
+            await queuePngAssetSave(assetIndex, assetData)
         }
+    }
+
+    if(pendingPngAssetSaves.size > 0){
+        await Promise.all(pendingPngAssetSaves)
     }
 
     if(queueFetch.length > 0){
