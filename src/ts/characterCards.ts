@@ -389,10 +389,9 @@ export async function characterURLImport() {
                     "content-type": "application/json"
                 }
             })
-            const img = new Uint8Array(await chara.arrayBuffer())
             await importCharacterProcess({
                 name: 'charahub.png',
-                data: img
+                data: chara.body ?? new Uint8Array(await chara.arrayBuffer())
             })
         }
     } catch (error) {
@@ -409,7 +408,7 @@ export async function characterURLImport() {
             const res = await fetch(url, {
                 method: 'GET',
             })
-            const data = new Uint8Array(await res.arrayBuffer())
+            const data = res.body ?? new Uint8Array(await res.arrayBuffer())
             await importFile(getFileName(res), data)
             checkCharOrder()
         } catch (error) {
@@ -450,10 +449,9 @@ export async function characterURLImport() {
         if(data.status !== 200){
             return
         }
-        const charx = new Uint8Array(await data.arrayBuffer())
         await importCharacterProcess({
             name: 'shared.charx',
-            data: charx
+            data: data.body ?? new Uint8Array(await data.arrayBuffer())
         })
     }
     if(hash.startsWith('#share_module')){
@@ -486,8 +484,7 @@ export async function characterURLImport() {
         const handleFiles = async (files:FileSystemFileHandle[]) => {
             for(const f of files){
                 const file = await f.getFile()
-                const data = new Uint8Array(await file.arrayBuffer())
-                await importFile(f.name, data);
+                await importFile(f.name, file);
             }
         }
         //@ts-expect-error launchQueue is File Handling API for PWA, not yet in TypeScript's Window interface
@@ -525,26 +522,28 @@ export async function characterURLImport() {
         })
     }
 
-    async function importFile(name:string, data:Uint8Array) {
-        if(name.endsWith('.charx') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png')){
+    async function importFile(name:string, data:Uint8Array|File|ReadableStream<Uint8Array>) {
+        const normalizedName = name.toLowerCase()
+        if(normalizedName.endsWith('.charx') || normalizedName.endsWith('.jpg') || normalizedName.endsWith('.jpeg') || normalizedName.endsWith('.png')){
             await importCharacterProcess({
                 name: name,
                 data: data
             })
             return
         }
-        if(name.endsWith('.risupreset') || name.endsWith('.risup')){
+        const bytes = data instanceof Uint8Array ? data : new Uint8Array(await new Response(data as BodyInit).arrayBuffer())
+        if(normalizedName.endsWith('.risupreset') || normalizedName.endsWith('.risup')){
             await importPreset({
                 name: name,
-                data: data
+                data: bytes
             })
             SettingsMenuIndex.set(1)
             settingsOpen.set(true)
             alertNormal(language.successImport)
             return
         }
-        if(name.endsWith('risum')){
-            const md = await readModule(Buffer.from(data))
+        if(normalizedName.endsWith('risum')){
+            const md = await readModule(Buffer.from(bytes))
             md.id = v4()
             DBState.db.modules.push(md)
             alertNormal(language.successImport)
