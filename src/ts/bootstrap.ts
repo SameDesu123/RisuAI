@@ -43,7 +43,7 @@ import {
 } from "./globalApi.svelte";
 import { isTauri, isTauriAndroid } from "./platform";
 import { registerModelDynamic } from "./model/modellist";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
@@ -57,6 +57,13 @@ export async function loadData() {
         try {
             if (isTauri) {
                 LoadingStatusState.text = "Checking Files..."
+                if (isTauriAndroid) {
+                    try {
+                        await invoke('set_android_webview_debugging', { enabled: true })
+                    } catch (error) {
+                        console.warn("Failed to enable Android WebView debugging:", error)
+                    }
+                }
                 if (!isTauriAndroid) {
                     appWindow.maximize()
                 }

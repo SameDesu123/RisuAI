@@ -202,6 +202,45 @@ fn set_android_fullscreen(enabled: bool) -> Result<(), String> {
 }
 
 #[cfg(target_os = "android")]
+#[tauri::command]
+fn set_android_webview_debugging(webview: tauri::Webview, enabled: bool) -> Result<(), String> {
+    let enabled = enabled && cfg!(debug_assertions);
+    webview
+        .with_webview(move |webview| {
+            webview.jni_handle().exec(move |env, _activity, _webview| {
+                if let Err(error) = set_android_webview_debugging_enabled(env, enabled) {
+                    eprintln!("Failed to set Android WebView debugging: {error}");
+                }
+            });
+        })
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+fn set_android_webview_debugging(enabled: bool) -> Result<(), String> {
+    let _ = enabled;
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn set_android_webview_debugging_enabled(
+    env: &mut jni::JNIEnv,
+    enabled: bool,
+) -> Result<(), jni::errors::Error> {
+    use jni::objects::JValue;
+
+    let webview_class = env.find_class("android/webkit/WebView")?;
+    env.call_static_method(
+        webview_class,
+        "setWebContentsDebuggingEnabled",
+        "(Z)V",
+        &[JValue::Bool(if enabled { 1 } else { 0 })],
+    )?;
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
 fn apply_android_fullscreen(
     env: &mut jni::JNIEnv,
     activity: &jni::objects::JObject,
@@ -801,6 +840,7 @@ pub fn run() {
             install_py_dependencies,
             streamed_fetch,
             set_android_fullscreen,
+            set_android_webview_debugging,
             oauth_login
         ])
         .run(tauri::generate_context!())
