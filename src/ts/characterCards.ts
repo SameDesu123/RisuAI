@@ -29,6 +29,64 @@ export const hubURL = isNodeServer
     ? NIGHTLY_HUB_URL 
     : EXTERNAL_HUB_URL;
 
+function decodeBase64Ascii(data: Uint8Array): Uint8Array {
+    let validLength = 0
+    let padding = 0
+
+    for(const byte of data){
+        if(byte === 61){
+            padding += 1
+            validLength += 1
+        }
+        else if((byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122) || (byte >= 48 && byte <= 57) || byte === 43 || byte === 47 || byte === 45 || byte === 95){
+            validLength += 1
+        }
+    }
+
+    const output = new Uint8Array(Math.max(0, Math.floor(validLength * 3 / 4) - padding))
+    let buffer = 0
+    let bits = 0
+    let offset = 0
+
+    for(const byte of data){
+        if(byte === 61){
+            break
+        }
+
+        let value = -1
+        if(byte >= 65 && byte <= 90){
+            value = byte - 65
+        }
+        else if(byte >= 97 && byte <= 122){
+            value = byte - 71
+        }
+        else if(byte >= 48 && byte <= 57){
+            value = byte + 4
+        }
+        else if(byte === 43 || byte === 45){
+            value = 62
+        }
+        else if(byte === 47 || byte === 95){
+            value = 63
+        }
+        else{
+            continue
+        }
+
+        buffer = (buffer << 6) | value
+        bits += 6
+        if(bits >= 8){
+            bits -= 8
+            if(offset < output.length){
+                output[offset] = (buffer >> bits) & 0xff
+                offset += 1
+            }
+        }
+    }
+
+    return offset === output.length ? output : output.slice(0, offset)
+}
+
 export async function importCharacter() {
     try {
         const files = await selectFileByDom(["*"], 'multiple')
@@ -170,12 +228,13 @@ export async function importCharacterProcess(f:{
 
 
     const readGenerator = PngChunk.readGenerator(f.data, {
-        returnTrimed: true
+        returnTrimed: true,
+        rawText: true
     })
     const assets:{[key:string]:string} = {}
     let queueFetch:Promise<Response>[] = []
     let queueFetchKey:string[] = []
-    let queueFetchData:Buffer[] = []
+    let queueFetchData:Uint8Array[] = []
     for await (const chunk of readGenerator){
         if(!chunk){
             continue
@@ -187,19 +246,30 @@ export async function importCharacterProcess(f:{
         if(chunk.key === 'chara'){
             //For memory reason, limit to 5MB
             if(readedChara.length < 5 * 1024 * 1024){
-                readedChara = chunk.value
+                readedChara = chunk.rawValue ? new TextDecoder().decode(chunk.rawValue) : chunk.value
             }
             continue
         }
         if(chunk.key === 'ccv3'){
             if(readedCCv3.length < 5 * 1024 * 1024){
-                readedCCv3 = chunk.value
+                readedCCv3 = chunk.rawValue ? new TextDecoder().decode(chunk.rawValue) : chunk.value
             }
             continue
         }
         if(chunk.key.startsWith('chara-ext-asset_')){
             const assetIndex = chunk.key.replace('chara-ext-asset_:', '').replace('chara-ext-asset_', '')
-            const assetData = Buffer.from(chunk.value, 'base64')
+            console.info('[character-import] png asset chunk found', {
+                assetIndex,
+                base64Bytes: chunk.rawValue?.length ?? chunk.value.length,
+                readedPngChunks
+            })
+            const assetData = chunk.rawValue ? decodeBase64Ascii(chunk.rawValue) : Buffer.from(chunk.value, 'base64')
+            console.info('[character-import] png asset loaded', {
+                assetIndex,
+                base64Bytes: chunk.rawValue?.length ?? chunk.value.length,
+                decodedBytes: assetData.length,
+                readedPngChunks
+            })
             if(pngChunks === 0){
                 alertWait('Loading... (Loaded ' + readedPngChunks + ' Assets)')
             }
@@ -239,8 +309,16 @@ export async function importCharacterProcess(f:{
             }
 
 
+            console.info('[character-import] saving png asset', {
+                assetIndex,
+                decodedBytes: assetData.length
+            })
             const assetId = await saveAsset(assetData)
             assets[assetIndex] = assetId
+            console.info('[character-import] saved png asset', {
+                assetIndex,
+                assetId
+            })
         }
     }
 
