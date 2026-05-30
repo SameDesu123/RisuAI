@@ -55,9 +55,11 @@ export async function loadData() {
     const loaded = get(loadedStore)
     if (!loaded) {
         try {
-            if (isTauri && !isTauriAndroid) {
+            if (isTauri) {
                 LoadingStatusState.text = "Checking Files..."
-                appWindow.maximize()
+                if (!isTauriAndroid) {
+                    appWindow.maximize()
+                }
                 if (!await exists('', { baseDir: BaseDirectory.AppData })) {
                     await mkdir('', { baseDir: BaseDirectory.AppData })
                 }
@@ -113,9 +115,11 @@ export async function loadData() {
                         throw "Your save file is corrupted"
                     }
                 }
-                LoadingStatusState.text = "Checking Update..."
-                await checkRisuUpdate()
-                await changeFullscreen()
+                if (!isTauriAndroid) {
+                    LoadingStatusState.text = "Checking Update..."
+                    await checkRisuUpdate()
+                    await changeFullscreen()
+                }
 
             }
             else {
@@ -524,7 +528,7 @@ async function cleanChunks() {
     }
 
     const uncleanable = new Set(getUncleanables(db))
-    if (isTauri && !isTauriAndroid) {
+    if (isTauri) {
         const assets = await readDir('assets', { baseDir: BaseDirectory.AppData })
         console.log(assets)
         for (const asset of assets) {
@@ -538,7 +542,9 @@ async function cleanChunks() {
             }
         }
 
-        const remotes = await readDir('remotes', { baseDir: BaseDirectory.AppData })
+        const remotes = await exists('remotes', { baseDir: BaseDirectory.AppData })
+            ? await readDir('remotes', { baseDir: BaseDirectory.AppData })
+            : []
 
         const remoteUncleanables = new Set<string>(
             db.characters.map((v) => v.chaId)

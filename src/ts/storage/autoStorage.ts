@@ -1,6 +1,6 @@
 import localforage from "localforage"
 import { replaceDbResources } from "../globalApi.svelte"
-import { isNodeServer, isTauriAndroid } from "src/ts/platform"
+import { isNodeServer } from "src/ts/platform"
 import { NodeStorage } from "./nodeStorage"
 import { OpfsStorage } from "./opfsStorage"
 import { alertInput, alertSelect, alertStore } from "../alert"
@@ -8,12 +8,11 @@ import { getDatabase, type Database } from "./database.svelte"
 import { AccountStorage } from "./accountStorage"
 import { decodeRisuSave, encodeRisuSaveLegacy } from "./risuSave";
 import { language } from "src/lang"
-import { TauriAppDataStorage } from "./tauriAppDataStorage"
 
 export class AutoStorage{
     isAccount:boolean = false
 
-    realStorage:LocalForage|NodeStorage|OpfsStorage|AccountStorage|TauriAppDataStorage
+    realStorage:LocalForage|NodeStorage|OpfsStorage|AccountStorage
 
     async setItem(key:string, value:Uint8Array):Promise<string|null> {
         await this.Init()
@@ -129,14 +128,9 @@ export class AutoStorage{
                 this.realStorage = new NodeStorage()
                 return
             }
-            if(isTauriAndroid){
-                console.log("using tauri app data storage")
-                // TODO(Android migration): import existing localforage/OPFS data in a later PR.
-                this.realStorage = new TauriAppDataStorage()
-                return
-            }
-            else if(window.navigator?.storage?.getDirectory &&
-                    FileSystemFileHandle?.prototype?.createWritable &&
+            if(window.navigator?.storage?.getDirectory &&
+                    typeof FileSystemFileHandle !== 'undefined' &&
+                    FileSystemFileHandle.prototype?.createWritable &&
                     localStorage.getItem('opfs_flag!') === "able"){
                 console.log("using opfs storage")
 

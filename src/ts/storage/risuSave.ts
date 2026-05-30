@@ -3,7 +3,7 @@ import * as fflate from "fflate";
 import { getDatabase, presetTemplate, type Database } from "./database.svelte";
 import localforage from "localforage";
 import { forageStorage } from "../globalApi.svelte";
-import { isNodeServer, isTauri, isTauriAndroid } from "src/ts/platform"
+import { isNodeServer, isTauri } from "src/ts/platform"
 import {
     writeFile,
     BaseDirectory,
@@ -382,7 +382,7 @@ export class RisuSaveEncoder {
 
         if(arg.skipRemoteSaving && checkedRemoteExistence.has(arg.name) === false){
             let fileExists = false;
-            if(isTauri && !isTauriAndroid){
+            if(isTauri){
                 fileExists = await exists(fileName, { baseDir: BaseDirectory.AppData });
             }
             else{
@@ -399,7 +399,7 @@ export class RisuSaveEncoder {
         }
 
         if(!arg.skipRemoteSaving){
-            if(isTauri && !isTauriAndroid){
+            if(isTauri){
                 if(!(await exists('remotes', { baseDir: BaseDirectory.AppData }))){
                     await mkdir('remotes', { recursive: true, baseDir: BaseDirectory.AppData });
                 }
@@ -559,7 +559,7 @@ export class RisuSaveDecoder {
                         } = JSON.parse(this.blocks[key].content);
                         const fileName = `remotes/${remoteInfo.name}.local.bin`
                         let remoteData:Uint8Array|null = null
-                        if(isTauri && !isTauriAndroid){
+                        if(isTauri){
                             try {
                                 if(await exists(fileName, { baseDir: BaseDirectory.AppData })){
                                     remoteData = await readFile(fileName, { baseDir: BaseDirectory.AppData });
