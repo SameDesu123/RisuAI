@@ -183,13 +183,15 @@ async fn oauth_login(app: AppHandle) -> Result<String, String> {
 #[cfg(target_os = "android")]
 #[tauri::command]
 fn set_android_fullscreen(webview: tauri::Webview, enabled: bool) -> Result<(), String> {
-    webview.jni_handle().exec(move |env, activity, _webview| {
-        if let Err(error) = apply_android_fullscreen(env, activity, enabled) {
-            eprintln!("Failed to set Android fullscreen: {error}");
-        }
-    });
-
-    Ok(())
+    webview
+        .with_webview(move |webview| {
+            webview.jni_handle().exec(move |env, activity, _webview| {
+                if let Err(error) = apply_android_fullscreen(env, activity, enabled) {
+                    eprintln!("Failed to set Android fullscreen: {error}");
+                }
+            });
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[cfg(not(target_os = "android"))]
