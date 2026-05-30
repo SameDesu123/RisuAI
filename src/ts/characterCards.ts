@@ -1810,19 +1810,22 @@ export async function downloadRisuHub(id:string, arg:{
             return
         }
 
-        if(res.headers.get('content-type') === 'image/png' || res.headers.get('content-type') === 'application/zip' || res.headers.get('content-type') === 'application/charx'){
+        const contentType = res.headers.get('content-type') ?? ''
+        const isPng = contentType.includes('image/png')
+        const isCharX = contentType.includes('application/zip') || contentType.includes('application/charx')
+        if(isPng || isCharX){
             let db = getDatabase()
-            if(res.headers.get('content-type') === 'application/zip' || res.headers.get('content-type') === 'application/charx'){
+            if(isCharX){
                 await importCharacterProcess({
                     name: 'realm.charx',
-                    data: new Uint8Array(await res.arrayBuffer()),
+                    data: res.body ?? new Uint8Array(await res.arrayBuffer()),
                     lightningRealmImport: db.lightningRealmImport,
                 })
             }
             else{
                 await importCharacterProcess({
                     name: 'realm.png',
-                    data: res.body,
+                    data: res.body ?? new Uint8Array(await res.arrayBuffer()),
                     lightningRealmImport: db.lightningRealmImport,
                 })
             }
