@@ -180,6 +180,208 @@ async fn oauth_login(app: AppHandle) -> Result<String, String> {
     return Ok(token_result.unwrap().access_token().secret().to_string());
 }
 
+#[cfg(target_os = "android")]
+#[tauri::command]
+fn set_android_fullscreen(webview: tauri::Webview, enabled: bool) -> Result<(), String> {
+    webview.jni_handle().exec(move |env, activity, _webview| {
+        if let Err(error) = apply_android_fullscreen(env, activity, enabled) {
+            eprintln!("Failed to set Android fullscreen: {error}");
+        }
+    });
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+fn set_android_fullscreen(enabled: bool) -> Result<(), String> {
+    let _ = enabled;
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn apply_android_fullscreen(
+    env: &mut jni::JNIEnv,
+    activity: &jni::objects::JObject,
+    enabled: bool,
+) -> Result<(), jni::errors::Error> {
+    use jni::objects::JValue;
+
+    const FLAG_FULLSCREEN: i32 = 0x00000400;
+    const SYSTEM_UI_FLAG_HIDE_NAVIGATION: i32 = 0x00000002;
+    const SYSTEM_UI_FLAG_FULLSCREEN: i32 = 0x00000004;
+    const SYSTEM_UI_FLAG_LAYOUT_STABLE: i32 = 0x00000100;
+    const SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION: i32 = 0x00000200;
+    const SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN: i32 = 0x00000400;
+    const SYSTEM_UI_FLAG_IMMERSIVE_STICKY: i32 = 0x00001000;
+    const BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE: i32 = 2;
+    const CUTOUT_MODE_DEFAULT: i32 = 0;
+    const CUTOUT_MODE_SHORT_EDGES: i32 = 1;
+
+    let window = env
+        .call_method(activity, "getWindow", "()Landroid/view/Window;", &[])?
+        .l()?;
+    let decor_view = env
+        .call_method(&window, "getDecorView", "()Landroid/view/View;", &[])?
+        .l()?;
+    let sdk = android_sdk_version(env)?;
+
+    if enabled {
+        env.call_method(&window, "addFlags", "(I)V", &[JValue::Int(FLAG_FULLSCREEN)])?;
+        if sdk >= 28 {
+            set_android_cutout_mode(env, &window, CUTOUT_MODE_SHORT_EDGES)?;
+        }
+        if sdk >= 30 {
+            set_android_decor_fits_system_windows(env, &window, false)?;
+            set_android_system_bars_visibility(env, &window, false)?;
+        }
+        env.call_method(
+            &decor_view,
+            "setSystemUiVisibility",
+            "(I)V",
+            &[JValue::Int(
+                SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | SYSTEM_UI_FLAG_FULLSCREEN
+                    | SYSTEM_UI_FLAG_IMMERSIVE_STICKY,
+            )],
+        )?;
+    } else {
+        if sdk >= 30 {
+            set_android_system_bars_visibility(env, &window, true)?;
+            set_android_decor_fits_system_windows(env, &window, true)?;
+        }
+        if sdk >= 28 {
+            set_android_cutout_mode(env, &window, CUTOUT_MODE_DEFAULT)?;
+        }
+        env.call_method(
+            &decor_view,
+            "setSystemUiVisibility",
+            "(I)V",
+            &[JValue::Int(0)],
+        )?;
+        env.call_method(
+            &window,
+            "clearFlags",
+            "(I)V",
+            &[JValue::Int(FLAG_FULLSCREEN)],
+        )?;
+    }
+
+    if sdk >= 30 && enabled {
+        let controller = env
+            .call_method(
+                &window,
+                "getInsetsController",
+                "()Landroid/view/WindowInsetsController;",
+                &[],
+            )?
+            .l()?;
+        if !controller.is_null() {
+            env.call_method(
+                &controller,
+                "setSystemBarsBehavior",
+                "(I)V",
+                &[JValue::Int(BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE)],
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn android_sdk_version(env: &mut jni::JNIEnv) -> Result<i32, jni::errors::Error> {
+    let version_class = env.find_class("android/os/Build$VERSION")?;
+    Ok(env
+        .get_static_field(version_class, "SDK_INT", "I")?
+        .i()
+        .unwrap_or_default())
+}
+
+#[cfg(target_os = "android")]
+fn set_android_decor_fits_system_windows(
+    env: &mut jni::JNIEnv,
+    window: &jni::objects::JObject,
+    fits: bool,
+) -> Result<(), jni::errors::Error> {
+    use jni::objects::JValue;
+
+    env.call_method(
+        window,
+        "setDecorFitsSystemWindows",
+        "(Z)V",
+        &[JValue::Bool(if fits { 1 } else { 0 })],
+    )?;
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn set_android_system_bars_visibility(
+    env: &mut jni::JNIEnv,
+    window: &jni::objects::JObject,
+    visible: bool,
+) -> Result<(), jni::errors::Error> {
+    use jni::objects::JValue;
+
+    let insets_type = env.find_class("android/view/WindowInsets$Type")?;
+    let system_bars = env
+        .call_static_method(insets_type, "systemBars", "()I", &[])?
+        .i()
+        .unwrap_or_default();
+    let controller = env
+        .call_method(
+            window,
+            "getInsetsController",
+            "()Landroid/view/WindowInsetsController;",
+            &[],
+        )?
+        .l()?;
+
+    if !controller.is_null() {
+        env.call_method(
+            &controller,
+            if visible { "show" } else { "hide" },
+            "(I)V",
+            &[JValue::Int(system_bars)],
+        )?;
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn set_android_cutout_mode(
+    env: &mut jni::JNIEnv,
+    window: &jni::objects::JObject,
+    mode: i32,
+) -> Result<(), jni::errors::Error> {
+    use jni::objects::JValue;
+
+    let attributes = env
+        .call_method(
+            window,
+            "getAttributes",
+            "()Landroid/view/WindowManager$LayoutParams;",
+            &[],
+        )?
+        .l()?;
+    env.set_field(
+        &attributes,
+        "layoutInDisplayCutoutMode",
+        "I",
+        JValue::Int(mode),
+    )?;
+    env.call_method(
+        window,
+        "setAttributes",
+        "(Landroid/view/WindowManager$LayoutParams;)V",
+        &[JValue::Object(&attributes)],
+    )?;
+    Ok(())
+}
 
 #[tauri::command]
 fn check_auth(fpath: String, auth: String) -> bool {
@@ -596,6 +798,7 @@ pub fn run() {
             run_py_server,
             install_py_dependencies,
             streamed_fetch,
+            set_android_fullscreen,
             oauth_login
         ])
         .run(tauri::generate_context!())

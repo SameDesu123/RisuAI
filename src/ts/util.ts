@@ -7,11 +7,23 @@ import { readFile } from "@tauri-apps/plugin-fs"
 import { basename } from "@tauri-apps/api/path"
 import { createBlankChar, getCharImage } from "./characters"
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { isIOS, isTauri } from "src/ts/platform"
+import { invoke } from "@tauri-apps/api/core"
+import { isIOS, isTauri, isTauriAndroid } from "src/ts/platform"
 import type { Attachment } from "svelte/attachments"
 import { mount, unmount, type Snippet } from "svelte"
 import PopupList from "src/lib/UI/PopupList.svelte"
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
+
+async function setBrowserFullscreen(enabled: boolean) {
+    if (enabled && !document.fullscreenElement) {
+        await document.documentElement.requestFullscreen({
+            navigationUI: "hide"
+        })
+    }
+    else if ((!enabled) && document.fullscreenElement) {
+        await document.exitFullscreen()
+    }
+}
 
 export interface Messagec extends Message{
     index: number
@@ -220,12 +232,27 @@ function readFileAsUint8Array(file: File) {
 
 export async function changeFullscreen(){
     const db = getDatabase()
-    const isFull = await appWindow.isFullscreen()
-    if(db.fullScreen && (!isFull)){
-        await appWindow.setFullscreen(true)
+    try {
+        if(isTauriAndroid){
+            await invoke('set_android_fullscreen', { enabled: !!db.fullScreen })
+            return
+        }
+
+        if(isTauri && appWindow){
+            const isFull = await appWindow.isFullscreen()
+            if(db.fullScreen && (!isFull)){
+                await appWindow.setFullscreen(true)
+            }
+            if((!db.fullScreen) && (isFull)){
+                await appWindow.setFullscreen(false)
+            }
+            return
+        }
+
+        await setBrowserFullscreen(!!db.fullScreen)
     }
-    if((!db.fullScreen) && (isFull)){
-        await appWindow.setFullscreen(false)
+    catch (error) {
+        console.warn('Failed to change fullscreen mode:', error)
     }
 }
 

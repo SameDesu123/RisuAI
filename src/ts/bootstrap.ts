@@ -118,8 +118,8 @@ export async function loadData() {
                 if (!isTauriAndroid) {
                     LoadingStatusState.text = "Checking Update..."
                     await checkRisuUpdate()
-                    await changeFullscreen()
                 }
+                await changeFullscreen()
 
             }
             else {
