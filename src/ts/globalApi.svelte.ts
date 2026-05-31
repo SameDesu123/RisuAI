@@ -335,10 +335,25 @@ export let requiresFullEncoderReload = $state({
     state: false
 })
 
+const shouldTrackSaveSectionLogs = import.meta.env.DEV
+const legacySaveChangeKeys = new Set([
+    'character',
+    'chat',
+    'botPreset',
+    'modules',
+    'loadouts',
+    'plugins',
+    'pluginCustomStorage',
+])
+
 function getChangedSaveSections(changeTracker: SectionSaveChangeTracker) {
     const sections: Record<string, unknown> = {}
 
     for (const [key, value] of Object.entries(changeTracker)) {
+        if (legacySaveChangeKeys.has(key)) {
+            continue
+        }
+
         if (Array.isArray(value)) {
             if (value.length > 0) {
                 sections[key] = value
@@ -680,10 +695,11 @@ export async function saveDb() {
 
         $effect(() => {
             DBState.db.botPresetsId
-            DBState.db.botPresets.length
+            $state.snapshot(DBState.db.botPresets)
             changeTracker.botPreset = true
             saveTimeoutExecute()
         })
+        if (shouldTrackSaveSectionLogs) {
         $effect(() => {
             const presets = Array.isArray(DBState.db.botPresets) ? DBState.db.botPresets : []
             trackSaveListSection({
@@ -756,11 +772,13 @@ export async function saveDb() {
                 markLegacyDirty: () => changeTracker.botPreset = true
             })
         })
+        }
         $effect(() => {
             $state.snapshot(DBState.db.modules)
             changeTracker.modules = true
             saveTimeoutExecute()
         })
+        if (shouldTrackSaveSectionLogs) {
         $effect(() => {
             const modules = Array.isArray(DBState.db.modules) ? DBState.db.modules : []
             trackSaveListSection({
@@ -833,11 +851,13 @@ export async function saveDb() {
                 markLegacyDirty: () => changeTracker.modules = true
             })
         })
+        }
         $effect(() => {
             $state.snapshot(DBState.db.loadouts)
             changeTracker.loadouts = true
             saveTimeoutExecute()
         })
+        if (shouldTrackSaveSectionLogs) {
         $effect(() => {
             const loadouts = Array.isArray(DBState.db.loadouts) ? DBState.db.loadouts : []
             trackSaveListSection({
@@ -874,11 +894,13 @@ export async function saveDb() {
                 markLegacyDirty: () => changeTracker.loadouts = true
             })
         })
+        }
         $effect(() => {
             $state.snapshot(DBState.db.plugins)
             changeTracker.plugins = true
             saveTimeoutExecute()
         })
+        if (shouldTrackSaveSectionLogs) {
         $effect(() => {
             const plugins = Array.isArray(DBState.db.plugins) ? DBState.db.plugins : []
             trackSaveListSection({
@@ -927,15 +949,18 @@ export async function saveDb() {
                 markLegacyDirty: () => changeTracker.plugins = true
             })
         })
+        }
         $effect(() => {
             $state.snapshot(DBState.db.pluginCustomStorage)
             changeTracker.pluginCustomStorage = true
             saveTimeoutExecute()
         })
+        if (shouldTrackSaveSectionLogs) {
         $effect(() => {
             const storage = DBState.db.pluginCustomStorage ?? {}
             trackPluginStorageKeys(storage, changeTracker.pluginStorage ??= [])
         })
+        }
         $effect(() => {
             for (const key in DBState.db) {
                 if (
@@ -951,9 +976,12 @@ export async function saveDb() {
                 return
             }
 
-            changeTracker.root = true
+            if (shouldTrackSaveSectionLogs) {
+                changeTracker.root = true
+            }
             saveTimeoutExecute()
         })
+        if (shouldTrackSaveSectionLogs) {
         $effect(() => {
             trackSaveRootSection(saveSectionRootUserKeys, rootUserWatcherReady, (value) => rootUserWatcherReady = value, changeTracker.rootUser ??= [])
         })
@@ -972,6 +1000,7 @@ export async function saveDb() {
         $effect(() => {
             trackSaveRootSection(saveSectionRootStorageKeys, rootStorageWatcherReady, (value) => rootStorageWatcherReady = value, changeTracker.rootStorage ??= [])
         })
+        }
         $effect(() => {
             if (DBState?.db?.characters?.[selIdState]) {
                 for (const key in DBState.db.characters[selIdState]) {
@@ -993,6 +1022,7 @@ export async function saveDb() {
             saveTimeoutExecute()
         })
 
+        if (shouldTrackSaveSectionLogs) {
         $effect(() => {
             const character = DBState?.db?.characters?.[selIdState]
             if (!character) return
@@ -1188,6 +1218,7 @@ export async function saveDb() {
                 changeTracker.chatMeta ??= []
             )
         })
+        }
     })
 
     let savetrys = 0
@@ -1214,7 +1245,6 @@ export async function saveDb() {
 
             let toSave = safeStructuredClone(changeTracker)
             logChangedSaveSections(toSave)
-            changeTracker.root = false
             changeTracker.character = changeTracker.character.length === 0 ? [] : [changeTracker.character[0]]
             changeTracker.chat = changeTracker.chat.length === 0 ? [] : [changeTracker.chat[0]]
             changeTracker.botPreset = false
@@ -1222,52 +1252,55 @@ export async function saveDb() {
             changeTracker.loadouts = false
             changeTracker.plugins = false
             changeTracker.pluginCustomStorage = false
-            changeTracker.rootUser = []
-            changeTracker.rootUi = []
-            changeTracker.rootProvider = []
-            changeTracker.rootPrompt = []
-            changeTracker.rootMemory = []
-            changeTracker.rootStorage = []
-            changeTracker.presetInfo = []
-            changeTracker.presetPrompt = []
-            changeTracker.presetModel = []
-            changeTracker.presetProvider = []
-            changeTracker.presetSchema = []
-            changeTracker.presetExtras = []
-            changeTracker.characterProfile = []
-            changeTracker.characterPrompt = []
-            changeTracker.characterGreeting = []
-            changeTracker.characterChatConfig = []
-            changeTracker.chatMessage = []
-            changeTracker.chatVariables = []
-            changeTracker.chatLore = []
-            changeTracker.chatMemory = []
-            changeTracker.chatMeta = []
-            changeTracker.moduleInfo = []
-            changeTracker.moduleLorebook = []
-            changeTracker.moduleRegex = []
-            changeTracker.moduleTrigger = []
-            changeTracker.moduleAssets = []
-            changeTracker.moduleScript = []
-            changeTracker.pluginInfo = []
-            changeTracker.pluginArguments = []
-            changeTracker.pluginLinks = []
-            changeTracker.pluginCode = []
-            changeTracker.pluginStorage = []
-            changeTracker.loadoutInfo = []
-            changeTracker.loadoutScope = []
-            changeTracker.loadoutState = []
-            changeTracker.regex = []
-            changeTracker.regexIndex = []
-            changeTracker.trigger = []
-            changeTracker.triggerIndex = []
-            changeTracker.lorebook = []
-            changeTracker.lorebookIndex = []
-            changeTracker.asset = []
-            changeTracker.tts = []
-            changeTracker.scriptBackground = []
-            changeTracker.scriptVirtual = []
-            changeTracker.advanced = []
+            if (shouldTrackSaveSectionLogs) {
+                changeTracker.root = false
+                changeTracker.rootUser = []
+                changeTracker.rootUi = []
+                changeTracker.rootProvider = []
+                changeTracker.rootPrompt = []
+                changeTracker.rootMemory = []
+                changeTracker.rootStorage = []
+                changeTracker.presetInfo = []
+                changeTracker.presetPrompt = []
+                changeTracker.presetModel = []
+                changeTracker.presetProvider = []
+                changeTracker.presetSchema = []
+                changeTracker.presetExtras = []
+                changeTracker.characterProfile = []
+                changeTracker.characterPrompt = []
+                changeTracker.characterGreeting = []
+                changeTracker.characterChatConfig = []
+                changeTracker.chatMessage = []
+                changeTracker.chatVariables = []
+                changeTracker.chatLore = []
+                changeTracker.chatMemory = []
+                changeTracker.chatMeta = []
+                changeTracker.moduleInfo = []
+                changeTracker.moduleLorebook = []
+                changeTracker.moduleRegex = []
+                changeTracker.moduleTrigger = []
+                changeTracker.moduleAssets = []
+                changeTracker.moduleScript = []
+                changeTracker.pluginInfo = []
+                changeTracker.pluginArguments = []
+                changeTracker.pluginLinks = []
+                changeTracker.pluginCode = []
+                changeTracker.pluginStorage = []
+                changeTracker.loadoutInfo = []
+                changeTracker.loadoutScope = []
+                changeTracker.loadoutState = []
+                changeTracker.regex = []
+                changeTracker.regexIndex = []
+                changeTracker.trigger = []
+                changeTracker.triggerIndex = []
+                changeTracker.lorebook = []
+                changeTracker.lorebookIndex = []
+                changeTracker.asset = []
+                changeTracker.tts = []
+                changeTracker.scriptBackground = []
+                changeTracker.scriptVirtual = []
+                changeTracker.advanced = []
+            }
             if (gotChannel) {
                 //Data is saved in other tab
                 await sleep(1000)
