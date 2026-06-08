@@ -553,6 +553,7 @@ export function setDatabase(data:Database){
     }
     data.modelUsageStatistics ??= createDefaultModelUsageStatistics()
     data.modelUsageStatistics.daily ??= {}
+    data.modelUsageStatisticsLocalTokenizerFallback ??= false
     data.customQuotes ??= false
     data.customQuotesData ??= ['“','”','‘','’']
     data.groupOtherBotRole ??= 'user'
@@ -1074,6 +1075,7 @@ export interface Database{
         imports: number
     }
     modelUsageStatistics: ModelUsageStatistics
+    modelUsageStatisticsLocalTokenizerFallback: boolean
     customQuotes:boolean
     customQuotesData?:[string, string, string, string]
     groupTemplate?:string

@@ -62,12 +62,13 @@ export function getRequestUsageTokenCount(usage?: RequestUsageMetadata) {
     return (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0);
 }
 
-export function recordModelUsageStatistics(usage?: RequestUsageMetadata) {
+export function recordModelUsageStatistics(usage?: RequestUsageMetadata, fallbackTokens = 0) {
     DBState.db.modelUsageStatistics ??= createDefaultModelUsageStatistics();
     DBState.db.modelUsageStatistics.daily ??= {};
 
     const date = getUsageDate();
-    const tokens = getRequestUsageTokenCount(usage);
+    const usageTokens = getRequestUsageTokenCount(usage);
+    const tokens = usageTokens > 0 ? usageTokens : fallbackTokens;
     let dailyRecord = DBState.db.modelUsageStatistics.daily[date];
 
     if (!dailyRecord) {

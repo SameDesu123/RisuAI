@@ -2,7 +2,7 @@ import { Ollama } from 'ollama/dist/browser.mjs';
 import { language } from "../../../lang";
 import { fetchNative, globalFetch } from "../../globalApi.svelte";
 import { getModelInfo, LLMFlags, LLMFormat, type LLMModel } from "../../model/modellist";
-import { recordModelUsageStatistics, type RequestUsageMetadata } from "../../modelUsageStatistics";
+import { getRequestUsageTokenCount, recordModelUsageStatistics, type RequestUsageMetadata } from "../../modelUsageStatistics";
 import { risuChatParser, risuEscape, risuUnescape } from "../../parser/parser.svelte";
 import { pluginProcess, pluginV2 } from "../../plugins/plugins.svelte";
 import { getCurrentCharacter, getCurrentChat, getDatabase, type character } from "../../storage/database.svelte";
@@ -97,6 +97,39 @@ export type requestDataResponse = {
 export interface StreamResponseChunk{[key:string]:string}
 
 type OllamaThinkMode = boolean | 'low' | 'medium' | 'high'
+
+function getRequestOutputText(response: requestDataResponse) {
+    if (response.type === "success") {
+        return response.result;
+    }
+
+    if (response.type === "multiline") {
+        return response.result.map((message) => message[1]).join("\n");
+    }
+
+    return "";
+}
+
+async function getLocalUsageFallbackTokens(arg: requestDataArgument, response: requestDataResponse) {
+    if (response.type === "streaming") {
+        return 0;
+    }
+
+    const promptText = arg.formated.map((message) => message.content).join("\n");
+    const outputText = getRequestOutputText(response);
+    const text = [promptText, outputText].filter(Boolean).join("\n");
+
+    if (!text) {
+        return 0;
+    }
+
+    try {
+        return (await tokenizeNum(text)).length;
+    } catch (error) {
+        console.error(error);
+        return 0;
+    }
+}
 
 function getOllamaThinkMode(mode: string): OllamaThinkMode | undefined {
     switch (mode) {
@@ -318,7 +351,10 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
     
             if(da.type !== 'fail' || da.noRetry){
                 if(da.type !== 'fail' && !arg.previewBody){
-                    recordModelUsageStatistics(da.usage)
+                    const fallbackTokens = db.modelUsageStatisticsLocalTokenizerFallback && getRequestUsageTokenCount(da.usage) === 0
+                        ? await getLocalUsageFallbackTokens(arg, da)
+                        : 0
+                    recordModelUsageStatistics(da.usage, fallbackTokens)
                 }
                 const usedModel = fallBackModels[fallbackIndex] || da.model
                 return usedModel ? {
