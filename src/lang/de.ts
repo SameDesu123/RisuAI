@@ -560,6 +560,7 @@ export const languageGerman = {
     "frequencyPenalty": "Häufigkeitslimitierung",
     "presensePenalty": "Auftrittslimitierung",
     "advancedSettings": "Erweitert",
+    "statistics": "Statistiken",
     "advancedSettingsWarn": "Warnung: Bitte ändern Sie die folgenden Optionen nicht, wenn Sie nicht exakt wissen, was diese bewirken!",
     "formatingOrder": "Formatreihenfolge",
     "authorNote": "Autorennotiz",

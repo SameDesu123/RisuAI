@@ -560,6 +560,7 @@ export const languageChinese = {
     "frequencyPenalty": "频率惩罚（Frequency Penalty）",
     "presensePenalty": "存在惩罚（Presence Penalty）",
     "advancedSettings": "高级设置",
+    "statistics": "统计",
     "advancedSettingsWarn": "警告：若不确定该选项的作用，请勿进行修改！",
     "formatingOrder": "格式顺序",
     "authorNote": "作者备注",

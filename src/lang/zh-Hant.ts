@@ -580,6 +580,7 @@ export const languageChineseTraditional = {
     "frequencyPenalty": "頻率懲罰（Frequency Penalty）",
     "presensePenalty": "存在懲罰（Presence Penalty）",
     "advancedSettings": "進階設定",
+    "statistics": "統計",
     "advancedSettingsWarn": "警告：若不確定選項的作用，請勿修改！",
     "formatingOrder": "格式順序",
     "authorNote": "作者備註",

@@ -1305,6 +1305,7 @@ export const languageKorean = {
     "claudeCachingRetrivalDesc": "4분마다 요청하여 Claude 캐싱의 캐시 시간을 연장합니다. 캐시 누락률을 줄일 수 있지만, 적절히 사용하지 않으면 비용이 증가할 수 있습니다.",
     "automaticCachePoint": "자동 캐시 포인트",
     "experimentalChatCompression": "실험적 채팅 데이터 처리",
+    "statistics": "통계",
     "loadingChatData": "채팅 데이터 로딩 중",
     "outputImageModal": "출력 이미지 모달",
     "playMessageOnTranslateEnd": "번역 완료 시 오디오 재생",

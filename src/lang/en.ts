@@ -1313,6 +1313,7 @@ export const languageEnglish = {
     googleCloudTokenization: "Google Cloud Tokenization",
     presetChain: "Preset Chain",
     legacyMediaFindings: "Legacy Media Findings",
+    statistics: "Statistics",
     staticsDisclaimer: "The statistics are based on the data from after July 2024. The data may not be accurate.",
     subtitles: "Subtitles",
     subtitlesWarning1: "You must use model with audio/video input to use this feature.",

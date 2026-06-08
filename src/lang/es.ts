@@ -560,6 +560,7 @@ export const languageSpanish = {
     "frequencyPenalty": "Penalización por Frecuencia",
     "presensePenalty": "Penalización por Presencia",
     "advancedSettings": "Configuraciones Avanzadas",
+    "statistics": "Estadísticas",
     "advancedSettingsWarn": "Advertencia: ¡Si no sabes lo que hace la opción, no la cambies!",
     "formatingOrder": "Orden de Formateo",
     "authorNote": "Nota del Autor",
