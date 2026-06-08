@@ -1,5 +1,6 @@
 import { fetchNative, textifyReadableStream } from "src/ts/globalApi.svelte"
 import { LLMFlags, LLMFormat, type LLMModel } from "src/ts/model/modellist"
+import { normalizeRequestUsageMetadata } from "src/ts/modelUsageStatistics"
 import { getDatabase, setDatabase } from "src/ts/storage/database.svelte"
 import { base64url, simplifySchema } from "src/ts/util"
 import { v4 } from "uuid"
@@ -22,6 +23,25 @@ type GeminiFunctionResponse = {
     id?: string;
     name: string;
     response: any
+}
+
+function getGeminiUsageMetadata(data: unknown) {
+    if (Array.isArray(data)) {
+        for (let index = data.length - 1; index >= 0; index -= 1) {
+            const item = data[index];
+            if (item?.usageMetadata) {
+                return item.usageMetadata;
+            }
+        }
+
+        return undefined;
+    }
+
+    if (data && typeof data === "object" && "usageMetadata" in data) {
+        return (data as { usageMetadata?: unknown }).usageMetadata;
+    }
+
+    return undefined;
 }
 
 interface GeminiPart{
@@ -963,7 +983,8 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
     console.log(result)
     return {
         type: 'success',
-        result: result
+        result: result,
+        usage: normalizeRequestUsageMetadata(getGeminiUsageMetadata(resData))
     }
 }
 

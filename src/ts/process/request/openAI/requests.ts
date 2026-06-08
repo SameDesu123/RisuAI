@@ -2,6 +2,7 @@ import { language } from "src/lang"
 import { alertError } from "src/ts/alert";
 import { getDatabase } from "src/ts/storage/database.svelte"
 import { LLMFlags, LLMFormat, LLMProvider } from "src/ts/model/modellist"
+import { normalizeRequestUsageMetadata } from "src/ts/modelUsageStatistics"
 import { strongBan, tokenizeNum } from "src/ts/tokenizer"
 import { getFreeOpenRouterModels } from "src/ts/model/openrouter"
 import { addFetchLog, fetchNative, globalFetch, textifyReadableStream } from "src/ts/globalApi.svelte"
@@ -850,30 +851,32 @@ export async function requestHTTPOpenAI(
                     
             if(arg.multiGen && dat.choices){
                 if(arg.extractJson && (db.jsonSchemaEnabled || arg.schema)){
-                    
                     const c = dat.choices.map((v:{message:{content:string}}) => {
                         const extracted = extractJSON(v.message.content ?? '', arg.extractJson)
                         return ["char", extracted]
                     })
-                    
+
                     return {
                         type: 'multiline',
-                        result: c
+                        result: c,
+                        usage: normalizeRequestUsageMetadata(dat.usage)
                     }
                 }
                 return {
                     type: 'multiline',
                     result: dat.choices.map((v) => {
                         return ["char", v.message.content ?? '']
-                    })
+                    }),
+                    usage: normalizeRequestUsageMetadata(dat.usage)
                 }
-            }            
-                    
+            }
+
             const result = processTextResponse(dat) ?? ''
-            
+
             return {
                 type: 'success',
-                result: result
+                result: result,
+                usage: normalizeRequestUsageMetadata(dat.usage)
             }
             
         } catch (error) {                    

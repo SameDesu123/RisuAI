@@ -2,6 +2,7 @@ import { Ollama } from 'ollama/dist/browser.mjs';
 import { language } from "../../../lang";
 import { fetchNative, globalFetch } from "../../globalApi.svelte";
 import { getModelInfo, LLMFlags, LLMFormat, type LLMModel } from "../../model/modellist";
+import { recordModelUsageStatistics, type RequestUsageMetadata } from "../../modelUsageStatistics";
 import { risuChatParser, risuEscape, risuUnescape } from "../../parser/parser.svelte";
 import { pluginProcess, pluginV2 } from "../../plugins/plugins.svelte";
 import { getCurrentCharacter, getCurrentChat, getDatabase, type character } from "../../storage/database.svelte";
@@ -74,6 +75,7 @@ export type requestDataResponse = {
     },
     failByServerError?: boolean
     model?: string
+    usage?: RequestUsageMetadata
 }|{
     type: "streaming",
     result: ReadableStream<StreamResponseChunk>,
@@ -81,6 +83,7 @@ export type requestDataResponse = {
         emotion?: string
     }
     model?: string
+    usage?: RequestUsageMetadata
 }|{
     type: "multiline",
     result: ['user'|'char',string][],
@@ -88,6 +91,7 @@ export type requestDataResponse = {
         emotion?: string
     }
     model?: string
+    usage?: RequestUsageMetadata
 }
 
 export interface StreamResponseChunk{[key:string]:string}
@@ -313,6 +317,9 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
             }
     
             if(da.type !== 'fail' || da.noRetry){
+                if(da.type !== 'fail' && !arg.previewBody){
+                    recordModelUsageStatistics(da.usage)
+                }
                 const usedModel = fallBackModels[fallbackIndex] || da.model
                 return usedModel ? {
                     ...da,

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { language } from "src/lang";
+    import { DBState } from "src/ts/stores.svelte";
 
     interface UsagePoint {
         date: string;
@@ -8,7 +9,13 @@
     }
 
     let submenu = $state(0);
-    let usagePoints = $state<UsagePoint[]>([]);
+    const usagePoints = $derived(Object.values(DBState.db.modelUsageStatistics?.daily ?? {})
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((record) => ({
+            date: record.date,
+            tokens: record.tokens,
+            requests: record.requests,
+        })));
 
     const chartWidth = 720;
     const chartHeight = 280;

@@ -20,6 +20,7 @@ import {
     DEFAULT_CHAT_LOAD_INITIAL_PAGES,
     normalizeChatLoadPages,
 } from '../chatLoadPages';
+import { createDefaultModelUsageStatistics, type ModelUsageStatistics } from '../modelUsageStatistics';
 
 //APP_VERSION_POINT is to locate the app version in the database file for version bumping
 export let appVer = "2026.4.181" //<APP_VERSION_POINT>
@@ -550,6 +551,8 @@ export function setDatabase(data:Database){
         messages: 0,
         imports: 0
     }
+    data.modelUsageStatistics ??= createDefaultModelUsageStatistics()
+    data.modelUsageStatistics.daily ??= {}
     data.customQuotes ??= false
     data.customQuotesData ??= ['“','”','‘','’']
     data.groupOtherBotRole ??= 'user'
@@ -1070,6 +1073,7 @@ export interface Database{
         messages: number
         imports: number
     }
+    modelUsageStatistics: ModelUsageStatistics
     customQuotes:boolean
     customQuotesData?:[string, string, string, string]
     groupTemplate?:string
