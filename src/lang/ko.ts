@@ -1307,6 +1307,8 @@ export const languageKorean = {
     "automaticCachePoint": "자동 캐시 포인트",
     "experimentalChatCompression": "실험적 채팅 데이터 처리",
     "statistics": "통계",
+    "last14Days": "14일",
+    "last30Days": "30일",
     "modelUsageStatisticsLocalTokenizerFallback": "제공자 사용량 정보가 없을 때 로컬 토크나이저 사용",
     "loadingChatData": "채팅 데이터 로딩 중",
     "outputImageModal": "출력 이미지 모달",

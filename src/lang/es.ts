@@ -562,6 +562,8 @@ export const languageSpanish = {
     "presensePenalty": "Penalización por Presencia",
     "advancedSettings": "Configuraciones Avanzadas",
     "statistics": "Estadísticas",
+    "last14Days": "14 días",
+    "last30Days": "30 días",
     "modelUsageStatisticsLocalTokenizerFallback": "Usar tokenizador local cuando el proveedor no devuelve datos de uso",
     "advancedSettingsWarn": "Advertencia: ¡Si no sabes lo que hace la opción, no la cambies!",
     "formatingOrder": "Orden de Formateo",

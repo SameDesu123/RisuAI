@@ -1316,6 +1316,8 @@ export const languageEnglish = {
     presetChain: "Preset Chain",
     legacyMediaFindings: "Legacy Media Findings",
     statistics: "Statistics",
+    last14Days: "14 Days",
+    last30Days: "30 Days",
     modelUsageStatisticsLocalTokenizerFallback: "Use local tokenizer when provider usage is unavailable",
     staticsDisclaimer: "The statistics are based on the data from after July 2024. The data may not be accurate.",
     subtitles: "Subtitles",

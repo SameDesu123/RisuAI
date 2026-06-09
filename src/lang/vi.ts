@@ -562,6 +562,8 @@ export const languageVietnamese = {
     "presensePenalty": "Hình phạt có mặt",
     "advancedSettings": "Cài đặt nâng cao",
     "statistics": "Thống kê",
+    "last14Days": "14 ngày",
+    "last30Days": "30 ngày",
     "modelUsageStatisticsLocalTokenizerFallback": "Dùng bộ tách token cục bộ khi nhà cung cấp không trả về dữ liệu sử dụng",
     "advancedSettingsWarn": "Cảnh báo: Nếu bạn không biết tùy chọn này làm gì, đừng thay đổi nó!",
     "formatingOrder": "Thứ tự hình thành",

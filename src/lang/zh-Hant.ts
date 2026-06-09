@@ -582,6 +582,8 @@ export const languageChineseTraditional = {
     "presensePenalty": "存在懲罰（Presence Penalty）",
     "advancedSettings": "進階設定",
     "statistics": "統計",
+    "last14Days": "14 天",
+    "last30Days": "30 天",
     "modelUsageStatisticsLocalTokenizerFallback": "供應商未回傳用量資訊時使用本機 tokenizer",
     "advancedSettingsWarn": "警告：若不確定選項的作用，請勿修改！",
     "formatingOrder": "格式順序",

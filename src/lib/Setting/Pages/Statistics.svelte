@@ -1,5 +1,6 @@
 <script lang="ts">
     import { language } from "src/lang";
+    import SegmentedControl from "src/lib/UI/GUI/SegmentedControl.svelte";
     import { statisticsSettingsItems } from "src/ts/setting/statisticsSettingsData";
     import { DBState } from "src/ts/stores.svelte";
     import SettingRenderer from "../SettingRenderer.svelte";
@@ -11,13 +12,12 @@
     }
 
     let submenu = $state(0);
-    const usagePoints = $derived(Object.values(DBState.db.modelUsageStatistics?.daily ?? {})
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .map((record) => ({
-            date: record.date,
-            tokens: record.tokens,
-            requests: record.requests,
-        })));
+    let usageRangeDays = $state(14);
+
+    const usageRangeOptions = [
+        { value: 14, label: language.last14Days },
+        { value: 30, label: language.last30Days },
+    ];
 
     const chartWidth = 720;
     const chartHeight = 280;
@@ -27,6 +27,36 @@
         bottom: 42,
         left: 58,
     };
+
+    function getDateKey(date: Date) {
+        const year = date.getFullYear();
+        const month = `${date.getMonth() + 1}`.padStart(2, "0");
+        const day = `${date.getDate()}`.padStart(2, "0");
+
+        return `${year}-${month}-${day}`;
+    }
+
+    function getUsageDateRange(days: number) {
+        const today = new Date();
+
+        return Array.from({ length: days }, (_, index) => {
+            const date = new Date(today);
+            date.setHours(0, 0, 0, 0);
+            date.setDate(today.getDate() - (days - 1 - index));
+
+            return getDateKey(date);
+        });
+    }
+
+    const usagePoints = $derived(getUsageDateRange(usageRangeDays).map((date) => {
+        const record = DBState.db.modelUsageStatistics?.daily?.[date];
+
+        return {
+            date,
+            tokens: record?.tokens ?? 0,
+            requests: record?.requests ?? 0,
+        };
+    }));
 
     function formatTokenCount(tokens: number) {
         if (tokens >= 1000000) {
@@ -41,7 +71,10 @@
     }
 
     function formatDateLabel(date: string) {
-        const parsed = new Date(date);
+        const [year, month, day] = date.split("-").map(Number);
+        const parsed = Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)
+            ? new Date(year, month - 1, day)
+            : new Date(date);
 
         if (Number.isNaN(parsed.getTime())) {
             return date;
@@ -55,6 +88,16 @@
 
     function formatRequestCount(requests: number) {
         return requests.toLocaleString();
+    }
+
+    function shouldShowDateLabel(index: number, total: number) {
+        if (index === 0 || index === total - 1) {
+            return true;
+        }
+
+        return total <= 14
+            ? index % 2 === 0
+            : index % 7 === 0;
     }
 
     function getYGrid(maxValue: number) {
@@ -114,6 +157,8 @@
             chartPoints,
             grid: getYGrid(maxValue),
             path: getLinePath(chartPoints),
+            hasData: points.some((point) => getValue(point) > 0),
+            barWidth: points.length > 1 ? Math.max(4, Math.min(18, xStep * 0.58)) : 18,
         };
     }
 
@@ -142,6 +187,11 @@
 </div>
 
 {#if submenu === 0}
+    <div class="mb-3 flex w-full flex-wrap items-center justify-between gap-2">
+        <span class="text-lg font-semibold text-textcolor">Model Usage</span>
+        <SegmentedControl bind:value={usageRangeDays} options={usageRangeOptions} size="sm" className="!mb-0" />
+    </div>
+
     <div class="w-full rounded-md border border-darkborderc bg-darkbg/30 p-4">
         <svg
             class="h-72 w-full overflow-visible text-textcolor"
@@ -195,7 +245,7 @@
                 Token Count
             </text>
 
-            {#if tokenUsageChart.chartPoints.length > 0}
+            {#if tokenUsageChart.hasData}
                 <path
                     d={tokenUsageChart.path}
                     fill="none"
@@ -207,7 +257,7 @@
 
                 {#each tokenUsageChart.chartPoints as point, index}
                     <circle cx={point.x} cy={point.y} r="4" class="fill-selected" />
-                    {#if index === 0 || index === tokenUsageChart.chartPoints.length - 1 || tokenUsageChart.chartPoints.length <= 7}
+                    {#if shouldShowDateLabel(index, tokenUsageChart.chartPoints.length)}
                         <text
                             x={point.x}
                             y={chartHeight - 14}
@@ -232,7 +282,7 @@
 
         <div class="mt-2 flex items-center justify-between text-sm text-textcolor2">
             <span>Date</span>
-            <span>{formatTokenCount(tokenUsageChart.maxValue)} max</span>
+            <span>{formatTokenCount(tokenUsageChart.hasData ? tokenUsageChart.maxValue : 0)} max</span>
         </div>
     </div>
 
@@ -289,17 +339,17 @@
                 Requests
             </text>
 
-            {#if requestUsageChart.chartPoints.length > 0}
+            {#if requestUsageChart.hasData}
                 {#each requestUsageChart.chartPoints as point, index}
                     <rect
-                        x={point.x - Math.max(8, 220 / requestUsageChart.chartPoints.length) / 2}
+                        x={point.x - requestUsageChart.barWidth / 2}
                         y={point.y}
-                        width={Math.max(8, 220 / requestUsageChart.chartPoints.length)}
+                        width={requestUsageChart.barWidth}
                         height={chartHeight - padding.bottom - point.y}
                         rx="4"
                         class="fill-selected"
                     />
-                    {#if index === 0 || index === requestUsageChart.chartPoints.length - 1 || requestUsageChart.chartPoints.length <= 7}
+                    {#if shouldShowDateLabel(index, requestUsageChart.chartPoints.length)}
                         <text
                             x={point.x}
                             y={chartHeight - 14}
@@ -324,7 +374,7 @@
 
         <div class="mt-2 flex items-center justify-between text-sm text-textcolor2">
             <span>Date</span>
-            <span>{formatRequestCount(requestUsageChart.maxValue)} max</span>
+            <span>{formatRequestCount(requestUsageChart.hasData ? requestUsageChart.maxValue : 0)} max</span>
         </div>
     </div>
 {/if}

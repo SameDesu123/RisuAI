@@ -562,6 +562,8 @@ export const languageGerman = {
     "presensePenalty": "Auftrittslimitierung",
     "advancedSettings": "Erweitert",
     "statistics": "Statistiken",
+    "last14Days": "14 Tage",
+    "last30Days": "30 Tage",
     "modelUsageStatisticsLocalTokenizerFallback": "Lokalen Tokenizer verwenden, wenn der Anbieter keine Nutzungsdaten liefert",
     "advancedSettingsWarn": "Warnung: Bitte ändern Sie die folgenden Optionen nicht, wenn Sie nicht exakt wissen, was diese bewirken!",
     "formatingOrder": "Formatreihenfolge",

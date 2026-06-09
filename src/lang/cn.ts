@@ -562,6 +562,8 @@ export const languageChinese = {
     "presensePenalty": "存在惩罚（Presence Penalty）",
     "advancedSettings": "高级设置",
     "statistics": "统计",
+    "last14Days": "14 天",
+    "last30Days": "30 天",
     "modelUsageStatisticsLocalTokenizerFallback": "提供商未返回用量信息时使用本地分词器",
     "advancedSettingsWarn": "警告：若不确定该选项的作用，请勿进行修改！",
     "formatingOrder": "格式顺序",
