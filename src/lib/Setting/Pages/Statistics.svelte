@@ -13,8 +13,13 @@
         requests: number;
     }
 
+    type TokenHoverPoint = ReturnType<typeof buildTokenUsageChart>["chartPoints"][number];
+    type RequestHoverPoint = ReturnType<typeof buildChart>["chartPoints"][number];
+
     let submenu = $state(0);
     let usageRangeDays = $state(14);
+    let tokenHoverPoint: TokenHoverPoint | null = $state(null);
+    let requestHoverPoint: RequestHoverPoint | null = $state(null);
 
     const usageRangeOptions = [
         { value: 14, label: language.last14Days },
@@ -93,6 +98,12 @@
         };
     }
 
+    function formatFullDateLabel(date: string) {
+        const label = formatDateLabelParts(date);
+
+        return label.day ? `${label.month} ${label.day}` : label.month;
+    }
+
     function formatRequestCount(requests: number) {
         return requests.toLocaleString();
     }
@@ -117,6 +128,21 @@
                     : 10;
 
         return Math.max(10, roundedNormalized * magnitude);
+    }
+
+    function getTooltipX(x: number, width: number) {
+        return Math.min(Math.max(x - width / 2, padding.left), chartWidth - padding.right - width);
+    }
+
+    function getTooltipY(anchorY: number, height: number) {
+        const aboveY = anchorY - height - 10;
+        const maxY = chartHeight - padding.bottom - height - 8;
+
+        if (aboveY >= padding.top + 8) {
+            return aboveY;
+        }
+
+        return Math.min(Math.max(anchorY + 10, padding.top + 8), maxY);
     }
 
     function getYGrid(maxValue: number) {
@@ -338,6 +364,72 @@
                     <circle cx={point.x} cy={point.inputY} r="3.5" fill={inputChartColor} />
                     <circle cx={point.x} cy={point.outputY} r="3.5" fill={outputChartColor} />
                 {/each}
+
+                {#each tokenUsageChart.chartPoints as point}
+                    <rect
+                        role="button"
+                        tabindex="0"
+                        aria-label={`${formatFullDateLabel(point.date)} ${language.inputTokens} ${formatRequestCount(point.inputValue)}, ${language.outputTokens} ${formatRequestCount(point.outputValue)}`}
+                        x={point.x - 9}
+                        y={padding.top}
+                        width="18"
+                        height={chartHeight - padding.top - padding.bottom}
+                        fill="transparent"
+                        onpointerenter={() => {
+                            tokenHoverPoint = point;
+                        }}
+                        onpointermove={() => {
+                            tokenHoverPoint = point;
+                        }}
+                        onpointerleave={() => {
+                            tokenHoverPoint = null;
+                        }}
+                        onfocus={() => {
+                            tokenHoverPoint = point;
+                        }}
+                        onblur={() => {
+                            tokenHoverPoint = null;
+                        }}
+                    />
+                {/each}
+
+                {#if tokenHoverPoint}
+                    {@const tooltipWidth = 178}
+                    {@const tooltipHeight = 62}
+                    {@const tooltipX = getTooltipX(tokenHoverPoint.x, tooltipWidth)}
+                    {@const tooltipY = getTooltipY(Math.min(tokenHoverPoint.inputY, tokenHoverPoint.outputY), tooltipHeight)}
+                    <line
+                        x1={tokenHoverPoint.x}
+                        y1={padding.top}
+                        x2={tokenHoverPoint.x}
+                        y2={chartHeight - padding.bottom}
+                        class="stroke-textcolor/20"
+                        stroke-width="1"
+                        stroke-dasharray="4 4"
+                    />
+                    <foreignObject x={tooltipX} y={tooltipY} width={tooltipWidth} height={tooltipHeight}>
+                        <div class="h-full rounded-md bg-[#2f3035] px-3 py-2 text-[11px] leading-tight text-white shadow-lg">
+                            <div class="mb-1 flex items-center justify-between gap-3 font-semibold">
+                                <span>{formatFullDateLabel(tokenHoverPoint.date)}</span>
+                                <span>{formatRequestCount(tokenHoverPoint.inputValue + tokenHoverPoint.outputValue)}</span>
+                            </div>
+                            <div class="flex items-center justify-between gap-3 text-white/80">
+                                <span class="inline-flex items-center gap-1.5">
+                                    <span class="h-2 w-2 rounded-sm" style={`background-color: ${inputChartColor}`}></span>
+                                    {language.inputTokens}
+                                </span>
+                                <span>{formatRequestCount(tokenHoverPoint.inputValue)}</span>
+                            </div>
+                            <div class="mt-1 flex items-center justify-between gap-3 text-white/80">
+                                <span class="inline-flex items-center gap-1.5">
+                                    <span class="h-2 w-2 rounded-sm" style={`background-color: ${outputChartColor}`}></span>
+                                    {language.outputTokens}
+                                </span>
+                                <span>{formatRequestCount(tokenHoverPoint.outputValue)}</span>
+                            </div>
+                        </div>
+                    </foreignObject>
+                {/if}
             {:else}
                 <text
                     x={(chartWidth + padding.left - padding.right) / 2}
@@ -442,6 +534,59 @@
                         class="fill-selected"
                     />
                 {/each}
+
+                {#each requestUsageChart.chartPoints as point}
+                    <rect
+                        role="button"
+                        tabindex="0"
+                        aria-label={`${formatFullDateLabel(point.date)} Requests ${formatRequestCount(point.value)}`}
+                        x={point.x - 9}
+                        y={padding.top}
+                        width="18"
+                        height={chartHeight - padding.top - padding.bottom}
+                        fill="transparent"
+                        onpointerenter={() => {
+                            requestHoverPoint = point;
+                        }}
+                        onpointermove={() => {
+                            requestHoverPoint = point;
+                        }}
+                        onpointerleave={() => {
+                            requestHoverPoint = null;
+                        }}
+                        onfocus={() => {
+                            requestHoverPoint = point;
+                        }}
+                        onblur={() => {
+                            requestHoverPoint = null;
+                        }}
+                    />
+                {/each}
+
+                {#if requestHoverPoint}
+                    {@const tooltipWidth = 130}
+                    {@const tooltipHeight = 44}
+                    {@const tooltipX = getTooltipX(requestHoverPoint.x, tooltipWidth)}
+                    {@const tooltipY = getTooltipY(requestHoverPoint.y, tooltipHeight)}
+                    <line
+                        x1={requestHoverPoint.x}
+                        y1={padding.top}
+                        x2={requestHoverPoint.x}
+                        y2={chartHeight - padding.bottom}
+                        class="stroke-textcolor/20"
+                        stroke-width="1"
+                        stroke-dasharray="4 4"
+                    />
+                    <foreignObject x={tooltipX} y={tooltipY} width={tooltipWidth} height={tooltipHeight}>
+                        <div class="h-full rounded-md bg-[#2f3035] px-3 py-2 text-[11px] leading-tight text-white shadow-lg">
+                            <div class="mb-1 font-semibold">{formatFullDateLabel(requestHoverPoint.date)}</div>
+                            <div class="flex justify-between gap-3 text-white/80">
+                                <span>Requests</span>
+                                <span>{formatRequestCount(requestHoverPoint.value)}</span>
+                            </div>
+                        </div>
+                    </foreignObject>
+                {/if}
             {:else}
                 <text
                     x={(chartWidth + padding.left - padding.right) / 2}
