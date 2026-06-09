@@ -30,6 +30,8 @@
         left: 58,
     };
     const horizontalPlotInset = 18;
+    const inputChartColor = "#2563eb";
+    const outputChartColor = "#16a34a";
 
     function getDateKey(date: Date) {
         const year = date.getFullYear();
@@ -140,21 +142,9 @@
             return `M ${points[0].x} ${points[0].y}`;
         }
 
-        let path = `M ${points[0].x} ${points[0].y}`;
-
-        for (let index = 1; index < points.length; index += 1) {
-            const previous = points[index - 1];
-            const current = points[index];
-            const midX = (previous.x + current.x) / 2;
-            const midY = (previous.y + current.y) / 2;
-
-            path += ` Q ${previous.x} ${previous.y} ${midX} ${midY}`;
-        }
-
-        const last = points[points.length - 1];
-        path += ` T ${last.x} ${last.y}`;
-
-        return path;
+        return points
+            .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+            .join(" ");
     }
 
     function buildChart(points: UsagePoint[], getValue: (point: UsagePoint) => number) {
@@ -244,11 +234,11 @@
     <div class="w-full rounded-md border border-darkborderc bg-darkbg/30 p-4">
         <div class="mb-2 flex items-center gap-4 text-xs text-textcolor2">
             <span class="inline-flex items-center gap-1">
-                <span class="h-2 w-2 rounded-full bg-selected"></span>
+                <span class="h-2 w-2 rounded-full" style={`background-color: ${inputChartColor}`}></span>
                 {language.inputTokens}
             </span>
             <span class="inline-flex items-center gap-1">
-                <span class="h-2 w-2 rounded-full bg-draculared"></span>
+                <span class="h-2 w-2 rounded-full" style={`background-color: ${outputChartColor}`}></span>
                 {language.outputTokens}
             </span>
         </div>
@@ -330,23 +320,23 @@
                 <path
                     d={tokenUsageChart.inputPath}
                     fill="none"
-                    class="stroke-selected"
-                    stroke-width="4"
+                    stroke={inputChartColor}
+                    stroke-width="3"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                 />
                 <path
                     d={tokenUsageChart.outputPath}
                     fill="none"
-                    class="stroke-draculared"
-                    stroke-width="4"
+                    stroke={outputChartColor}
+                    stroke-width="3"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                 />
 
                 {#each tokenUsageChart.chartPoints as point, index}
-                    <circle cx={point.x} cy={point.inputY} r="4" class="fill-selected" />
-                    <circle cx={point.x} cy={point.outputY} r="4" class="fill-draculared" />
+                    <circle cx={point.x} cy={point.inputY} r="3.5" fill={inputChartColor} />
+                    <circle cx={point.x} cy={point.outputY} r="3.5" fill={outputChartColor} />
                 {/each}
             {:else}
                 <text
