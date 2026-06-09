@@ -110,12 +110,12 @@ function getRequestOutputText(response: requestDataResponse) {
     return "";
 }
 
-async function getLocalUsageFallbackTokens(arg: requestDataArgument, response: requestDataResponse) {
-    if (response.type === "streaming") {
-        return 0;
-    }
+function getRequestPromptText(arg: requestDataArgument) {
+    return arg.formated.map((message) => message.content).join("\n");
+}
 
-    const promptText = arg.formated.map((message) => message.content).join("\n");
+async function getLocalUsageFallbackTokens(arg: requestDataArgument, response: requestDataResponse) {
+    const promptText = getRequestPromptText(arg);
     const outputText = getRequestOutputText(response);
     const text = [promptText, outputText].filter(Boolean).join("\n");
 
