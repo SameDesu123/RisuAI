@@ -117,17 +117,30 @@ function getRequestPromptText(arg: requestDataArgument) {
 async function getLocalUsageFallbackTokens(arg: requestDataArgument, response: requestDataResponse) {
     const promptText = getRequestPromptText(arg);
     const outputText = getRequestOutputText(response);
-    const text = [promptText, outputText].filter(Boolean).join("\n");
 
-    if (!text) {
-        return 0;
+    if (!promptText && !outputText) {
+        return {
+            inputTokens: 0,
+            outputTokens: 0,
+        };
     }
 
     try {
-        return (await tokenizeNum(text)).length;
+        const [inputTokens, outputTokens] = await Promise.all([
+            promptText ? tokenizeNum(promptText) : [],
+            outputText ? tokenizeNum(outputText) : [],
+        ]);
+
+        return {
+            inputTokens: inputTokens.length,
+            outputTokens: outputTokens.length,
+        };
     } catch (error) {
         console.error(error);
-        return 0;
+        return {
+            inputTokens: 0,
+            outputTokens: 0,
+        };
     }
 }
 
@@ -399,8 +412,8 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
                 if(da.type !== 'fail' && !arg.previewBody){
                     const fallbackTokens = db.modelUsageStatisticsLocalTokenizerFallback && getRequestUsageTokenCount(da.usage) === 0
                         ? await getLocalUsageFallbackTokens(arg, da)
-                        : 0
-                    recordModelUsageStatistics(da.usage, fallbackTokens)
+                        : { inputTokens: 0, outputTokens: 0 }
+                    recordModelUsageStatistics(da.usage, fallbackTokens.inputTokens, fallbackTokens.outputTokens)
                     if(da.type === 'streaming' && db.modelUsageStatisticsLocalTokenizerFallback && getRequestUsageTokenCount(da.usage) === 0){
                         da = {
                             ...da,

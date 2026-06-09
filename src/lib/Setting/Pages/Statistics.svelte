@@ -8,6 +8,8 @@
     interface UsagePoint {
         date: string;
         tokens: number;
+        inputTokens: number;
+        outputTokens: number;
         requests: number;
     }
 
@@ -55,6 +57,8 @@
         return {
             date,
             tokens: record?.tokens ?? 0,
+            inputTokens: record?.inputTokens ?? 0,
+            outputTokens: record?.outputTokens ?? Math.max(0, (record?.tokens ?? 0) - (record?.inputTokens ?? 0)),
             requests: record?.requests ?? 0,
         };
     }));
@@ -177,7 +181,37 @@
         };
     }
 
-    const tokenUsageChart = $derived(buildChart(usagePoints, (point) => point.tokens));
+    function buildTokenUsageChart(points: UsagePoint[]) {
+        const rawMaxValue = Math.max(...points.flatMap((point) => [point.inputTokens, point.outputTokens]), 0);
+        const maxValue = getRoundedChartMax(rawMaxValue);
+        const plotWidth = chartWidth - padding.left - padding.right;
+        const plotHeight = chartHeight - padding.top - padding.bottom;
+        const usablePlotWidth = plotWidth - horizontalPlotInset * 2;
+        const xStep = points.length > 1 ? usablePlotWidth / (points.length - 1) : 0;
+        const chartPoints = points.map((point, index) => {
+            const x = points.length > 1 ? padding.left + horizontalPlotInset + xStep * index : padding.left + plotWidth / 2;
+
+            return {
+                date: point.date,
+                inputValue: point.inputTokens,
+                outputValue: point.outputTokens,
+                x,
+                inputY: chartHeight - padding.bottom - (plotHeight * point.inputTokens) / maxValue,
+                outputY: chartHeight - padding.bottom - (plotHeight * point.outputTokens) / maxValue,
+            };
+        });
+
+        return {
+            maxValue,
+            chartPoints,
+            grid: getYGrid(maxValue),
+            inputPath: getLinePath(chartPoints.map((point) => ({ x: point.x, y: point.inputY }))),
+            outputPath: getLinePath(chartPoints.map((point) => ({ x: point.x, y: point.outputY }))),
+            hasData: points.some((point) => point.inputTokens > 0 || point.outputTokens > 0),
+        };
+    }
+
+    const tokenUsageChart = $derived(buildTokenUsageChart(usagePoints));
     const requestUsageChart = $derived(buildChart(usagePoints, (point) => point.requests));
 </script>
 
@@ -208,6 +242,16 @@
     </div>
 
     <div class="w-full rounded-md border border-darkborderc bg-darkbg/30 p-4">
+        <div class="mb-2 flex items-center gap-4 text-xs text-textcolor2">
+            <span class="inline-flex items-center gap-1">
+                <span class="h-2 w-2 rounded-full bg-selected"></span>
+                {language.inputTokens}
+            </span>
+            <span class="inline-flex items-center gap-1">
+                <span class="h-2 w-2 rounded-full bg-draculared"></span>
+                {language.outputTokens}
+            </span>
+        </div>
         <svg
             class="h-72 w-full overflow-visible text-textcolor"
             viewBox={`0 0 ${chartWidth} ${chartHeight}`}
@@ -284,16 +328,25 @@
 
             {#if tokenUsageChart.hasData}
                 <path
-                    d={tokenUsageChart.path}
+                    d={tokenUsageChart.inputPath}
                     fill="none"
                     class="stroke-selected"
                     stroke-width="4"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                 />
+                <path
+                    d={tokenUsageChart.outputPath}
+                    fill="none"
+                    class="stroke-draculared"
+                    stroke-width="4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                />
 
                 {#each tokenUsageChart.chartPoints as point, index}
-                    <circle cx={point.x} cy={point.y} r="4" class="fill-selected" />
+                    <circle cx={point.x} cy={point.inputY} r="4" class="fill-selected" />
+                    <circle cx={point.x} cy={point.outputY} r="4" class="fill-draculared" />
                 {/each}
             {:else}
                 <text

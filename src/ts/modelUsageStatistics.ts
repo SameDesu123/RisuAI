@@ -3,6 +3,8 @@ import { DBState } from "./stores.svelte";
 export interface ModelUsageDailyRecord {
     date: string;
     tokens: number;
+    inputTokens: number;
+    outputTokens: number;
     requests: number;
 }
 
@@ -62,26 +64,47 @@ export function getRequestUsageTokenCount(usage?: RequestUsageMetadata) {
     return (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0);
 }
 
-export function recordModelUsageStatistics(usage?: RequestUsageMetadata, fallbackTokens = 0) {
+function normalizeDailyRecord(record: ModelUsageDailyRecord) {
+    record.tokens ??= 0;
+    record.inputTokens ??= 0;
+    record.outputTokens ??= Math.max(0, record.tokens - record.inputTokens);
+    record.requests ??= 0;
+
+    return record;
+}
+
+function createDailyRecord(date: string): ModelUsageDailyRecord {
+    return {
+        date,
+        tokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        requests: 0,
+    };
+}
+
+export function recordModelUsageStatistics(usage?: RequestUsageMetadata, fallbackInputTokens = 0, fallbackOutputTokens = 0) {
     DBState.db.modelUsageStatistics ??= createDefaultModelUsageStatistics();
     DBState.db.modelUsageStatistics.daily ??= {};
 
     const date = getUsageDate();
     const usageTokens = getRequestUsageTokenCount(usage);
-    const tokens = usageTokens > 0 ? usageTokens : fallbackTokens;
+    const hasUsageBreakdown = typeof usage?.promptTokens === "number" || typeof usage?.completionTokens === "number";
+    const inputTokens = usage?.promptTokens ?? fallbackInputTokens;
+    const outputTokens = usage?.completionTokens ?? (usageTokens > 0 && !hasUsageBreakdown ? usageTokens : fallbackOutputTokens);
+    const tokens = usageTokens > 0 ? usageTokens : inputTokens + outputTokens;
     let dailyRecord = DBState.db.modelUsageStatistics.daily[date];
 
     if (!dailyRecord) {
-        dailyRecord = {
-            date,
-            tokens: 0,
-            requests: 0,
-        };
+        dailyRecord = createDailyRecord(date);
         DBState.db.modelUsageStatistics.daily[date] = dailyRecord;
     }
 
+    normalizeDailyRecord(dailyRecord);
     dailyRecord.requests += 1;
     dailyRecord.tokens += tokens;
+    dailyRecord.inputTokens += inputTokens;
+    dailyRecord.outputTokens += outputTokens;
     DBState.db.modelUsageStatistics.daily = Object.fromEntries(
         Object.entries(DBState.db.modelUsageStatistics.daily)
             .sort(([a], [b]) => a.localeCompare(b))
@@ -101,15 +124,13 @@ export function addModelUsageStatisticsTokens(tokens: number) {
     let dailyRecord = DBState.db.modelUsageStatistics.daily[date];
 
     if (!dailyRecord) {
-        dailyRecord = {
-            date,
-            tokens: 0,
-            requests: 0,
-        };
+        dailyRecord = createDailyRecord(date);
         DBState.db.modelUsageStatistics.daily[date] = dailyRecord;
     }
 
+    normalizeDailyRecord(dailyRecord);
     dailyRecord.tokens += tokens;
+    dailyRecord.outputTokens += tokens;
     DBState.db.modelUsageStatistics.daily = Object.fromEntries(
         Object.entries(DBState.db.modelUsageStatistics.daily)
             .sort(([a], [b]) => a.localeCompare(b))

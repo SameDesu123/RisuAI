@@ -553,6 +553,12 @@ export function setDatabase(data:Database){
     }
     data.modelUsageStatistics ??= createDefaultModelUsageStatistics()
     data.modelUsageStatistics.daily ??= {}
+    for(const record of Object.values(data.modelUsageStatistics.daily)){
+        record.tokens ??= 0
+        record.inputTokens ??= 0
+        record.outputTokens ??= Math.max(0, record.tokens - record.inputTokens)
+        record.requests ??= 0
+    }
     data.modelUsageStatisticsLocalTokenizerFallback ??= false
     data.customQuotes ??= false
     data.customQuotesData ??= ['“','”','‘','’']
