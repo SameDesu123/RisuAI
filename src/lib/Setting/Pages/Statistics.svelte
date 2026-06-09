@@ -95,6 +95,24 @@
         return total > 14 ? 9 : 10;
     }
 
+    function getRoundedChartMax(value: number) {
+        if (value <= 0) {
+            return 10;
+        }
+
+        const magnitude = 10 ** Math.floor(Math.log10(value));
+        const normalized = value / magnitude;
+        const roundedNormalized = normalized <= 1
+            ? 1
+            : normalized <= 2
+                ? 2
+                : normalized <= 5
+                    ? 5
+                    : 10;
+
+        return Math.max(10, roundedNormalized * magnitude);
+    }
+
     function getYGrid(maxValue: number) {
         const step = maxValue / 4;
 
@@ -136,7 +154,8 @@
     }
 
     function buildChart(points: UsagePoint[], getValue: (point: UsagePoint) => number) {
-        const maxValue = Math.max(...points.map(getValue), 1);
+        const rawMaxValue = Math.max(...points.map(getValue), 0);
+        const maxValue = getRoundedChartMax(rawMaxValue);
         const plotWidth = chartWidth - padding.left - padding.right;
         const plotHeight = chartHeight - padding.top - padding.bottom;
         const usablePlotWidth = plotWidth - horizontalPlotInset * 2;
