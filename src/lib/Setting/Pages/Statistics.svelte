@@ -23,10 +23,11 @@
     const chartHeight = 280;
     const padding = {
         top: 18,
-        right: 24,
-        bottom: 42,
+        right: 34,
+        bottom: 58,
         left: 58,
     };
+    const horizontalPlotInset = 18;
 
     function getDateKey(date: Date) {
         const year = date.getFullYear();
@@ -70,34 +71,28 @@
         return tokens.toString();
     }
 
-    function formatDateLabel(date: string) {
+    function formatDateLabelParts(date: string) {
         const [year, month, day] = date.split("-").map(Number);
-        const parsed = Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)
-            ? new Date(year, month - 1, day)
-            : new Date(date);
 
-        if (Number.isNaN(parsed.getTime())) {
-            return date;
+        if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+            return {
+                month: date,
+                day: "",
+            };
         }
 
-        return parsed.toLocaleDateString(undefined, {
-            month: "short",
-            day: "numeric",
-        });
+        return {
+            month: `${month}월`,
+            day: `${day}일`,
+        };
     }
 
     function formatRequestCount(requests: number) {
         return requests.toLocaleString();
     }
 
-    function shouldShowDateLabel(index: number, total: number) {
-        if (index === 0 || index === total - 1) {
-            return true;
-        }
-
-        return total <= 14
-            ? index % 2 === 0
-            : index % 7 === 0;
+    function getDateLabelFontSize(total: number) {
+        return total > 14 ? 9 : 10;
     }
 
     function getYGrid(maxValue: number) {
@@ -144,11 +139,12 @@
         const maxValue = Math.max(...points.map(getValue), 1);
         const plotWidth = chartWidth - padding.left - padding.right;
         const plotHeight = chartHeight - padding.top - padding.bottom;
-        const xStep = points.length > 1 ? plotWidth / (points.length - 1) : 0;
+        const usablePlotWidth = plotWidth - horizontalPlotInset * 2;
+        const xStep = points.length > 1 ? usablePlotWidth / (points.length - 1) : 0;
         const chartPoints = points.map((point, index) => ({
             date: point.date,
             value: getValue(point),
-            x: points.length > 1 ? padding.left + xStep * index : padding.left + plotWidth / 2,
+            x: points.length > 1 ? padding.left + horizontalPlotInset + xStep * index : padding.left + plotWidth / 2,
             y: chartHeight - padding.bottom - (plotHeight * getValue(point)) / maxValue,
         }));
 
@@ -235,6 +231,28 @@
                 stroke-width="1.5"
             />
 
+            {#each tokenUsageChart.chartPoints as point, index}
+                <line
+                    x1={point.x}
+                    y1={chartHeight - padding.bottom}
+                    x2={point.x}
+                    y2={chartHeight - padding.bottom + 5}
+                    class="stroke-textcolor/25"
+                    stroke-width="1"
+                />
+                {@const dateLabel = formatDateLabelParts(point.date)}
+                <text
+                    x={point.x}
+                    y={chartHeight - 36}
+                    text-anchor="middle"
+                    class="fill-textcolor2"
+                    font-size={getDateLabelFontSize(tokenUsageChart.chartPoints.length)}
+                >
+                    <tspan x={point.x}>{dateLabel.month}</tspan>
+                    <tspan x={point.x} dy="12">{dateLabel.day}</tspan>
+                </text>
+            {/each}
+
             <text
                 x={18}
                 y={(chartHeight - padding.bottom + padding.top) / 2}
@@ -257,16 +275,6 @@
 
                 {#each tokenUsageChart.chartPoints as point, index}
                     <circle cx={point.x} cy={point.y} r="4" class="fill-selected" />
-                    {#if shouldShowDateLabel(index, tokenUsageChart.chartPoints.length)}
-                        <text
-                            x={point.x}
-                            y={chartHeight - 14}
-                            text-anchor="middle"
-                            class="fill-textcolor2 text-[11px]"
-                        >
-                            {formatDateLabel(point.date)}
-                        </text>
-                    {/if}
                 {/each}
             {:else}
                 <text
@@ -329,6 +337,28 @@
                 stroke-width="1.5"
             />
 
+            {#each requestUsageChart.chartPoints as point, index}
+                <line
+                    x1={point.x}
+                    y1={chartHeight - padding.bottom}
+                    x2={point.x}
+                    y2={chartHeight - padding.bottom + 5}
+                    class="stroke-textcolor/25"
+                    stroke-width="1"
+                />
+                {@const dateLabel = formatDateLabelParts(point.date)}
+                <text
+                    x={point.x}
+                    y={chartHeight - 36}
+                    text-anchor="middle"
+                    class="fill-textcolor2"
+                    font-size={getDateLabelFontSize(requestUsageChart.chartPoints.length)}
+                >
+                    <tspan x={point.x}>{dateLabel.month}</tspan>
+                    <tspan x={point.x} dy="12">{dateLabel.day}</tspan>
+                </text>
+            {/each}
+
             <text
                 x={18}
                 y={(chartHeight - padding.bottom + padding.top) / 2}
@@ -349,16 +379,6 @@
                         rx="4"
                         class="fill-selected"
                     />
-                    {#if shouldShowDateLabel(index, requestUsageChart.chartPoints.length)}
-                        <text
-                            x={point.x}
-                            y={chartHeight - 14}
-                            text-anchor="middle"
-                            class="fill-textcolor2 text-[11px]"
-                        >
-                            {formatDateLabel(point.date)}
-                        </text>
-                    {/if}
                 {/each}
             {:else}
                 <text
