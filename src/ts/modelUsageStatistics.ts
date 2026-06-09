@@ -88,3 +88,31 @@ export function recordModelUsageStatistics(usage?: RequestUsageMetadata, fallbac
             .slice(-MAX_DAILY_USAGE_RECORDS),
     );
 }
+
+export function addModelUsageStatisticsTokens(tokens: number) {
+    if (!Number.isFinite(tokens) || tokens <= 0) {
+        return;
+    }
+
+    DBState.db.modelUsageStatistics ??= createDefaultModelUsageStatistics();
+    DBState.db.modelUsageStatistics.daily ??= {};
+
+    const date = getUsageDate();
+    let dailyRecord = DBState.db.modelUsageStatistics.daily[date];
+
+    if (!dailyRecord) {
+        dailyRecord = {
+            date,
+            tokens: 0,
+            requests: 0,
+        };
+        DBState.db.modelUsageStatistics.daily[date] = dailyRecord;
+    }
+
+    dailyRecord.tokens += tokens;
+    DBState.db.modelUsageStatistics.daily = Object.fromEntries(
+        Object.entries(DBState.db.modelUsageStatistics.daily)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .slice(-MAX_DAILY_USAGE_RECORDS),
+    );
+}

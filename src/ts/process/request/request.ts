@@ -2,7 +2,7 @@ import { Ollama } from 'ollama/dist/browser.mjs';
 import { language } from "../../../lang";
 import { fetchNative, globalFetch } from "../../globalApi.svelte";
 import { getModelInfo, LLMFlags, LLMFormat, type LLMModel } from "../../model/modellist";
-import { getRequestUsageTokenCount, recordModelUsageStatistics, type RequestUsageMetadata } from "../../modelUsageStatistics";
+import { addModelUsageStatisticsTokens, getRequestUsageTokenCount, recordModelUsageStatistics, type RequestUsageMetadata } from "../../modelUsageStatistics";
 import { risuChatParser, risuEscape, risuUnescape } from "../../parser/parser.svelte";
 import { pluginProcess, pluginV2 } from "../../plugins/plugins.svelte";
 import { getCurrentCharacter, getCurrentChat, getDatabase, type character } from "../../storage/database.svelte";
@@ -129,6 +129,52 @@ async function getLocalUsageFallbackTokens(arg: requestDataArgument, response: r
         console.error(error);
         return 0;
     }
+}
+
+function wrapLocalUsageFallbackStream(stream: ReadableStream<StreamResponseChunk>) {
+    let lastResponseChunk: StreamResponseChunk = {};
+    let reader: ReadableStreamDefaultReader<StreamResponseChunk> | undefined;
+    let canceled = false;
+
+    return new ReadableStream<StreamResponseChunk>({
+        async start(controller) {
+            reader = stream.getReader();
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+
+                    if (value) {
+                        lastResponseChunk = value;
+                        controller.enqueue(value);
+                    }
+
+                    if (done) {
+                        const outputText = Object.values(lastResponseChunk).filter(Boolean).join("\n");
+
+                        if (!canceled && outputText) {
+                            try {
+                                addModelUsageStatisticsTokens((await tokenizeNum(outputText)).length);
+                            } catch (error) {
+                                console.error(error);
+                            }
+                        }
+
+                        controller.close();
+                        break;
+                    }
+                }
+            } catch (error) {
+                controller.error(error);
+            } finally {
+                reader.releaseLock();
+            }
+        },
+        cancel(reason) {
+            canceled = true;
+            return reader?.cancel(reason);
+        },
+    });
 }
 
 function getOllamaThinkMode(mode: string): OllamaThinkMode | undefined {
@@ -355,6 +401,12 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
                         ? await getLocalUsageFallbackTokens(arg, da)
                         : 0
                     recordModelUsageStatistics(da.usage, fallbackTokens)
+                    if(da.type === 'streaming' && db.modelUsageStatisticsLocalTokenizerFallback && getRequestUsageTokenCount(da.usage) === 0){
+                        da = {
+                            ...da,
+                            result: wrapLocalUsageFallbackStream(da.result),
+                        }
+                    }
                 }
                 const usedModel = fallBackModels[fallbackIndex] || da.model
                 return usedModel ? {
