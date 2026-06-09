@@ -1,7 +1,8 @@
 <script lang="ts">
-    import CheckInput from "src/lib/UI/GUI/CheckInput.svelte";
     import { language } from "src/lang";
+    import { statisticsSettingsItems } from "src/ts/setting/statisticsSettingsData";
     import { DBState } from "src/ts/stores.svelte";
+    import SettingRenderer from "../SettingRenderer.svelte";
 
     interface UsagePoint {
         date: string;
@@ -329,13 +330,5 @@
 {/if}
 
 {#if submenu === 2}
-    <div class="w-full rounded-md border border-darkborderc bg-darkbg/30 p-4">
-        <CheckInput
-            bind:check={DBState.db.modelUsageStatisticsLocalTokenizerFallback}
-            name="Use local tokenizer when provider usage is unavailable"
-        />
-        <p class="mt-2 text-sm text-textcolor2">
-            Counts prompt and completed response text locally when the provider response has no usage metadata.
-        </p>
-    </div>
+    <SettingRenderer items={statisticsSettingsItems} />
 {/if}

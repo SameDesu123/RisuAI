@@ -83,6 +83,8 @@ export const languageEnglish = {
             "\n- `<cbs>` - parses curly braced synatxes in IN." +
             "\n\nTo use with native flags, you can use like `gi<cbs><move_top>`.",
         experimental: "This is a experimental feature. It might be unstable.",
+        modelUsageStatisticsLocalTokenizerFallback:
+            "Counts prompt and completed response text locally when the provider response has no usage metadata.",
         oogaboogaURL:
             "If your WebUI supports older version of api, your url should look *like https:.../run/textgen*\n\n" +
             "If your WebUI supports newVersion of api, your url should look like *https://.../api/v1/generate* and use the api server as host, and add --api to arguments.",
@@ -1314,6 +1316,7 @@ export const languageEnglish = {
     presetChain: "Preset Chain",
     legacyMediaFindings: "Legacy Media Findings",
     statistics: "Statistics",
+    modelUsageStatisticsLocalTokenizerFallback: "Use local tokenizer when provider usage is unavailable",
     staticsDisclaimer: "The statistics are based on the data from after July 2024. The data may not be accurate.",
     subtitles: "Subtitles",
     subtitlesWarning1: "You must use model with audio/video input to use this feature.",
