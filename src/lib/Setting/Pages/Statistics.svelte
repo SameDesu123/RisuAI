@@ -1,6 +1,7 @@
 <script lang="ts">
     import { language } from "src/lang";
     import SegmentedControl from "src/lib/UI/GUI/SegmentedControl.svelte";
+    import { ColorSchemeTypeStore } from "src/ts/gui/colorscheme";
     import { statisticsSettingsItems } from "src/ts/setting/statisticsSettingsData";
     import { DBState } from "src/ts/stores.svelte";
     import SettingRenderer from "../SettingRenderer.svelte";
@@ -35,9 +36,10 @@
         left: 58,
     };
     const horizontalPlotInset = 18;
-    const inputChartColor = "#93c5fd";
-    const outputChartColor = "#86efac";
-    const requestChartColor = "#c4b5fd";
+    const chartTone = $derived($ColorSchemeTypeStore === "light" ? "500" : "300");
+    const inputChartColor = $derived(`var(--risu-theme-primary-${chartTone})`);
+    const outputChartColor = $derived(`var(--risu-theme-success-${chartTone})`);
+    const requestChartColor = $derived(`var(--risu-theme-secondary-${chartTone})`);
 
     function getDateKey(date: Date) {
         const year = date.getFullYear();
