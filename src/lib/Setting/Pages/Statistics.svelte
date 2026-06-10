@@ -35,8 +35,9 @@
         left: 58,
     };
     const horizontalPlotInset = 18;
-    const inputChartColor = "#2563eb";
-    const outputChartColor = "#16a34a";
+    const inputChartColor = "#93c5fd";
+    const outputChartColor = "#86efac";
+    const requestChartColor = "#c4b5fd";
 
     function getDateKey(date: Date) {
         const year = date.getFullYear();
@@ -555,7 +556,7 @@
                         width={requestUsageChart.barWidth}
                         height={chartHeight - padding.bottom - point.y}
                         rx="4"
-                        class="fill-selected"
+                        fill={requestChartColor}
                     />
                 {/each}
 
