@@ -36,7 +36,7 @@
         left: 58,
     };
     const horizontalPlotInset = 18;
-    const chartTone = $derived($ColorSchemeTypeStore === "light" ? "500" : "300");
+    const chartTone = $derived($ColorSchemeTypeStore === "light" ? "500" : "400");
     const inputChartColor = $derived(`var(--risu-theme-primary-${chartTone})`);
     const outputChartColor = $derived(`var(--risu-theme-success-${chartTone})`);
     const requestChartColor = $derived(`var(--risu-theme-secondary-${chartTone})`);
