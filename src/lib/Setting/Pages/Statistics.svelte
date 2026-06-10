@@ -198,22 +198,35 @@
     }
 
     function buildTokenUsageChart(points: UsagePoint[]) {
-        const rawMaxValue = Math.max(...points.flatMap((point) => [point.inputTokens, point.outputTokens]), 0);
+        const rawMaxValue = Math.max(...points.map((point) => point.inputTokens + point.outputTokens), 0);
         const maxValue = getRoundedChartMax(rawMaxValue);
         const plotWidth = chartWidth - padding.left - padding.right;
         const plotHeight = chartHeight - padding.top - padding.bottom;
         const usablePlotWidth = plotWidth - horizontalPlotInset * 2;
         const xStep = points.length > 1 ? usablePlotWidth / (points.length - 1) : 0;
+        const barWidth = points.length > 1 ? Math.max(8, Math.min(22, xStep * 0.58)) : 22;
         const chartPoints = points.map((point, index) => {
             const x = points.length > 1 ? padding.left + horizontalPlotInset + xStep * index : padding.left + plotWidth / 2;
+            const inputHeight = (plotHeight * point.inputTokens) / maxValue;
+            const outputHeight = (plotHeight * point.outputTokens) / maxValue;
+            const totalHeight = inputHeight + outputHeight;
+            const barBottom = chartHeight - padding.bottom;
+            const barTop = barBottom - totalHeight;
 
             return {
                 date: point.date,
                 inputValue: point.inputTokens,
                 outputValue: point.outputTokens,
                 x,
-                inputY: chartHeight - padding.bottom - (plotHeight * point.inputTokens) / maxValue,
-                outputY: chartHeight - padding.bottom - (plotHeight * point.outputTokens) / maxValue,
+                barX: x - barWidth / 2,
+                barTop,
+                barBottom,
+                barWidth,
+                totalHeight,
+                inputY: barBottom - inputHeight,
+                inputHeight,
+                outputY: barTop,
+                outputHeight,
             };
         });
 
@@ -221,8 +234,7 @@
             maxValue,
             chartPoints,
             grid: getYGrid(maxValue),
-            inputPath: getLinePath(chartPoints.map((point) => ({ x: point.x, y: point.inputY }))),
-            outputPath: getLinePath(chartPoints.map((point) => ({ x: point.x, y: point.outputY }))),
+            barWidth,
             hasData: points.some((point) => point.inputTokens > 0 || point.outputTokens > 0),
         };
     }
@@ -343,26 +355,38 @@
             </text>
 
             {#if tokenUsageChart.hasData}
-                <path
-                    d={tokenUsageChart.inputPath}
-                    fill="none"
-                    stroke={inputChartColor}
-                    stroke-width="3"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                />
-                <path
-                    d={tokenUsageChart.outputPath}
-                    fill="none"
-                    stroke={outputChartColor}
-                    stroke-width="3"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                />
-
                 {#each tokenUsageChart.chartPoints as point, index}
-                    <circle cx={point.x} cy={point.inputY} r="3.5" fill={inputChartColor} />
-                    <circle cx={point.x} cy={point.outputY} r="3.5" fill={outputChartColor} />
+                    {#if point.totalHeight > 0}
+                        <clipPath id={`token-bar-clip-${index}`}>
+                            <rect
+                                x={point.barX}
+                                y={point.barTop}
+                                width={point.barWidth}
+                                height={point.totalHeight}
+                                rx="4"
+                            />
+                        </clipPath>
+                        <g clip-path={`url(#token-bar-clip-${index})`}>
+                            {#if point.inputHeight > 0}
+                                <rect
+                                    x={point.barX}
+                                    y={point.inputY}
+                                    width={point.barWidth}
+                                    height={point.inputHeight}
+                                    fill={inputChartColor}
+                                />
+                            {/if}
+                            {#if point.outputHeight > 0}
+                                <rect
+                                    x={point.barX}
+                                    y={point.outputY}
+                                    width={point.barWidth}
+                                    height={point.outputHeight}
+                                    fill={outputChartColor}
+                                />
+                            {/if}
+                        </g>
+                    {/if}
                 {/each}
 
                 {#each tokenUsageChart.chartPoints as point}
@@ -370,9 +394,9 @@
                         role="button"
                         tabindex="0"
                         aria-label={`${formatFullDateLabel(point.date)} ${language.inputTokens} ${formatRequestCount(point.inputValue)}, ${language.outputTokens} ${formatRequestCount(point.outputValue)}`}
-                        x={point.x - 9}
+                        x={point.barX}
                         y={padding.top}
-                        width="18"
+                        width={point.barWidth}
                         height={chartHeight - padding.top - padding.bottom}
                         fill="transparent"
                         onpointerenter={() => {
@@ -397,7 +421,7 @@
                     {@const tooltipWidth = 178}
                     {@const tooltipHeight = 62}
                     {@const tooltipX = getTooltipX(tokenHoverPoint.x, tooltipWidth)}
-                    {@const tooltipY = getTooltipY(Math.min(tokenHoverPoint.inputY, tokenHoverPoint.outputY), tooltipHeight)}
+                    {@const tooltipY = getTooltipY(tokenHoverPoint.barTop, tooltipHeight)}
                     <line
                         x1={tokenHoverPoint.x}
                         y1={padding.top}
