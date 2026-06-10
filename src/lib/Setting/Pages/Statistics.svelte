@@ -36,10 +36,11 @@
         left: 58,
     };
     const horizontalPlotInset = 18;
-    const chartTone = $derived($ColorSchemeTypeStore === "light" ? "500" : "400");
-    const inputChartColor = $derived(`var(--risu-theme-primary-${chartTone})`);
-    const outputChartColor = $derived(`var(--risu-theme-success-${chartTone})`);
-    const requestChartColor = $derived(`var(--risu-theme-secondary-${chartTone})`);
+    const chartTone = $derived($ColorSchemeTypeStore === "light" ? "500" : "300");
+    const chartColorWeight = $derived($ColorSchemeTypeStore === "light" ? "88%" : "68%");
+    const inputChartColor = $derived(`color-mix(in srgb, var(--risu-theme-primary-${chartTone}) ${chartColorWeight}, var(--risu-theme-bgcolor))`);
+    const outputChartColor = $derived(`color-mix(in srgb, var(--risu-theme-success-${chartTone}) ${chartColorWeight}, var(--risu-theme-bgcolor))`);
+    const requestChartColor = $derived(`color-mix(in srgb, var(--risu-theme-secondary-${chartTone}) ${chartColorWeight}, var(--risu-theme-bgcolor))`);
 
     function getDateKey(date: Date) {
         const year = date.getFullYear();
