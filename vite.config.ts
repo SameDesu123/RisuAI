@@ -30,6 +30,7 @@ export default defineConfig(({command, mode}) => {
       host: '0.0.0.0', // listen on all addresses
       port: 5174,
       strictPort: true,
+      allowedHosts: ['.trycloudflare.com'],
       // hmr: false,
     },
     // to make use of `TAURI_ENV_DEBUG` and other env variables
