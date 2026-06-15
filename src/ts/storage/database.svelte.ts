@@ -701,6 +701,7 @@ export function setDatabase(data:Database){
     data.moveInsteadOfCopyOnCMPConvert ??= false
     data.skipSavingAssetsOnWebSync ??= true
     data.coldstorage ??= data?.plugins?.length === 0
+    data.databaseBlockStorage ??= false
     changeLanguage(data.language)
     setDatabaseLite(data)
 }
@@ -1257,6 +1258,7 @@ export interface Database{
     lastLoadedLoadoutName: string
     moveInsteadOfCopyOnCMPConvert?:boolean
     skipSavingAssetsOnWebSync?:boolean
+    databaseBlockStorage?:boolean
 }
 
 export interface CustomSideBarItem{
@@ -1816,6 +1818,12 @@ export interface Chat{
     lastDate?:number
     bookmarks?: string[];
     bookmarkNames?: { [chatId: string]: string };
+    databaseBlockStorage?: {
+        key: string
+        hash: string
+        byteLength: number
+        updatedAt: number
+    }
 }
 
 export interface ChatFolder{
