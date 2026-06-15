@@ -1,7 +1,7 @@
 import { alertNormal, alertSelect } from "../alert"
 import { keiServerURL } from "./kei"
 import { getDatabase, setDatabase } from "../storage/database.svelte"
-import { requiresFullEncoderReload } from "../globalApi.svelte"
+import { getHydratedDatabaseSnapshot, requiresFullEncoderReload } from "../globalApi.svelte"
 
 export async function autoServerBackup(){
     const db = getDatabase()
@@ -80,7 +80,7 @@ export async function autoServerBackup(){
 }
 
 let lastKeiSave = 0
-export function saveDbKei() {
+export async function saveDbKei() {
     try{
         let db = getDatabase()
         if(db.account.kei){
@@ -88,6 +88,7 @@ export function saveDbKei() {
                 return
             }
             lastKeiSave = Date.now()
+            db = await getHydratedDatabaseSnapshot({ databaseBlockStorage: false })
             fetch(keiServerURL() + '/autobackup/save', {
                 method: 'POST',
                 headers: {

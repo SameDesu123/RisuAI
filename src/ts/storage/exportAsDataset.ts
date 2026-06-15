@@ -1,10 +1,12 @@
 import { getDatabase } from "./database.svelte";
-import { downloadFile } from "../globalApi.svelte";
+import { downloadFile, getHydratedDatabaseSnapshot } from "../globalApi.svelte";
 import { alertNormal } from "../alert";
 import { language } from "src/lang";
 
 export async function exportAsDataset(){
-    const db = getDatabase()
+    const db = getDatabase().databaseBlockStorage
+        ? await getHydratedDatabaseSnapshot()
+        : getDatabase()
 
     let dataset = []
     for(const char of db.characters){

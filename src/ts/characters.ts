@@ -6,7 +6,7 @@ import { checkNullish, findCharacterbyId, getUserName, selectMultipleFile, selec
 import { v4 as uuidv4, v4 } from 'uuid';
 import { getImageType } from "./media";
 import { DBState, MobileGUIStack, OpenRealmStore, selectedCharID } from "./stores.svelte";
-import { AppendableBuffer, changeChatTo, checkCharOrder, downloadFile, getFileSrc, requiresFullEncoderReload } from "./globalApi.svelte";
+import { AppendableBuffer, changeChatTo, checkCharOrder, downloadFile, getFileSrc, preLoadDatabaseBlockChat, requiresFullEncoderReload } from "./globalApi.svelte";
 import { updateInlayScreen } from "./process/inlayScreen";
 import { parseMarkdownSafe } from "./parser/parser.svelte";
 import { translateHTML } from "./translator/translator";
@@ -14,6 +14,7 @@ import { doingChat } from "./process/index.svelte";
 import { importCharacter } from "./characterCards";
 import { PngChunk } from "./pngChunk";
 import { getColdStorageItem } from "./process/coldstorage.svelte";
+import { isDatabaseBlockChatStub } from "./storage/databaseBlockStorage";
 
 export function createNewCharacter() {
     DBState.db.characters.push(createBlankChar())
@@ -197,6 +198,9 @@ export async function exportChat(page:number){
         const anonymous = (mode === '2' || mode === '3') ? ((await alertSelect([language.includePersonaName, language.hidePersonaName])) === '1') : false
         const selectedID = get(selectedCharID)
         const db = DBState.db
+        if(isDatabaseBlockChatStub(db.characters[selectedID].chats[page])){
+            await preLoadDatabaseBlockChat(selectedID, page)
+        }
         const chat = db.characters[selectedID].chats[page]
         const char = db.characters[selectedID]
         const date = new Date().toJSON();
@@ -509,6 +513,11 @@ export async function exportAllChats() {
         const selectedID = get(selectedCharID)
         const db = getDatabase()
         const char = db.characters[selectedID]
+        for(let i = 0; i < char.chats.length; i++){
+            if(isDatabaseBlockChatStub(char.chats[i])){
+                await preLoadDatabaseBlockChat(selectedID, i)
+            }
+        }
         const date = new Date().toISOString().replace(/[:.]/g, "-")
         const allChats = char.chats
         const allFolders = char.chatFolders
