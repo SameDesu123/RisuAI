@@ -31,7 +31,8 @@ import { runLuaEditTrigger } from "./scriptings";
 import { getModelInfo, LLMFlags } from "../model/modellist";
 import { hypaMemoryV3 } from "./memory/hypav3";
 import { getModuleAssets, getModuleToggles } from "./modules";
-import { readImage } from "../globalApi.svelte";
+import { preLoadDatabaseBlockChat, readImage } from "../globalApi.svelte";
+import { isDatabaseBlockChatStub } from "../storage/databaseBlockStorage";
 
 export interface OpenAIChat{
     role: 'system'|'user'|'assistant'|'function'
@@ -221,6 +222,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     const nowChatroom = DBState.db.characters[selectedChar]
     nowChatroom.lastInteraction = Date.now()
     selectedChat = nowChatroom.chatPage
+    if(isDatabaseBlockChatStub(nowChatroom.chats[selectedChat])){
+        await preLoadDatabaseBlockChat(selectedChar, selectedChat)
+    }
     nowChatroom.chats[nowChatroom.chatPage].message = nowChatroom.chats[nowChatroom.chatPage].message.map((v) => {
         v.chatId = v.chatId ?? v4()
         return v

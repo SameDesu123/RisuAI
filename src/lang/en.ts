@@ -126,6 +126,8 @@ export const languageEnglish = {
         showUnrecommended: "If enabled, it will show unrecommended, deprecated settings. It is NOT RECOMMENDED to use these settings.",
         imageCompression: "If enabled, it will compress images when exporting character. if animated images doesn't works, try disabling this option.",
         useExperimental: "If enabled, it will show some experimental features.",
+        databaseBlockStorage:
+            "Stores the main database as a small manifest plus separate character and chat blocks. This can reduce save/load work for large databases, but it is experimental.",
         forceProxyAsOpenAI: "If enabled, it will force to use OpenAI format when using reverse proxy.",
         forcePlainFetch: "If enabled, it will use browser fetch api instead of native http request. this can cause CORS errors.",
         autoFillRequestURL: "If enabled, it will autofill request url to match the current model.",
@@ -1440,6 +1442,7 @@ export const languageEnglish = {
     claudeCachingRetrivalDesc:
         "Extends the cache time for Claude Caching, by requesting every 4 minutes. This can reduce the cache miss rate, but it can increase the cost if its not used properly.",
     automaticCachePoint: "Automatic Cache Point",
+    databaseBlockStorage: "Database Block Storage",
     experimentalChatCompression: "Experimental Chat Data Handling",
     loadingChatData: "Loading Chat Data",
     outputImageModal: "Output Image Modal",
