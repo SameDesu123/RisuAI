@@ -137,9 +137,9 @@ export const languageSettingsItems: SettingItem[] = [
     // Translator Specific Configurations
     {
         id: 'lang.deeplWebWarn',
-        type: 'header',
+        type: 'alert',
         labelKey: 'webdeeplwarn',
-        options: { level: 'warning' },
+        options: { severity: 'warning', titleKey: 'warning' },
         condition: (ctx) => !!ctx.db.translator && ctx.db.translatorType === 'deepl' && !isTauri,
     },
 
