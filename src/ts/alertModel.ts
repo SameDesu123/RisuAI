@@ -57,7 +57,7 @@ export function getAlertDescriptor(type: LegacyAlertType): StandardAlertDescript
 
     if (dialogAlertTypes.has(type)) {
         return {
-            severity: type === 'requestdata' || type === 'requestlogs' ? 'info' : 'neutral',
+            severity: type === 'requestlogs' ? 'info' : 'neutral',
             surface: 'dialog',
             blocking: true,
             dismissible: true,
