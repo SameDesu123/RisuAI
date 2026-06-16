@@ -24,6 +24,9 @@ describe('getAlertDescriptor', () => {
     });
 
     it('marks extracted special views as dialogs', () => {
+        expect(getAlertDescriptor('cardexport').surface).toBe('dialog');
+        expect(getAlertDescriptor('selectModule').surface).toBe('dialog');
+        expect(getAlertDescriptor('pukmakkurit').surface).toBe('dialog');
         expect(getAlertDescriptor('requestlogs')).toMatchObject({
             severity: 'info',
             surface: 'dialog',

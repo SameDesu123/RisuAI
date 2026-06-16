@@ -1,6 +1,6 @@
 <script lang="ts">
     import { alertGenerationInfoStore } from "../../../ts/alert";
-    
+    import { getAlertDescriptor } from 'src/ts/alertModel';
     import { DBState } from 'src/ts/stores.svelte';
     import { getCharImage } from '../../../ts/characters';
     import { ParseMarkdown } from '../../../ts/parser/parser.svelte';
@@ -65,6 +65,7 @@
     let cardLicense = $state('')
     let generationInfoMenuIndex = $state(0)
     let copiedKey: string | null = $state(null)
+    const alertDescriptor = $derived(getAlertDescriptor($alertStore.type))
 
     $effect(() => {
         void loadDetailedOSLabel();
@@ -158,7 +159,7 @@
     }
 }}></svelte:window>
 
-{#if $alertStore.type !== 'none' &&  $alertStore.type !== 'toast' &&  $alertStore.type !== 'cardexport' && $alertStore.type !== 'branches' && $alertStore.type !== 'selectModule' && $alertStore.type !== 'pukmakkurit' && $alertStore.type !== 'requestlogs'}
+{#if $alertStore.type !== 'none' && alertDescriptor.surface === 'modal'}
     <div class="absolute w-full h-full z-50 bg-black/50 flex justify-center items-center" class:vis={ $alertStore.type === 'wait2'}>
         <div class="bg-darkbg p-4 break-any rounded-md flex flex-col max-w-3xl  max-h-full overflow-y-auto">
             {#if $alertStore.type === 'error'}
@@ -176,7 +177,7 @@
                 <div class="overflow-y-auto">
                     <span class="text-gray-300 chattext prose chattext2" class:prose-invert={$ColorSchemeTypeStore}>
                         {#await ParseMarkdown($alertStore.msg) then msg}
-                            {@html msg}                        
+                            {@html msg}
                         {/await}
                     </span>
                 </div>
@@ -363,11 +364,11 @@
                                     }}>
                                         <User/>
                                     </BarIcon>
-                                {:then im} 
+                                {:then im}
                                     <BarIcon onClick={() => {
                                         alertStore.set({type: 'none',msg: char.chaId})
                                     }} additionalStyle={im} />
-                                    
+
                                 {/await}
                             {:else}
                                 <BarIcon onClick={() => {
@@ -453,10 +454,10 @@
                         {@const totalRounded = (stage1 + stage2 + stage3 + stage4).toFixed(1)}
                         <span class="text-gray-400">Timing</span>
                         <span class="text-gray-400 justify-self-end">
-                            <span style="color: #60a5fa;">{stage1}</span> + 
-                            <span style="color: #db2777;">{stage2}</span> + 
-                            <span style="color: #34d399;">{stage3}</span> + 
-                            <span style="color: #8b5cf6;">{stage4}</span> = 
+                            <span style="color: #60a5fa;">{stage1}</span> +
+                            <span style="color: #db2777;">{stage2}</span> +
+                            <span style="color: #34d399;">{stage3}</span> +
+                            <span style="color: #8b5cf6;">{stage4}</span> =
                             <span class="text-white font-bold">{totalRounded}s</span>
                         </span>
                     {/if}
@@ -464,13 +465,13 @@
                     <span class="text-green-500">Tokens</span>
                     {#await tokenize(DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message[$alertGenerationInfoStore.idx].data)}
                         <span class="text-green-500 justify-self-end">Loading</span>
-                    {:then tokens} 
+                    {:then tokens}
                         <span class="text-green-500 justify-self-end">{tokens}</span>
                     {/await}
                 </div>
                 {/if}
                 {#if generationInfoMenuIndex === 2}
-                    {#await getFetchData($alertStore.msg) then data} 
+                    {#await getFetchData($alertStore.msg) then data}
                         {#if !data}
                             <span class="text-gray-300 text-lg mt-2">{language.errors.requestLogRemoved}</span>
                             <span class="text-gray-500">{language.errors.requestLogRemovedDesc}</span>
@@ -693,7 +694,7 @@
         </div>
     </div>
 
-{:else if $alertStore.type === 'cardexport'}
+{:else if alertDescriptor.surface === 'dialog' && $alertStore.type === 'cardexport'}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div  class="fixed top-0 left-0 h-full w-full bg-black/50 flex flex-col z-50 items-center justify-center" role="button" tabindex="0" onclick={close}>
         <div class="bg-darkbg rounded-md p-4 max-w-full flex flex-col w-2xl" role="button" tabindex="0" onclick={(e) => {
@@ -775,28 +776,28 @@
         </div>
     </div>
 
-{:else if $alertStore.type === 'toast'}
+{:else if alertDescriptor.surface === 'toast'}
     <AlertToast message={$alertStore.msg} />
-{:else if $alertStore.type === 'selectModule'}
+{:else if alertDescriptor.surface === 'dialog' && $alertStore.type === 'selectModule'}
     <ModuleChatMenu alertMode close={(d) => {
         alertStore.set({
             type: 'none',
             msg: d
         })
     }} />
-{:else if $alertStore.type === 'pukmakkurit'}
+{:else if alertDescriptor.surface === 'dialog' && $alertStore.type === 'pukmakkurit'}
     <!-- Log Generator by dootaang, GPL3 -->
     <!-- Svelte, Typescript version by Kwaroran -->
-    
+
     <div class="absolute w-full h-full z-50 bg-black/50 flex justify-center items-center">
         <div class="bg-darkbg p-4 break-any rounded-md flex flex-col max-w-3xl  max-h-full overflow-y-auto">
             <h2 class="text-green-700 mt-0 mb-2 w-40 max-w-full">{language.preview}</h2>
 
         </div>
     </div>
-{:else if $alertStore.type === 'branches'}
+{:else if alertDescriptor.surface === 'dialog' && $alertStore.type === 'branches'}
     <BranchesDialog />
-{:else if $alertStore.type === 'requestlogs'}
+{:else if alertDescriptor.surface === 'dialog' && $alertStore.type === 'requestlogs'}
     <RequestLogsDialog />
 {/if}
 
