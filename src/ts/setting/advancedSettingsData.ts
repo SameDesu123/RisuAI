@@ -4,7 +4,7 @@ import { isNodeServer, isTauri } from '../platform';
 
 export const advancedSettingsItems: SettingItem[] = [
     { type: 'header', id: 'adv.header', labelKey: 'advancedSettings', options: { level: 'h2' }, classes: '!mb-0' },
-    { type: 'header', id: 'adv.warn', labelKey: 'advancedSettingsWarn', options: { level: 'warning' } },
+    { type: 'alert', id: 'adv.warn', labelKey: 'advancedSettingsWarn', options: { severity: 'warning', titleKey: 'warning' } },
 
     // LoreBook Settings
     {

@@ -701,6 +701,7 @@ export const languageEnglish = {
     accept: "Accept",
     doNotAccept: "Do Not Accept",
     pluginImport: "Plugin Import",
+    warning: "Warning",
     goback: "Go Back",
     botSettings: "Bot Settings",
     model: "Model",

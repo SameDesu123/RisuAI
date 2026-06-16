@@ -568,6 +568,7 @@ export const languageKorean = {
     "accept": "동의",
     "doNotAccept": "동의하지 않음",
     "pluginImport": "플러그인 가져오기",
+    "warning": "경고",
     "goback": "뒤로",
     "botSettings": "봇 설정",
     "model": "모델",

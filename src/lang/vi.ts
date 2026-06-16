@@ -549,6 +549,7 @@ export const languageVietnamese = {
     "accept": "Chấp nhận",
     "doNotAccept": "Không chấp nhận",
     "pluginImport": "Nhập plugin",
+    "warning": "Cảnh báo",
     "goback": "Quay lại",
     "botSettings": "Cài đặt bot",
     "model": "Người mẫu",

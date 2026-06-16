@@ -569,6 +569,7 @@ export const languageChineseTraditional = {
     "accept": "接受",
     "doNotAccept": "不接受",
     "pluginImport": "匯入插件",
+    "warning": "警告",
     "goback": "返回",
     "botSettings": "機器人設定",
     "model": "模型",

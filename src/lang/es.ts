@@ -549,6 +549,7 @@ export const languageSpanish = {
     "accept": "Aceptar",
     "doNotAccept": "No aceptar",
     "pluginImport": "Importar plugin",
+    "warning": "Advertencia",
     "goback": "Volver",
     "botSettings": "Configuración del Bot",
     "model": "Modelo",
