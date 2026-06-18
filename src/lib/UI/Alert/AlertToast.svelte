@@ -6,16 +6,28 @@
     }
 
     let { message }: Props = $props();
-</script>
 
-<div
-    class="toast-anime absolute right-0 bottom-0 z-50 flex max-h-11/12 max-w-3xl flex-col overflow-y-auto rounded-md bg-darkbg p-4 text-textcolor break-any"
-    onanimationend={() => {
+    function closeToast() {
         alertStore.set({
             type: 'none',
             msg: '',
         });
-    }}
+    }
+
+    $effect(() => {
+        message;
+
+        const closeTimer = setTimeout(closeToast, 1200);
+
+        return () => {
+            clearTimeout(closeTimer);
+        };
+    });
+</script>
+
+<div
+    class="toast-anime absolute right-0 bottom-0 z-50 flex max-h-11/12 max-w-3xl flex-col overflow-y-auto rounded-md bg-darkbg p-4 text-textcolor break-any"
+    onanimationend={closeToast}
 >
     {message}
 </div>
