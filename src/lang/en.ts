@@ -777,6 +777,7 @@ export const languageEnglish = {
     plugin: "Plugin",
     language: "Language",
     UiLanguage: "UI Language",
+    languageSettingsApplyNotice: "Move to another page or close settings to apply.",
     createfromScratch: "Create from Scratch",
     importCharacter: "Import Character",
     translator: "Translator",

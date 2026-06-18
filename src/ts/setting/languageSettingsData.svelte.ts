@@ -2,7 +2,7 @@
  * Language Settings Data
  * 
  * Data-driven definition for LanguageSettings page.
- * Uses `.svelte.ts` extension to support reactive `langState` via Svelte 5 runes.
+ * Uses `.svelte.ts` extension to support reactive language change notice state via Svelte 5 runes.
  */
 
 import type { SettingItem } from './types';
@@ -81,9 +81,10 @@ export const languageSettingsItems: SettingItem[] = [
     },
 
     {
-        id: 'lang.restartWarn',
+        id: 'lang.applyNotice',
         type: 'header',
-        fallbackLabel: 'Close the settings to take effect',
+        labelKey: 'languageSettingsApplyNotice',
+        fallbackLabel: 'Move to another page or close settings to apply.',
         options: { level: 'span' },
         classes: 'bg-red-500 text-sm',
         condition: () => langState.changed,

@@ -625,6 +625,7 @@ export const languageSpanish = {
     "plugin": "Plugin",
     "language": "Idioma",
     "UiLanguage": "Idioma de la Interfaz",
+    "languageSettingsApplyNotice": "Cambia a otra página o cierra la configuración para aplicar el cambio.",
     "createfromScratch": "Crear desde Cero",
     "importCharacter": "Importar Personaje",
     "translator": "Traductor",

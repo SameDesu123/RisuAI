@@ -644,6 +644,7 @@ export const languageKorean = {
     "plugin": "플러그인",
     "language": "언어",
     "UiLanguage": "UI 언어",
+    "languageSettingsApplyNotice": "다른 페이지로 이동하거나 설정을 닫으면 적용됩니다.",
     "createfromScratch": "새 캐릭터 생성",
     "importCharacter": "캐릭터 임포트",
     "translator": "번역기",

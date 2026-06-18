@@ -643,6 +643,7 @@ export const languageChineseTraditional = {
     "plugin": "外掛",
     "language": "語言",
     "UiLanguage": "介面語言",
+    "languageSettingsApplyNotice": "切換到其他頁面或關閉設定後生效。",
     "createfromScratch": "從頭建立",
     "importCharacter": "匯入角色",
     "translator": "翻譯器",
