@@ -625,6 +625,7 @@ export const languageChinese = {
     "plugin": "插件",
     "language": "语言",
     "UiLanguage": "介面语言",
+    "languageSettingsApplyNotice": "切换到其他页面或关闭设置后生效。",
     "createfromScratch": "自行创建",
     "importCharacter": "导入角色",
     "translator": "翻译器",

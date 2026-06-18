@@ -625,6 +625,7 @@ export const languageVietnamese = {
     "plugin": "Cắm vào",
     "language": "Ngôn ngữ",
     "UiLanguage": "Ngôn ngữ giao diện người dùng",
+    "languageSettingsApplyNotice": "Chuyển sang trang khác hoặc đóng cài đặt để áp dụng.",
     "createfromScratch": "Tạo từ đầu",
     "importCharacter": "Nhập ký tự",
     "translator": "Người phiên dịch",

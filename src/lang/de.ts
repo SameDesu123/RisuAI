@@ -625,6 +625,7 @@ export const languageGerman = {
     "plugin": "Plugins",
     "language": "Sprache",
     "UiLanguage": "UI-Sprache",
+    "languageSettingsApplyNotice": "Wechseln Sie zu einer anderen Seite oder schließen Sie die Einstellungen, um die Änderung anzuwenden.",
     "createfromScratch": "Von Grund auf neu erstellen",
     "importCharacter": "Charakter importieren",
     "translator": "Übersetzer",
