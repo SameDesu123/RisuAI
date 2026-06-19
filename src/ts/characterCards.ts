@@ -67,7 +67,10 @@ export async function importCharacterProcess<T extends boolean = false>(f:{
         }
         if((da.char_name || da.name) && (da.char_persona || da.description) && (da.char_greeting || da.first_mes)){
             DBState.db.characters.push(convertOffSpecCards(da))
-            alertToast(language.importedCharacter, 'success')
+            alertToast(language.importedCharacter, 'success', {
+                kind: 'import',
+                source: 'character-card'
+            })
             return
         }
         else{
@@ -379,7 +382,10 @@ export async function importCharacterProcess<T extends boolean = false>(f:{
         const charaData:OldTavernChar = JSON.parse(Buffer.from(readedChara, 'base64').toString('utf-8'))
         const imgp = await saveAsset(img)
         DBState.db.characters.push(convertOffSpecCards(charaData, imgp))
-        alertToast(language.importedCharacter, 'success')
+        alertToast(language.importedCharacter, 'success', {
+            kind: 'import',
+            source: 'character-card'
+        })
         return DBState.db.characters.length - 1
     }
     await importCharacterCardSpec(parsed, img, "normal", assets)
@@ -471,7 +477,10 @@ export async function characterURLImport() {
             }
         }
         DBState.db.modules.push(importData)
-        alertToast(language.successImport, 'success')
+        alertToast(language.successImport, 'success', {
+            kind: 'import',
+            source: 'character-card'
+        })
         SettingsMenuIndex.set(14)
         settingsOpen.set(true)
         return
@@ -507,7 +516,10 @@ export async function characterURLImport() {
         const md = await readModule(Buffer.from(module))
         md.id = v4()
         DBState.db.modules.push(md)
-        alertToast(language.successImport, 'success')
+        alertToast(language.successImport, 'success', {
+            kind: 'import',
+            source: 'character-card'
+        })
         SettingsMenuIndex.set(14)
         settingsOpen.set(true)
     }
@@ -582,14 +594,20 @@ export async function characterURLImport() {
             })
             SettingsMenuIndex.set(1)
             settingsOpen.set(true)
-            alertToast(language.successImport, 'success')
+            alertToast(language.successImport, 'success', {
+                kind: 'import',
+                source: 'character-card'
+            })
             return
         }
         if(name.endsWith('risum')){
             const md = await readModule(Buffer.from(data))
             md.id = v4()
             DBState.db.modules.push(md)
-            alertToast(language.successImport, 'success')
+            alertToast(language.successImport, 'success', {
+                kind: 'import',
+                source: 'character-card'
+            })
             SettingsMenuIndex.set(14)
             settingsOpen.set(true)
             return
@@ -1028,7 +1046,10 @@ async function importCharacterCardSpec<T extends boolean = false>(card:Character
     }
 
     db.characters.push(char)
-    alertToast(language.importedCharacter, 'success')
+    alertToast(language.importedCharacter, 'success', {
+        kind: 'import',
+        source: 'character-card'
+    })
     return true as any
 
 }
@@ -1320,7 +1341,10 @@ export async function exportCharacterCard(char:character, type:'png'|'json'|'cha
             }
             if(type === 'json'){
                 await downloadFile(`${char.name.replace(/[<>:"/\\|?*\.\,]/g, "")}_export.json`, Buffer.from(JSON.stringify(card, null, 4), 'utf-8'))
-                alertToast(language.successExport, 'success')
+                alertToast(language.successExport, 'success', {
+                    kind: 'export',
+                    source: 'character-card'
+                })
                 return
             }
     
@@ -1476,7 +1500,10 @@ export async function exportCharacterCard(char:character, type:'png'|'json'|'cha
             }
             if(type === 'json'){
                 await downloadFile(`${char.name.replace(/[<>:"/\\|?*\.\,]/g, "")}_export.json`, Buffer.from(JSON.stringify(card, null, 4), 'utf-8'))
-                alertToast(language.successExport, 'success')
+                alertToast(language.successExport, 'success', {
+                    kind: 'export',
+                    source: 'character-card'
+                })
                 return
             }
 
@@ -1512,7 +1539,10 @@ export async function exportCharacterCard(char:character, type:'png'|'json'|'cha
         await sleep(10)
 
         if(!arg.writer){
-            alertToast(language.successExport, 'success')
+            alertToast(language.successExport, 'success', {
+                kind: 'export',
+                source: 'character-card'
+            })
         }
 
     }

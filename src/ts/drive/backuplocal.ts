@@ -205,7 +205,10 @@ export async function SaveLocalBackup(){
         }
         alertMd(message)
     } else {
-        alertToast('Success', 'success')
+        alertToast('Success', 'success', {
+            kind: 'backup',
+            source: 'local'
+        })
     }
 }
 
@@ -421,7 +424,10 @@ export async function SavePartialLocalBackup(){
         }
         alertMd(message)
     } else {
-        alertToast('Success', 'success')
+        alertToast('Success', 'success', {
+            kind: 'backup',
+            source: 'local'
+        })
     }
 }
 
@@ -573,7 +579,10 @@ export function LoadLocalBackup(){
                 remainingBuffer = remainingBuffer.slice(offset);
             }
 
-            alertToast('Success', 'success');
+            alertToast('Success', 'success', {
+                kind: 'backup',
+                source: 'local'
+            });
         };
 
         input.click();

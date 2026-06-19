@@ -754,7 +754,10 @@ export async function exportLoreBook(mode:'global'|'local'|'sglobal'){
 
         await downloadFile(`lorebook_export.json`, stringl)
 
-        alertToast(language.successExport, 'success')
+        alertToast(language.successExport, 'success', {
+            kind: 'export',
+            source: 'lorebook'
+        })
     } catch (error) {
         alertError(error)
     }

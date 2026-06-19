@@ -340,7 +340,10 @@ export async function exportChat(page:number){
             })
             await navigator.clipboard.write([item])
 
-            alertToast(language.clipboardSuccess, 'success')
+            alertToast(language.clipboardSuccess, 'success', {
+                kind: 'clipboard',
+                source: 'character'
+            })
             return
 
         }
@@ -362,7 +365,10 @@ export async function exportChat(page:number){
             await downloadFile(`${char.name}_${date}_chat`.replace(/[<>:"/\\|?*\.\,]/g, "") + '.txt', Buffer.from(stringl, 'utf-8'))
 
         }
-        alertToast(language.successExport, 'success')
+        alertToast(language.successExport, 'success', {
+            kind: 'export',
+            source: 'character'
+        })
     } catch (error) {
         alertError(error)
     }
@@ -415,7 +421,10 @@ export async function importChat(){
 
             DBState.db.characters[selectedID].chats.unshift(newChat)
             changeChatTo(0)
-            alertToast(language.successImport, 'success')
+            alertToast(language.successImport, 'success', {
+                kind: 'import',
+                source: 'character'
+            })
         }
         else if(dat.name.endsWith('json')){
             const json = JSON.parse(Buffer.from(dat.data).toString('utf-8'))
@@ -445,7 +454,10 @@ export async function importChat(){
                     chat.id = v4()
                 })
                 DBState.db.characters[selectedID].chats.unshift(...chats)
-                alertToast(language.successImport, 'success')
+                alertToast(language.successImport, 'success', {
+                    kind: 'import',
+                    source: 'character'
+                })
                 return
             }
             if(json.type === 'risuAllChats' && json.ver === 1){
@@ -461,7 +473,10 @@ export async function importChat(){
                         v.fmIndex ??= -1
                         return v
                     })))
-                    alertToast(language.successImport, 'success')
+                    alertToast(language.successImport, 'success', {
+                        kind: 'import',
+                        source: 'character'
+                    })
                     return
                 } else {
                     alertError(language.errors.noData)
@@ -474,7 +489,10 @@ export async function importChat(){
                     das.fmIndex ??= -1
                     das.id = v4()
                     DBState.db.characters[selectedID].chats.unshift(das)
-                    alertToast(language.successImport, 'success')
+                    alertToast(language.successImport, 'success', {
+                        kind: 'import',
+                        source: 'character'
+                    })
                     return
                 }
                 else{
@@ -493,7 +511,10 @@ export async function importChat(){
             const json = JSON.parse(chat)
             if(json.message && json.note && json.name && json.localLore){
                 DBState.db.characters[selectedID].chats.unshift(json)
-                alertToast(language.successImport, 'success')
+                alertToast(language.successImport, 'success', {
+                    kind: 'import',
+                    source: 'character'
+                })
             }
             else{
                 alertError(language.errors.noData)
@@ -519,7 +540,10 @@ export async function exportAllChats() {
             folders: allFolders
         }), 'utf-8')
         await downloadFile(`${char.name}_all_chats_${date}`.replace(/[<>:"/\\|?*.,]/g, "") + '.json', stringl)
-        alertToast(language.successExport, 'success')
+        alertToast(language.successExport, 'success', {
+            kind: 'export',
+            source: 'character'
+        })
     } catch (error) {
         alertError(error)
     }

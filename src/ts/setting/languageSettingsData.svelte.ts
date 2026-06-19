@@ -287,7 +287,10 @@ export const languageSettingsItems: SettingItem[] = [
                     }
                     const json = JSON.stringify(cache, null, 2);
                     await downloadFile('translation_cache.json', new TextEncoder().encode(json));
-                    alertToast(language.exportTranslationCacheSuccess, 'success');
+                    alertToast(language.exportTranslationCacheSuccess, 'success', {
+                        kind: 'export',
+                        source: 'translation-cache'
+                    });
                 } catch (e: any) {
                     alertError(e.message);
                 }
@@ -359,7 +362,10 @@ export const languageSettingsItems: SettingItem[] = [
                     if (!confirmed) return;
                     alertWait(language.loading);
                     await clearLLMCache();
-                    alertToast(language.clearTranslationCacheSuccess, 'success');
+                    alertToast(language.clearTranslationCacheSuccess, 'success', {
+                        kind: 'settings',
+                        source: 'translation-cache'
+                    });
                 } catch (e: any) {
                     alertError(e.message);
                 }

@@ -62,7 +62,10 @@ export async function autoServerBackup(){
                     if(res.status === 200){
                         setDatabase(await res.json())
                         requiresFullEncoderReload.state = true
-                        alertToast("Successfully restored!", 'success')
+                        alertToast("Successfully restored!", 'success', {
+                            kind: 'backup',
+                            source: 'kei'
+                        })
                     }
                     else{
                         alertNormal("Error: " + res.text())
