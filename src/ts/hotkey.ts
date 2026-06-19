@@ -239,7 +239,7 @@ export function initHotkey(){
         }
         if(ev.key === 'Escape'){
             if(doingAlert()){
-                alertToast('Alert Closed')
+                alertToast('Alert Closed', 'success')
             }
             if(get(settingsOpen)){
                 settingsOpen.set(false)
@@ -414,7 +414,7 @@ function changeToPreset(num:number){
         let db = getDatabase()
         let pres = db.botPresets
         if(pres.length > num){
-            alertToast(`Changed to Preset: ${pres[num].name}`)
+            alertToast(`Changed to Preset: ${pres[num].name}`, 'success')
             changeToPreset2(num)
         }
     }

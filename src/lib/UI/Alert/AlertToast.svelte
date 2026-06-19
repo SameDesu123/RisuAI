@@ -9,17 +9,16 @@
 
     interface Props {
         message: string;
+        severity: AlertSeverity;
         refreshKey: unknown;
     }
 
-    let { message, refreshKey }: Props = $props();
+    let { message, severity, refreshKey }: Props = $props();
     let entered = $state(false);
     let dismissing = $state(false);
     let enterFrame: ReturnType<typeof requestAnimationFrame> | undefined;
     let visibleTimer: ReturnType<typeof setTimeout> | undefined;
     let dismissTimer: ReturnType<typeof setTimeout> | undefined;
-
-    const severity = $derived(detectSeverity(message));
 
     const severityConfig: Record<AlertSeverity, {
         iconColor: string;
@@ -63,48 +62,6 @@
     const toastFontSize = $derived(`${0.875 * ((DBState.db.zoomsize ?? 100) / 100)}rem`);
     const toastPosition = $derived(DBState.db.toastPosition === 'topRight' ? 'topRight' : 'topCenter');
     const toastPositionClass = $derived(toastPosition === 'topRight' ? 'position-top-right' : 'position-top-center');
-
-    function detectSeverity(msg: string): AlertSeverity {
-        const lower = msg.toLowerCase().trim();
-
-        const warningMarkers = [
-            'cannot ',
-            'cannot\n',
-            'error',
-            'fail',
-            'not found',
-            'unable to',
-            'invalid',
-            'missing',
-            'warn',
-        ];
-        if (warningMarkers.some((m) => lower.includes(m))) {
-            return 'warning';
-        }
-
-        const successMarkers = [
-            'saved',
-            'copied',
-            'complete',
-            'completed',
-            'success',
-            'done',
-            'applied',
-            'exported',
-            'imported',
-            'created',
-            'changed to ',
-            'changed',
-            'closed',
-            'cleared',
-            'reset',
-        ];
-        if (successMarkers.some((m) => lower.includes(m))) {
-            return 'success';
-        }
-
-        return 'info';
-    }
 
     function clearToastTimers() {
         if (enterFrame !== undefined) {
