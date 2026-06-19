@@ -1,6 +1,6 @@
 import { getDatabase, saveImage, setDatabase } from "./storage/database.svelte"
 import { selectSingleFile, sleep } from "./util"
-import { alertError, alertNormal, alertStore } from "./alert"
+import { alertError, alertToast, alertStore } from "./alert"
 import { AppendableBuffer, downloadFile, readImage } from "./globalApi.svelte"
 import { language } from "src/lang"
 import { reencodeImage } from "./process/files/inlays"
@@ -98,7 +98,7 @@ export async function exportUserPersona() {
     await sleep(10)
     await downloadFile(`${db.username.replace(/[<>:"/\\|?*\.\,]/g, "")}_export.png`, img)
 
-    alertNormal(language.successExport)
+    alertToast(language.successExport, 'success')
 }
 
 export async function importUserPersona() {
@@ -130,7 +130,7 @@ export async function importUserPersona() {
                 note: data.note,
                 id: v4()
             })
-            alertNormal(language.successImport)
+            alertToast(language.successImport, 'success')
         } else {
             alertError(language.errors.noData)
         }

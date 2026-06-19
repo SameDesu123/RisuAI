@@ -1,4 +1,4 @@
-import { alertNormal, alertSelect } from "../alert"
+import { alertNormal, alertSelect, alertToast } from "../alert"
 import { keiServerURL } from "./kei"
 import { getDatabase, setDatabase } from "../storage/database.svelte"
 import { requiresFullEncoderReload } from "../globalApi.svelte"
@@ -62,7 +62,7 @@ export async function autoServerBackup(){
                     if(res.status === 200){
                         setDatabase(await res.json())
                         requiresFullEncoderReload.state = true
-                        alertNormal("Successfully restored!")
+                        alertToast("Successfully restored!", 'success')
                     }
                     else{
                         alertNormal("Error: " + res.text())
