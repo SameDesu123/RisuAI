@@ -159,7 +159,11 @@
               .sort((a, b) => a.name.localeCompare(b.model_id));
 
             wavespeedModels = filteredModels;
-            alertToast(`Successfully loaded ${filteredModels.length} models`, 'success');
+            alertToast(`Successfully loaded ${filteredModels.length} models`, 'success', {
+                kind: 'model',
+                source: 'wavespeed',
+                aggregate: false
+            });
         } catch (error) {
             alertError(`Failed to fetch models: ${error}`);
         } finally {
@@ -1135,7 +1139,10 @@
                         }), 'utf-8')
                         
                         await downloadFile(`hypaV3_export_${preset.name}.json`, bytesExport)
-                        alertToast(language.successExport, 'success')
+                        alertToast(language.successExport, 'success', {
+                            kind: 'export',
+                            source: 'bot-settings'
+                        })
                     } catch (error) {
                         alertError(`${error}`)
                     }
@@ -1163,7 +1170,10 @@
                         DBState.db.hypaV3Presets = presets
                         DBState.db.hypaV3PresetId = DBState.db.hypaV3Presets.length - 1
 
-                        alertToast(language.successImport, 'success')
+                        alertToast(language.successImport, 'success', {
+                            kind: 'import',
+                            source: 'bot-settings'
+                        })
                     } catch (error) {
                         alertError(`${error}`)
                     }

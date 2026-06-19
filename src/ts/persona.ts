@@ -98,7 +98,10 @@ export async function exportUserPersona() {
     await sleep(10)
     await downloadFile(`${db.username.replace(/[<>:"/\\|?*\.\,]/g, "")}_export.png`, img)
 
-    alertToast(language.successExport, 'success')
+    alertToast(language.successExport, 'success', {
+        kind: 'export',
+        source: 'persona'
+    })
 }
 
 export async function importUserPersona() {
@@ -130,7 +133,10 @@ export async function importUserPersona() {
                 note: data.note,
                 id: v4()
             })
-            alertToast(language.successImport, 'success')
+            alertToast(language.successImport, 'success', {
+                kind: 'import',
+                source: 'persona'
+            })
         } else {
             alertError(language.errors.noData)
         }

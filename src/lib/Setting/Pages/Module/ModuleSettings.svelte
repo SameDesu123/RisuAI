@@ -65,7 +65,10 @@
                                 const module = DBState.db.modules.find((v) => v.id === rmodule.id)
                                 const char = convertModuleToCharacter(module)
                                 DBState.db.characters.push(char)
-                                alertToast(language.successfullyConverted, 'success')
+                                alertToast(language.successfullyConverted, 'success', {
+                                    kind: 'settings',
+                                    source: 'module-settings'
+                                })
                                 checkCharOrder()
                             }}>
                                 <UserIcon size={18}/>

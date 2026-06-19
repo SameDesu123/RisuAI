@@ -90,7 +90,10 @@
 
             await downloadFile(`lorebook_export.json`, stringl)
 
-            alertToast(language.successExport, 'success')
+            alertToast(language.successExport, 'success', {
+                kind: 'export',
+                source: 'module-menu'
+            })
         } catch (error) {
             alertError(`${error}`)
         }

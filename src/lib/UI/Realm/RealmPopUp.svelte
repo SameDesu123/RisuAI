@@ -116,7 +116,10 @@
             <button class="text-textcolor2 hover:text-green-500" onclick={(async (e) => {
                 e.stopPropagation()
                 await navigator.clipboard.writeText(`https://realm.risuai.net/character/${openedData.id}`)
-                alertToast(language.clipboardSuccess, 'success')
+                alertToast(language.clipboardSuccess, 'success', {
+                    kind: 'clipboard',
+                    source: 'realm'
+                })
             })}>
                 <PaperclipIcon />
             </button>

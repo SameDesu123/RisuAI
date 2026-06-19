@@ -67,7 +67,10 @@ Show Statistics
         const json = JSON.stringify(db, null, 2)
         await downloadFile('risuai-settings-report.json', new TextEncoder().encode(json))
         await navigator.clipboard.writeText(json)
-        alertToast(language.settingsExported, 'success')
+        alertToast(language.settingsExported, 'success', {
+            kind: 'settings',
+            source: 'advanced'
+        })
         
 
     }}

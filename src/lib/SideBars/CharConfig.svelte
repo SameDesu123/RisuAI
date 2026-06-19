@@ -1268,7 +1268,10 @@
                 }
                 const m = convertCharacterToModule(char)
                 DBState.db.modules.push(m)
-                alertToast(language.successfullyConverted, 'success')
+                alertToast(language.successfullyConverted, 'success', {
+                    kind: 'settings',
+                    source: 'character-config'
+                })
             }}
             className="mt-4"
         >

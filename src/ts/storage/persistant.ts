@@ -50,7 +50,10 @@ export async function persistantStorageRecommended() {
 export async function requestPersistantStorage() {
     const status = await requestPersistantStorageMain();
     if(status) {
-        alertToast(language.persistentStorageSuccess, 'success')
+        alertToast(language.persistentStorageSuccess, 'success', {
+            kind: 'storage',
+            source: 'persistent-storage'
+        })
     } else {
         alertNormal(language.persistentStorageFail)
     }

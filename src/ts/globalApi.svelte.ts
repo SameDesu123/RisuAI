@@ -2078,7 +2078,10 @@ export async function loadInternalBackup() {
         await decodeRisuSave(Buffer.from(data) as unknown as Uint8Array)
     )
 
-    alertToast('Loaded backup', 'success')
+    alertToast('Loaded backup', 'success', {
+        kind: 'backup',
+        source: 'global-api'
+    })
 
 
 

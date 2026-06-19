@@ -54,7 +54,10 @@ export async function exportModule(module:RisuModule, arg:{
         writer
     })
     if(alertEnd){
-        alertToast(language.successExport, 'success')
+        alertToast(language.successExport, 'success', {
+            kind: 'export',
+            source: 'module'
+        })
     }
 }
 
@@ -116,7 +119,10 @@ export async function exportModuleLegacy(module:RisuModule, arg:{
         await downloadFile(module.name + '.risum', apb.buffer)
     }
     if(alertEnd){
-        alertToast(language.successExport, 'success')
+        alertToast(language.successExport, 'success', {
+            kind: 'export',
+            source: 'module'
+        })
     }
 
     return apb.buffer
@@ -277,7 +283,10 @@ export async function importModule(){
             console.error(error)
             alertError(language.errors.noData)
         }
-        alertToast(language.successImport, 'success')
+        alertToast(language.successImport, 'success', {
+            kind: 'import',
+            source: 'module'
+        })
         return
     }
     if(f.name.endsWith('.risum')){
@@ -544,7 +553,10 @@ export async function applyModule() {
 
     setCurrentCharacter(currentChar)
 
-    alertToast(language.successApplyModule, 'success')
+    alertToast(language.successApplyModule, 'success', {
+        kind: 'settings',
+        source: 'module'
+    })
 }
 
 let lastModuleIds:string = ''
