@@ -1,6 +1,6 @@
 import { get, writable } from "svelte/store";
 import { saveImage, type character, type Chat, defaultSdDataFunc, type loreBook, getDatabase, getCharacterByIndex, setCharacterByIndex } from "./storage/database.svelte";
-import { alertAddCharacter, alertConfirm, alertError, alertToast, alertSelect, alertStore, alertWait } from "./alert";
+import { alertAddCharacter, alertClear, alertConfirm, alertError, alertToast, alertSelect, alertStore, alertWait } from "./alert";
 import { language } from "../lang";
 import { checkNullish, findCharacterbyId, getUserName, selectMultipleFile, selectSingleFile } from "./util";
 import { v4 as uuidv4, v4 } from 'uuid';
@@ -340,6 +340,7 @@ export async function exportChat(page:number){
             })
             await navigator.clipboard.write([item])
 
+            alertClear()
             alertToast(language.clipboardSuccess, 'success', {
                 kind: 'clipboard',
                 source: 'character'
@@ -365,6 +366,7 @@ export async function exportChat(page:number){
             await downloadFile(`${char.name}_${date}_chat`.replace(/[<>:"/\\|?*\.\,]/g, "") + '.txt', Buffer.from(stringl, 'utf-8'))
 
         }
+        alertClear()
         alertToast(language.successExport, 'success', {
             kind: 'export',
             source: 'character'
