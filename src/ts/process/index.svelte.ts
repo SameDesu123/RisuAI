@@ -196,7 +196,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         })
 
         if(findId === -1){
-            alertToast(`Cannot find preset: ${ele}`)
+            alertToast(`Cannot find preset: ${ele}`, 'warning')
         }
         else{
             changeToPreset(findId, true)
