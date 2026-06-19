@@ -135,7 +135,10 @@ export async function loadRisuAccountBackup() {
             await decodeRisuSave(buf.buffer)
         )
     
-        alertToast('Loaded backup', 'success')
+        alertToast('Loaded backup', 'success', {
+            kind: 'backup',
+            source: 'account'
+        })
     }
 
 }

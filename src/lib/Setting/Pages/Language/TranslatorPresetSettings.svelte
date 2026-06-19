@@ -123,7 +123,10 @@
                     getTranslatorPresetDownloadName(preset.name),
                     await encodeTranslatorPresetFile(preset)
                 );
-                alertToast(language.successExport, 'success');
+                alertToast(language.successExport, 'success', {
+                    kind: 'export',
+                    source: 'translator-preset'
+                });
             } catch (error) {
                 alertError(`${error}`);
             }
@@ -148,7 +151,10 @@
                 DBState.db.translatorPresetId = DBState.db.translatorPresets.length - 1;
                 normalizeTranslatorPresets();
 
-                alertToast(language.successImport, 'success');
+                alertToast(language.successImport, 'success', {
+                    kind: 'import',
+                    source: 'translator-preset'
+                });
             } catch (error) {
                 alertError(`${error}`);
             }

@@ -277,7 +277,10 @@
                                             const confirm = await alertConfirm(language.doYouWantToUnbindCurrentPersona)
                                             if(confirm){
                                                 chat.bindedPersona = ''
-                                                alertToast(language.personaUnbindedSuccess, 'success')
+                                                alertToast(language.personaUnbindedSuccess, 'success', {
+                                                    kind: 'settings',
+                                                    source: 'persona-binding'
+                                                })
                                             }
                                         }
                                         else{
@@ -288,7 +291,10 @@
                                                 }
                                                 chat.bindedPersona = DBState.db.personas[DBState.db.selectedPersona].id
                                                 console.log(DBState.db.personas[DBState.db.selectedPersona])
-                                                alertToast(language.personaBindedSuccess, 'success')
+                                                alertToast(language.personaBindedSuccess, 'success', {
+                                                    kind: 'settings',
+                                                    source: 'persona-binding'
+                                                })
                                             }
                                         }
                                         break
@@ -389,7 +395,10 @@
                                     const confirm = await alertConfirm(language.doYouWantToUnbindCurrentPersona)
                                     if(confirm){
                                         chat.bindedPersona = ''
-                                        alertToast(language.personaUnbindedSuccess, 'success')
+                                        alertToast(language.personaUnbindedSuccess, 'success', {
+                                            kind: 'settings',
+                                            source: 'persona-binding'
+                                        })
                                     }
                                 }
                                 else{
@@ -400,7 +409,10 @@
                                         }
                                         chat.bindedPersona = DBState.db.personas[DBState.db.selectedPersona].id
                                         console.log(DBState.db.personas[DBState.db.selectedPersona])
-                                        alertToast(language.personaBindedSuccess, 'success')
+                                        alertToast(language.personaBindedSuccess, 'success', {
+                                            kind: 'settings',
+                                            source: 'persona-binding'
+                                        })
                                     }
                                 }
                                 break

@@ -174,7 +174,10 @@ async function backupDrive(ACCESS_TOKEN:string) {
     await createFileInFolder(ACCESS_TOKEN, `${(Date.now() / 1000).toFixed(0)}-database.risudat`, dbData)
 
 
-    alertToast('Success', 'success')
+    alertToast('Success', 'success', {
+        kind: 'backup',
+        source: 'drive'
+    })
 }
 
 type DriveFile = {

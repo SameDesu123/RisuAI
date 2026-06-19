@@ -2311,7 +2311,10 @@ export async function downloadPreset(id:number, type:'json'|'risupreset'|'return
 
     }
 
-    alertToast(language.successExport, 'success')
+    alertToast(language.successExport, 'success', {
+        kind: 'export',
+        source: 'database'
+    })
 
 
     return {
