@@ -575,6 +575,7 @@ export function setDatabase(data:Database){
     data.enableCustomFlags ??= false
     data.assetMaxDifference ??= 4
     data.showSavingIcon ??= false
+    data.toastPosition = data.toastPosition === 'topRight' ? 'topRight' : 'topCenter'
     data.banCharacterset ??= []
     data.showPromptComparison ??= false
     data.OaiCompAPIKeys ??= {}
@@ -719,6 +720,8 @@ export function getDatabase(options:getDatabaseOptions = {}):Database{
     }
     return DBState.db as Database
 }
+
+export type ToastPosition = 'topCenter' | 'topRight'
 
 export function getCurrentCharacter(options:getDatabaseOptions = {}):character|groupChat{
     const db = getDatabase(options)
@@ -952,6 +955,7 @@ export interface Database{
     mancerHeader:string
     emotionProcesser:'submodel'|'embedding',
     showMenuChatList?:boolean,
+    toastPosition: ToastPosition,
     translatorType:'google'|'deepl'|'none'|'llm'|'deeplX'|'bergamot',
     translatorInputLanguage?:string
     htmlTranslation?:boolean,
