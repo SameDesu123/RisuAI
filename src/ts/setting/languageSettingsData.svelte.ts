@@ -10,7 +10,7 @@ import { isTauri } from '../platform';
 import { changeLanguage, language } from 'src/lang';
 import { languageEnglish } from 'src/lang/en';
 import { sleep } from '../util';
-import { alertNormal, alertSelect, alertConfirm, alertError, alertWait, alertToast } from '../alert';
+import { alertClear, alertNormal, alertSelect, alertConfirm, alertError, alertWait, alertToast } from '../alert';
 import { downloadFile } from '../globalApi.svelte';
 import { selectFileByDom } from '../util';
 import { exportLLMCacheAsJSON, importLLMCacheFromJSON, clearLLMCache } from '../translator/translator';
@@ -287,6 +287,7 @@ export const languageSettingsItems: SettingItem[] = [
                     }
                     const json = JSON.stringify(cache, null, 2);
                     await downloadFile('translation_cache.json', new TextEncoder().encode(json));
+                    alertClear();
                     alertToast(language.exportTranslationCacheSuccess, 'success', {
                         kind: 'export',
                         source: 'translation-cache'
@@ -362,6 +363,7 @@ export const languageSettingsItems: SettingItem[] = [
                     if (!confirmed) return;
                     alertWait(language.loading);
                     await clearLLMCache();
+                    alertClear();
                     alertToast(language.clearTranslationCacheSuccess, 'success', {
                         kind: 'settings',
                         source: 'translation-cache'
