@@ -4,7 +4,7 @@ import { language } from "../lang"
 import { isTauri, isNodeServer } from "src/ts/platform"
 import { getDatabase, type MessageGenerationInfo } from "./storage/database.svelte"
 import { alertStore as alertStoreImported } from "./stores.svelte"
-import type { LegacyAlertType } from "./alertModel"
+import type { AlertSeverity, LegacyAlertType } from "./alertModel"
 
 export interface alertData{
     type: LegacyAlertType,
@@ -13,6 +13,7 @@ export interface alertData{
     datalist?: [string, string][],
     stackTrace?: string;
     defaultValue?: string
+    severity?: AlertSeverity
 }
 
 type AlertGenerationInfoStoreData = {
@@ -156,10 +157,11 @@ export function doingAlert(){
     return get(alertStoreImported).type !== 'none' && get(alertStoreImported).type !== 'toast' && get(alertStoreImported).type !== 'wait'
 }
 
-export function alertToast(msg:string){
+export function alertToast(msg:string, severity: AlertSeverity = 'info'){
     alertStoreImported.set({
         'type': 'toast',
-        'msg': msg
+        'msg': msg,
+        'severity': severity
     })
 }
 
