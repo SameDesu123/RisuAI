@@ -27,6 +27,7 @@
     import AlertToast from "./AlertToast.svelte";
     import BranchesDialog from "./BranchesDialog.svelte";
     import RequestLogsDialog from "./RequestLogsDialog.svelte";
+    import { dismissActiveToast, toastQueueStore } from "src/ts/toastQueue";
 
     let showDetails = $state(false);
     let translatedStackTrace = $state('');
@@ -777,7 +778,12 @@
     </div>
 
 {:else if alertDescriptor.surface === 'toast'}
-    <AlertToast message={$alertStore.msg} severity={$alertStore.severity ?? alertDescriptor.severity} refreshKey={$alertStore} />
+    <AlertToast
+        message={$alertStore.msg}
+        severity={$alertStore.severity ?? alertDescriptor.severity}
+        refreshKey={$alertStore}
+        onDone={() => alertStore.set({ type: 'none', msg: '' })}
+    />
 {:else if alertDescriptor.surface === 'dialog' && $alertStore.type === 'selectModule'}
     <ModuleChatMenu alertMode close={(d) => {
         alertStore.set({
@@ -799,6 +805,16 @@
     <BranchesDialog />
 {:else if alertDescriptor.surface === 'dialog' && $alertStore.type === 'requestlogs'}
     <RequestLogsDialog />
+{/if}
+
+{#if $toastQueueStore.active}
+    <AlertToast
+        message={$toastQueueStore.active.message}
+        severity={$toastQueueStore.active.severity}
+        count={$toastQueueStore.active.count}
+        refreshKey={$toastQueueStore.active.refreshKey}
+        onDone={() => dismissActiveToast($toastQueueStore.active?.id ?? -1)}
+    />
 {/if}
 
 <style>

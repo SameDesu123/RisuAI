@@ -2,6 +2,49 @@ export type AlertSeverity = 'info' | 'success' | 'warning' | 'error' | 'neutral'
 
 export type AlertSurface = 'modal' | 'toast' | 'inline' | 'dialog';
 
+export type ToastKind =
+    | 'export'
+    | 'import'
+    | 'clipboard'
+    | 'backup'
+    | 'settings'
+    | 'model'
+    | 'preset'
+    | 'storage'
+    | 'request'
+    | 'ui';
+
+export type ToastFailureClass =
+    | 'auth'
+    | 'rateLimit'
+    | 'network'
+    | 'provider'
+    | 'validation'
+    | 'unknown';
+
+export interface ToastOptions {
+    kind?: ToastKind;
+    failureClass?: ToastFailureClass;
+    status?: number;
+    provider?: string;
+    model?: string;
+    source?: string;
+    dedupeKey?: string;
+    aggregate?: boolean;
+}
+
+export interface ToastQueueItem {
+    id: number;
+    message: string;
+    severity: AlertSeverity;
+    dedupeKey: string;
+    aggregate: boolean;
+    count: number;
+    refreshKey: number;
+    createdAt: number;
+    updatedAt: number;
+}
+
 export type LegacyAlertType =
     | 'error'
     | 'normal'

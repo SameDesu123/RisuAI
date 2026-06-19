@@ -1,6 +1,6 @@
 <script lang="ts">
     import { CheckIcon } from '@lucide/svelte';
-    import { alertStore, DBState } from 'src/ts/stores.svelte';
+    import { DBState } from 'src/ts/stores.svelte';
     import type { AlertSeverity } from 'src/ts/alertModel';
     import AlertSeverityIcon from './AlertSeverityIcon.svelte';
 
@@ -10,13 +10,15 @@
     interface Props {
         message: string;
         severity: AlertSeverity;
+        count?: number;
         refreshKey: unknown;
+        onDone: () => void;
     }
 
-    let { message, severity, refreshKey }: Props = $props();
+    let { message, severity, count = 1, refreshKey, onDone }: Props = $props();
     let entered = $state(false);
     let dismissing = $state(false);
-    let enterFrame: ReturnType<typeof requestAnimationFrame> | undefined;
+    let enterTimer: ReturnType<typeof setTimeout> | undefined;
     let visibleTimer: ReturnType<typeof setTimeout> | undefined;
     let dismissTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -64,9 +66,9 @@
     const toastPositionClass = $derived(toastPosition === 'topRight' ? 'position-top-right' : 'position-top-center');
 
     function clearToastTimers() {
-        if (enterFrame !== undefined) {
-            cancelAnimationFrame(enterFrame);
-            enterFrame = undefined;
+        if (enterTimer) {
+            clearTimeout(enterTimer);
+            enterTimer = undefined;
         }
 
         if (visibleTimer) {
@@ -82,10 +84,7 @@
 
     function closeToast() {
         clearToastTimers();
-        alertStore.set({
-            type: 'none',
-            msg: '',
-        });
+        onDone();
     }
 
     function startToastCountdown() {
@@ -93,10 +92,10 @@
         entered = false;
         dismissing = false;
 
-        enterFrame = requestAnimationFrame(() => {
+        enterTimer = setTimeout(() => {
             entered = true;
-            enterFrame = undefined;
-        });
+            enterTimer = undefined;
+        }, 0);
 
         visibleTimer = setTimeout(() => {
             dismissing = true;
@@ -134,6 +133,9 @@
         {/if}
     </span>
     <span class="toast-msg">{message}</span>
+    {#if count > 1}
+        <span class="toast-count" aria-label={`${count} notifications`}>{count > 9 ? '9+' : count}</span>
+    {/if}
 </div>
 
 <style>
@@ -216,5 +218,21 @@
         min-width: 0;
         text-align: left;
         white-space: pre-wrap;
+    }
+
+    .toast-count {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.7em;
+        height: 1.7em;
+        padding: 0 0.48em;
+        border-radius: 9999px;
+        background: color-mix(in srgb, var(--toast-accent) 28%, var(--risu-theme-darkbutton, rgb(40 40 40)));
+        color: var(--risu-theme-textcolor, #e5e5e5);
+        font-size: 0.78em;
+        font-weight: 700;
+        line-height: 1;
     }
 </style>
