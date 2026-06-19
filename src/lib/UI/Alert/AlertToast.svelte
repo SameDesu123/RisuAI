@@ -13,7 +13,9 @@
     }
 
     let { message, refreshKey }: Props = $props();
+    let entered = $state(false);
     let dismissing = $state(false);
+    let enterFrame: ReturnType<typeof requestAnimationFrame> | undefined;
     let visibleTimer: ReturnType<typeof setTimeout> | undefined;
     let dismissTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -59,6 +61,8 @@
 
     const config = $derived(severityConfig[severity]);
     const toastFontSize = $derived(`${0.875 * ((DBState.db.zoomsize ?? 100) / 100)}rem`);
+    const toastPosition = $derived(DBState.db.toastPosition === 'topRight' ? 'topRight' : 'topCenter');
+    const toastPositionClass = $derived(toastPosition === 'topRight' ? 'position-top-right' : 'position-top-center');
 
     function detectSeverity(msg: string): AlertSeverity {
         const lower = msg.toLowerCase().trim();
@@ -103,6 +107,11 @@
     }
 
     function clearToastTimers() {
+        if (enterFrame !== undefined) {
+            cancelAnimationFrame(enterFrame);
+            enterFrame = undefined;
+        }
+
         if (visibleTimer) {
             clearTimeout(visibleTimer);
             visibleTimer = undefined;
@@ -124,7 +133,13 @@
 
     function startToastCountdown() {
         clearToastTimers();
+        entered = false;
         dismissing = false;
+
+        enterFrame = requestAnimationFrame(() => {
+            entered = true;
+            enterFrame = undefined;
+        });
 
         visibleTimer = setTimeout(() => {
             dismissing = true;
@@ -143,8 +158,9 @@
 </script>
 
 <div
+    class:entered
     class:dismissing
-    class="toast-shell fixed left-1/2 top-4 z-50 flex items-center gap-3 overflow-y-auto break-any"
+    class="toast-shell {toastPositionClass} fixed top-4 z-50 flex items-center gap-3 overflow-y-auto break-any"
     style:--toast-icon-color={config.iconColor}
     style:--toast-chip-bg={config.chipBg}
     style:--toast-accent={config.accent}
@@ -169,28 +185,18 @@
         overflow-wrap: anywhere;
     }
 
-    @keyframes toast-enter {
-        from {
-            opacity: 0;
-            transform: translate(-50%, -130%) scale(0.96);
-        }
-
-        to {
-            opacity: 1;
-            transform: translate(-50%, 0) scale(1);
-        }
+    .position-top-center {
+        left: 50%;
+        --toast-enter-transform: translate(-50%, -130%) scale(0.96);
+        --toast-visible-transform: translate(-50%, 0) scale(1);
+        transform-origin: top center;
     }
 
-    @keyframes toast-exit {
-        from {
-            opacity: 1;
-            transform: translate(-50%, 0) scale(1);
-        }
-
-        to {
-            opacity: 0;
-            transform: translate(-50%, -130%) scale(0.96);
-        }
+    .position-top-right {
+        right: 1rem;
+        --toast-enter-transform: translate(0, -130%) scale(0.96);
+        --toast-visible-transform: translate(0, 0) scale(1);
+        transform-origin: top right;
     }
 
     .toast-shell {
@@ -206,18 +212,28 @@
         font-size: var(--toast-font-size, 0.875rem);
         line-height: 1.35;
         backdrop-filter: blur(10px);
+        opacity: 0;
+        transform: var(--toast-enter-transform);
         box-shadow:
             0 10px 30px -8px rgb(0 0 0 / 0.55),
             0 0 0 1px color-mix(in srgb, var(--toast-accent) 25%, transparent),
             0 0 22px -6px var(--toast-glow);
-        transform-origin: top center;
-        animation: toast-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        transition:
+            opacity 180ms cubic-bezier(0.16, 1, 0.3, 1),
+            transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
         will-change: transform, opacity;
+    }
+
+    .toast-shell.entered {
+        opacity: 1;
+        transform: var(--toast-visible-transform);
     }
 
     .toast-shell.dismissing {
         pointer-events: none;
-        animation: toast-exit 180ms ease-in forwards;
+        opacity: 0;
+        transform: var(--toast-enter-transform);
+        transition-timing-function: ease-in;
     }
 
     .toast-chip {
