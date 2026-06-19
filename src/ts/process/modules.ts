@@ -54,6 +54,7 @@ export async function exportModule(module:RisuModule, arg:{
         writer
     })
     if(alertEnd){
+        alertClear()
         alertToast(language.successExport, 'success', {
             kind: 'export',
             source: 'module'
@@ -119,6 +120,7 @@ export async function exportModuleLegacy(module:RisuModule, arg:{
         await downloadFile(module.name + '.risum', apb.buffer)
     }
     if(alertEnd){
+        alertClear()
         alertToast(language.successExport, 'success', {
             kind: 'export',
             source: 'module'
