@@ -67,17 +67,24 @@ export let previewBody:string = ''
 const RESPONSE_TOKEN_COUNTER_THROTTLE_MS = 500;
 const RESPONSE_TOKEN_COUNTER_FINAL_VISIBLE_MS = 10000;
 
-function formatResponseTokenValue(tokens: number) {
-    return `${tokens.toLocaleString()} ${language.tokens}`;
+function formatTokenCount(label: string, tokens: number) {
+    return `${label} ${tokens.toLocaleString()} ${language.tokens}`;
 }
 
-function createResponseTokenCounter(enabled: boolean, key: string, showInitial = true) {
+function formatResponseTokenValue(inputTokens: number, outputTokens: number) {
+    return [
+        formatTokenCount(language.input, inputTokens),
+        formatTokenCount(language.output, outputTokens),
+    ].join(' | ');
+}
+
+function createResponseTokenCounter(enabled: boolean, key: string, inputTokens: number, showInitial = true) {
     let disposed = !enabled;
     let latestText = '';
     let lastStartedAt = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let runId = 0;
-    const title = language.outputTokens;
+    const title = language.tokenCounter;
 
     const clearTimer = () => {
         if(timer){
@@ -90,7 +97,7 @@ function createResponseTokenCounter(enabled: boolean, key: string, showInitial =
         setPinnedStatus({
             title,
             key,
-            value: formatResponseTokenValue(tokens),
+            value: formatResponseTokenValue(inputTokens, tokens),
             severity,
             kind: 'token',
         });
@@ -122,7 +129,7 @@ function createResponseTokenCounter(enabled: boolean, key: string, showInitial =
         setPinnedStatus({
             key,
             title,
-            value: formatResponseTokenValue(0),
+            value: formatResponseTokenValue(inputTokens, 0),
             severity: 'info',
             kind: 'token',
         });
@@ -1664,6 +1671,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         const responseTokenCounter = createResponseTokenCounter(
             DBState.db.showResponseTokenCounter === true,
             `response-token-counter-${generationId}`,
+            inputTokens,
         );
         let msgIndex = DBState.db.characters[selectedChar].chats[selectedChat].message.length
         let prefix = ''
@@ -1765,6 +1773,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         const responseTokenCounter = createResponseTokenCounter(
             DBState.db.showResponseTokenCounter === true,
             `response-token-counter-${generationId}`,
+            inputTokens,
             false,
         );
         const msgs = (req.type === 'success') ? [['char',req.result]] as const 

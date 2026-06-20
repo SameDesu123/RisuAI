@@ -1063,6 +1063,8 @@ export const languageKorean = {
     "normal": "일반",
     "error": "에러",
     "input": "입력",
+    "output": "출력",
+    "tokenCounter": "토큰 카운터",
     "select": "선택",
     "options": "선택지",
     "alertContent": "알림 내용",

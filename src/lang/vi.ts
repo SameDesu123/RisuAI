@@ -1042,6 +1042,8 @@ export const languageVietnamese = {
     "normal": "Bình thường",
     "error": "Lỗi",
     "input": "Đầu vào",
+    "output": "Đầu ra",
+    "tokenCounter": "Bộ đếm token",
     "select": "Chọn",
     "options": "Tùy chọn",
     "alertContent": "Nội dung cảnh báo",

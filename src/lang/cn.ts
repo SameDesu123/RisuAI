@@ -1042,6 +1042,8 @@ export const languageChinese = {
     "normal": "正常",
     "error": "错误",
     "input": "输入",
+    "output": "输出",
+    "tokenCounter": "Token 计数器",
     "select": "选择",
     "options": "选项",
     "alertContent": "警告内容",
