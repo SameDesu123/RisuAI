@@ -1,7 +1,8 @@
 <script lang="ts">
-    import { CheckIcon, XIcon } from '@lucide/svelte';
+    import { CheckIcon, GaugeIcon, ArrowDownToLineIcon, ArrowUpFromLineIcon, XIcon } from '@lucide/svelte';
     import type { AlertSeverity } from 'src/ts/alertModel';
     import { clearPinnedStatus, pinnedStatusStore } from 'src/ts/alert';
+    import { language } from 'src/lang';
     import { DBState } from 'src/ts/stores.svelte';
     import AlertSeverityIcon from './AlertSeverityIcon.svelte';
 
@@ -68,13 +69,38 @@
             >
                 {#if item.kind === 'token'}
                     <div class="pinned-token-counter">
-                        <span class="pinned-status-title">{item.title}</span>
-                        {#if item.value}
-                            <span class="pinned-token-counter-value">
-                                <span class="pinned-token-counter-separator" aria-hidden="true">|</span>
-                                {item.value}
+                        <div class="pinned-token-counter-head">
+                            <span class="pinned-status-chip pinned-token-counter-chip" aria-hidden="true">
+                                <GaugeIcon size={15} strokeWidth={2.4} />
                             </span>
-                        {/if}
+                            <span class="pinned-status-title">{item.title}</span>
+                            <button
+                                type="button"
+                                class="pinned-status-close pinned-token-counter-close"
+                                aria-label="Close token counter"
+                                onclick={() => clearPinnedStatus(item.key)}
+                            >
+                                <XIcon size={16} />
+                            </button>
+                        </div>
+                        <div class="pinned-token-counter-rows">
+                            <div class="pinned-token-row pinned-token-row-input">
+                                <span class="pinned-token-row-icon" aria-hidden="true">
+                                    <ArrowDownToLineIcon size={14} strokeWidth={2.4} />
+                                </span>
+                                <span class="pinned-token-row-label">{language.input}</span>
+                                <span class="pinned-token-row-value">{(item.tokenInput ?? 0).toLocaleString()}</span>
+                                <span class="pinned-token-row-unit">{language.tokens}</span>
+                            </div>
+                            <div class="pinned-token-row pinned-token-row-output">
+                                <span class="pinned-token-row-icon" aria-hidden="true">
+                                    <ArrowUpFromLineIcon size={14} strokeWidth={2.4} />
+                                </span>
+                                <span class="pinned-token-row-label">{language.output}</span>
+                                <span class="pinned-token-row-value">{(item.tokenOutput ?? 0).toLocaleString()}</span>
+                                <span class="pinned-token-row-unit">{language.tokens}</span>
+                            </div>
+                        </div>
                     </div>
                 {:else}
                     <div class="pinned-status-row">
@@ -158,40 +184,97 @@
     }
 
     .token-counter-card {
-        padding: 0.6em 1em;
+        padding: 0.7em 0.85em;
     }
 
     .pinned-token-counter {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1.1em;
-        min-width: min(30em, calc(100vw - 4rem));
-        min-height: 1.9em;
+        flex-direction: column;
+        gap: 0.55em;
+        min-width: min(28em, calc(100vw - 4rem));
     }
 
-    .pinned-token-counter .pinned-status-title {
-        flex: none;
-        text-align: left;
+    .pinned-token-counter-head {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.55em;
+        padding-bottom: 0.45em;
+        border-bottom: 1px solid color-mix(in srgb, var(--pinned-accent) 32%, transparent);
     }
 
-    .pinned-token-counter-value {
-        display: inline-flex;
-        flex: 1 1 auto;
+    .pinned-token-counter-chip {
+        width: 1.65em;
+        height: 1.65em;
+    }
+
+    .pinned-token-counter-close {
+        justify-self: end;
+    }
+
+    .pinned-token-counter-rows {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 0.45em;
+    }
+
+    .pinned-token-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
         align-items: center;
-        justify-content: flex-end;
-        gap: 0.7em;
         min-width: 0;
-        color: var(--pinned-icon-color);
-        font-size: 0.9em;
-        font-weight: 700;
-        line-height: 1.2;
-        text-align: right;
+        min-height: 2.45em;
+        gap: 0.45em;
+        padding: 0.38em 0.55em;
+        border-radius: 0.3rem;
+        background: color-mix(in srgb, var(--pinned-chip-bg) 45%, transparent);
     }
 
-    .pinned-token-counter-separator {
-        color: color-mix(in srgb, var(--risu-theme-textcolor2, #a3a3a3) 85%, transparent);
+    .pinned-token-row-icon {
+        display: inline-flex;
+        align-self: center;
+        color: var(--pinned-icon-color);
+    }
+
+    .pinned-token-row-icon :global(svg) {
+        display: block;
+        width: 0.95em;
+        height: 0.95em;
+    }
+
+    .pinned-token-row-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.82em;
         font-weight: 600;
+        line-height: 1;
+        color: color-mix(in srgb, var(--risu-theme-textcolor2, #a3a3a3) 92%, transparent);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .pinned-token-row-value {
+        font-size: 1.12em;
+        font-weight: 700;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+        color: var(--risu-theme-textcolor, #e5e5e5);
+        font-feature-settings: 'tnum';
+        white-space: nowrap;
+    }
+
+    .pinned-token-row-unit {
+        font-size: 0.72em;
+        font-weight: 500;
+        line-height: 1;
+        color: color-mix(in srgb, var(--risu-theme-textcolor2, #a3a3a3) 80%, transparent);
+        white-space: nowrap;
+    }
+
+    .pinned-token-row-output .pinned-token-row-value {
+        color: var(--pinned-icon-color);
     }
 
     .pinned-status-row {

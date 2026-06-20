@@ -67,17 +67,6 @@ export let previewBody:string = ''
 const RESPONSE_TOKEN_COUNTER_THROTTLE_MS = 500;
 const RESPONSE_TOKEN_COUNTER_FINAL_VISIBLE_MS = 10000;
 
-function formatTokenCount(label: string, tokens: number) {
-    return `${label} ${tokens.toLocaleString()} ${language.tokens}`;
-}
-
-function formatResponseTokenValue(inputTokens: number, outputTokens: number) {
-    return [
-        formatTokenCount(language.input, inputTokens),
-        formatTokenCount(language.output, outputTokens),
-    ].join(' | ');
-}
-
 function createResponseTokenCounter(enabled: boolean, key: string, inputTokens: number, showInitial = true) {
     let disposed = !enabled;
     let latestText = '';
@@ -97,7 +86,8 @@ function createResponseTokenCounter(enabled: boolean, key: string, inputTokens: 
         setPinnedStatus({
             title,
             key,
-            value: formatResponseTokenValue(inputTokens, tokens),
+            tokenInput: inputTokens,
+            tokenOutput: tokens,
             severity,
             kind: 'token',
         });
@@ -129,7 +119,8 @@ function createResponseTokenCounter(enabled: boolean, key: string, inputTokens: 
         setPinnedStatus({
             key,
             title,
-            value: formatResponseTokenValue(inputTokens, 0),
+            tokenInput: inputTokens,
+            tokenOutput: 0,
             severity: 'info',
             kind: 'token',
         });
