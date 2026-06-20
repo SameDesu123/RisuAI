@@ -1690,6 +1690,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             void reader.cancel().catch(() => {})
         }
         abortSignal.addEventListener('abort', abortReader, { once: true })
+        let streamFinished = false
         try {
             while(streamAborted === false){
                 let readed: ReadableStreamReadResult<{ [key: string]: string }>
@@ -1723,12 +1724,16 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
             }
+            streamFinished = true
         }
         finally {
             abortSignal.removeEventListener('abort', abortReader)
             DBState.db.characters[selectedChar].chats[selectedChat].isStreaming = false
             DBState.db.characters[selectedChar].reloadKeys += 1
             void reader.cancel().catch(() => {})
+            if(!streamFinished && !streamAborted && !abortSignal.aborted){
+                responseTokenCounter.clear()
+            }
         }
 
         if(streamAborted || abortSignal.aborted){
