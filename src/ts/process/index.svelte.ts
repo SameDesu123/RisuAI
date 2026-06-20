@@ -4,7 +4,7 @@ import { DBState } from '../stores.svelte';
 import { CharEmotion, selectedCharID } from "../stores.svelte";
 import { ChatTokenizer, tokenize, tokenizeNum } from "../tokenizer";
 import { language } from "../../lang";
-import { alertError, alertToast, clearPinnedStatus, setPinnedStatus, updatePinnedStatus } from "../alert";
+import { alertError, alertToast, clearPinnedStatus, setPinnedStatus } from "../alert";
 import { parseChatML } from "../parser/chatML";
 import { loadLoreBookV3Prompt } from "./lorebook.svelte";
 import { findCharacterbyId, getAuthorNoteDefaultText, getPersonaPrompt, getUserName, isLastCharPunctuation, trimUntilPunctuation, parseToggleSyntax, prebuiltAssetCommand, sleep } from "../util";
@@ -64,20 +64,20 @@ export let requestTokenParts:{[key:string]:requestTokenPart[]} = {}
 export let previewFormated:OpenAIChat[] = []
 export let previewBody:string = ''
 
-const STREAMING_TOKEN_COUNTER_THROTTLE_MS = 500;
-const STREAMING_TOKEN_COUNTER_FINAL_VISIBLE_MS = 1500;
+const RESPONSE_TOKEN_COUNTER_THROTTLE_MS = 500;
+const RESPONSE_TOKEN_COUNTER_FINAL_VISIBLE_MS = 1500;
 
-function formatStreamingTokenValue(tokens: number) {
+function formatResponseTokenValue(tokens: number) {
     return `${tokens.toLocaleString()} ${language.tokens}`;
 }
 
-function createStreamingTokenCounter(enabled: boolean, key: string) {
+function createResponseTokenCounter(enabled: boolean, key: string, showInitial = true) {
     let disposed = !enabled;
     let latestText = '';
     let lastStartedAt = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let runId = 0;
-    const title = `${language.streaming} ${language.tokens}`;
+    const title = language.outputTokens;
 
     const clearTimer = () => {
         if(timer){
@@ -87,9 +87,10 @@ function createStreamingTokenCounter(enabled: boolean, key: string) {
     };
 
     const setCount = (tokens: number, severity: 'info' | 'success' = 'info') => {
-        updatePinnedStatus(key, {
+        setPinnedStatus({
             title,
-            value: formatStreamingTokenValue(tokens),
+            key,
+            value: formatResponseTokenValue(tokens),
             severity,
             kind: 'token',
         });
@@ -117,11 +118,11 @@ function createStreamingTokenCounter(enabled: boolean, key: string) {
         })();
     };
 
-    if(enabled){
+    if(enabled && showInitial){
         setPinnedStatus({
             key,
             title,
-            value: formatStreamingTokenValue(0),
+            value: formatResponseTokenValue(0),
             severity: 'info',
             kind: 'token',
         });
@@ -134,7 +135,7 @@ function createStreamingTokenCounter(enabled: boolean, key: string) {
             }
 
             latestText = text;
-            const delay = Math.max(0, STREAMING_TOKEN_COUNTER_THROTTLE_MS - (Date.now() - lastStartedAt));
+            const delay = Math.max(0, RESPONSE_TOKEN_COUNTER_THROTTLE_MS - (Date.now() - lastStartedAt));
             if(delay === 0){
                 clearTimer();
                 calculate();
@@ -162,7 +163,7 @@ function createStreamingTokenCounter(enabled: boolean, key: string) {
                         return;
                     }
                     setCount(tokens, 'success');
-                    await sleep(STREAMING_TOKEN_COUNTER_FINAL_VISIBLE_MS);
+                    await sleep(RESPONSE_TOKEN_COUNTER_FINAL_VISIBLE_MS);
                     if(disposed || currentRunId !== runId){
                         return;
                     }
@@ -1660,9 +1661,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
     else if(req.type === 'streaming'){
         const reader = req.result.getReader()
-        const streamingTokenCounter = createStreamingTokenCounter(
-            DBState.db.showStreamingTokenCounter === true,
-            `streaming-token-counter-${generationId}`,
+        const responseTokenCounter = createResponseTokenCounter(
+            DBState.db.showResponseTokenCounter === true,
+            `response-token-counter-${generationId}`,
         );
         let msgIndex = DBState.db.characters[selectedChar].chats[selectedChat].message.length
         let prefix = ''
@@ -1715,7 +1716,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     }
                     let result2 = await processScriptFull(nowChatroom, reformatContent(prefix + result), 'editoutput', msgIndex)
                     DBState.db.characters[selectedChar].chats[selectedChat].message[msgIndex].data = result2.data
-                    streamingTokenCounter.update(result2.data)
+                    responseTokenCounter.update(result2.data)
                     emoChanged = result2.emoChanged
                     DBState.db.characters[selectedChar].reloadKeys += 1
                 }
@@ -1732,11 +1733,11 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
 
         if(streamAborted || abortSignal.aborted){
-            streamingTokenCounter.clear()
+            responseTokenCounter.clear()
             return false
         }
 
-        streamingTokenCounter.finish(DBState.db.characters[selectedChar].chats[selectedChat].message[msgIndex].data)
+        responseTokenCounter.finish(DBState.db.characters[selectedChar].chats[selectedChat].message[msgIndex].data)
         addRerolls(generationId, Object.values(lastResponseChunk))
 
         DBState.db.characters[selectedChar].chats[selectedChat] = runCurrentChatFunction(DBState.db.characters[selectedChar].chats[selectedChat])
@@ -1761,6 +1762,11 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
     }
     else{
+        const responseTokenCounter = createResponseTokenCounter(
+            DBState.db.showResponseTokenCounter === true,
+            `response-token-counter-${generationId}`,
+            false,
+        );
         const msgs = (req.type === 'success') ? [['char',req.result]] as const 
                     : (req.type === 'multiline') ? req.result
                     : []
@@ -1796,6 +1802,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     const p = await inlayResult.promise
                     DBState.db.characters[selectedChar].chats[selectedChat].message[msgIndex].data = p
                 }
+                responseTokenCounter.finish(DBState.db.characters[selectedChar].chats[selectedChat].message[msgIndex].data)
             }
             else if(i===0){
                 DBState.db.characters[selectedChar].chats[selectedChat].message.push({
@@ -1812,6 +1819,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     const p = await inlayResult.promise
                     DBState.db.characters[selectedChar].chats[selectedChat].message[ind].data = p
                 }
+                responseTokenCounter.finish(DBState.db.characters[selectedChar].chats[selectedChat].message[ind].data)
                 mrerolls.push(result)
             }
             else{
