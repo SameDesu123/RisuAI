@@ -218,6 +218,7 @@ export function setDatabase(data:Database){
     if(checkNullish(data.showMemoryLimit)){
         data.showMemoryLimit = false
     }
+    data.showStreamingTokenCounter ??= false
     if(checkNullish(data.showFirstMessagePages)){
         data.showFirstMessagePages = false
     }
@@ -1108,6 +1109,7 @@ export interface Database{
     autoTranslateCachedOnly:boolean
     lightningRealmImport:boolean
     notification: boolean
+    showStreamingTokenCounter:boolean
     customFlags: LLMFlags[]
     enableCustomFlags: boolean
     googleClaudeTokenizing: boolean

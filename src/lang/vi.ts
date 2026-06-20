@@ -1185,6 +1185,7 @@ export const languageVietnamese = {
     "banCharacterset": "Tự động tạo lại khi gặp bộ ký tự",
     "realmDirectOpen": "Mở trực tiếp nhân vật trong RisuRealm",
     "showPromptComparison": "Hiển thị so sánh lời nhắc",
+    "showStreamingTokenCounter": "Hiển thị bộ đếm token khi streaming",
     "inlayErrorResponse": "Phản hồi lỗi Inlay",
     "triggerOn": "Kích hoạt bật",
     "noConfig": "Không có cấu hình",

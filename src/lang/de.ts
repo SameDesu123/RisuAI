@@ -1185,6 +1185,7 @@ export const languageGerman = {
     "banCharacterset": "Bei Zeichensatz automatisch neu generieren",
     "realmDirectOpen": "Charakter in RisuRealm direkt öffnen",
     "showPromptComparison": "Anweisungsvergleich anzeigen",
+    "showStreamingTokenCounter": "Streaming-Token-Zähler anzeigen",
     "inlayErrorResponse": "Fehlerantwort einfügen",
     "triggerOn": "Trigger ein",
     "noConfig": "Keine Konfiguration",

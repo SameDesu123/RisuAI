@@ -1342,6 +1342,7 @@ export const languageEnglish = {
     banCharacterset: "Auto Regenerate On Characterset",
     realmDirectOpen: "Directly open character in RisuRealm",
     showPromptComparison: "Show Prompt Comparison",
+    showStreamingTokenCounter: "Show Streaming Token Counter",
     inlayErrorResponse: "Inlay Error Response",
     triggerOn: "Trigger On",
     noConfig: "No Config",
