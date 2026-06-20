@@ -1,7 +1,8 @@
 <script lang="ts">
-    import { ChevronDownIcon, ChevronUpIcon } from '@lucide/svelte';
+    import { CheckIcon, XIcon } from '@lucide/svelte';
     import type { AlertSeverity } from 'src/ts/alertModel';
-    import { pinnedStatusStore, togglePinnedStatusCollapsed } from 'src/ts/pinnedStatus';
+    import { clearPinnedStatus, pinnedStatusStore } from 'src/ts/alert';
+    import { DBState } from 'src/ts/stores.svelte';
     import AlertSeverityIcon from './AlertSeverityIcon.svelte';
 
     const severityConfig: Record<AlertSeverity, {
@@ -41,14 +42,22 @@
             glow: 'rgb(0 0 0 / 0.2)',
         },
     };
+
+    const pinnedStatusFontSize = $derived(`${0.875 * ((DBState.db?.zoomsize ?? 100) / 100)}rem`);
+    const pinnedStatusPosition = $derived(DBState.db?.toastPosition === 'topRight' ? 'topRight' : 'topCenter');
+    const pinnedStatusPositionClass = $derived(
+        pinnedStatusPosition === 'topRight' ? 'position-top-right' : 'position-top-center'
+    );
 </script>
 
 {#if $pinnedStatusStore.length > 0}
-    <div class="pinned-status-stack fixed right-4 top-[4.25rem] z-40 flex flex-col gap-2 pointer-events-none">
+    <div
+        class="pinned-status-stack {pinnedStatusPositionClass} fixed top-4 z-50 flex flex-col gap-2 pointer-events-none break-any"
+        style:--pinned-status-font-size={pinnedStatusFontSize}
+    >
         {#each $pinnedStatusStore as item (item.key)}
             {@const config = severityConfig[item.severity]}
             <section
-                class:collapsed={item.collapsed}
                 class="pinned-status-card pointer-events-auto"
                 style:--pinned-icon-color={config.iconColor}
                 style:--pinned-chip-bg={config.chipBg}
@@ -59,7 +68,11 @@
             >
                 <div class="pinned-status-row">
                     <span class="pinned-status-chip" aria-hidden="true">
-                        <AlertSeverityIcon severity={item.severity} size={16} />
+                        {#if item.severity === 'success'}
+                            <CheckIcon size={16} strokeWidth={2.6} />
+                        {:else}
+                            <AlertSeverityIcon severity={item.severity} size={16} />
+                        {/if}
                     </span>
                     <div class="pinned-status-copy">
                         <div class="pinned-status-heading">
@@ -68,27 +81,20 @@
                                 <span class="pinned-status-value">{item.value}</span>
                             {/if}
                         </div>
-                        {#if !item.collapsed}
-                            {#if item.message}
-                                <p class="pinned-status-message">{item.message}</p>
-                            {/if}
-                            {#if item.detail}
-                                <p class="pinned-status-detail">{item.detail}</p>
-                            {/if}
+                        {#if item.message}
+                            <p class="pinned-status-message">{item.message}</p>
+                        {/if}
+                        {#if item.detail}
+                            <p class="pinned-status-detail">{item.detail}</p>
                         {/if}
                     </div>
                     <button
                         type="button"
-                        class="pinned-status-toggle"
-                        aria-label={item.collapsed ? 'Expand pinned status' : 'Collapse pinned status'}
-                        aria-expanded={!item.collapsed}
-                        onclick={() => togglePinnedStatusCollapsed(item.key)}
+                        class="pinned-status-close"
+                        aria-label="Close pinned status"
+                        onclick={() => clearPinnedStatus(item.key)}
                     >
-                        {#if item.collapsed}
-                            <ChevronDownIcon size={16} />
-                        {:else}
-                            <ChevronUpIcon size={16} />
-                        {/if}
+                        <XIcon size={16} />
                     </button>
                 </div>
             </section>
@@ -97,33 +103,50 @@
 {/if}
 
 <style>
+    .break-any {
+        word-break: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .position-top-center {
+        left: 50%;
+        transform: translateX(-50%);
+        transform-origin: top center;
+    }
+
+    .position-top-right {
+        right: 1rem;
+        transform-origin: top right;
+    }
+
     .pinned-status-stack {
-        width: min(calc(100vw - 2rem), 24rem);
+        width: fit-content;
+        max-width: min(calc(100vw - 2rem), 38em);
+        font-size: var(--pinned-status-font-size, 0.875rem);
     }
 
     .pinned-status-card {
         box-sizing: border-box;
         width: 100%;
-        padding: 0.65rem;
+        padding: 0.6em 0.6em 0.6em 0.6em;
         border-radius: 0.375rem;
         border: 1px solid color-mix(in srgb, var(--pinned-accent) 70%, var(--risu-theme-darkborderc, rgb(75 75 75)));
-        background: color-mix(in srgb, var(--risu-theme-darkbg, rgb(17 17 17)) 90%, transparent);
+        background: color-mix(in srgb, var(--risu-theme-darkbg, rgb(17 17 17)) 88%, transparent);
         color: var(--risu-theme-textcolor, #e5e5e5);
+        line-height: 1.35;
         backdrop-filter: blur(10px);
+        animation: pinned-status-enter 180ms cubic-bezier(0.16, 1, 0.3, 1);
+        will-change: transform, opacity;
         box-shadow:
-            0 10px 30px -8px rgb(0 0 0 / 0.45),
-            0 0 0 1px color-mix(in srgb, var(--pinned-accent) 20%, transparent),
-            0 0 20px -8px var(--pinned-glow);
-    }
-
-    .pinned-status-card.collapsed {
-        padding-block: 0.55rem;
+            0 10px 30px -8px rgb(0 0 0 / 0.55),
+            0 0 0 1px color-mix(in srgb, var(--pinned-accent) 25%, transparent),
+            0 0 22px -6px var(--pinned-glow);
     }
 
     .pinned-status-row {
         display: flex;
-        align-items: flex-start;
-        gap: 0.65rem;
+        align-items: center;
+        gap: 0.75em;
         min-width: 0;
     }
 
@@ -132,8 +155,8 @@
         flex: none;
         align-items: center;
         justify-content: center;
-        width: 1.9rem;
-        height: 1.9rem;
+        width: 1.9em;
+        height: 1.9em;
         border-radius: 9999px;
         background: var(--pinned-chip-bg);
         color: var(--pinned-icon-color);
@@ -141,8 +164,8 @@
 
     .pinned-status-chip :global(svg) {
         display: block;
-        width: 1rem;
-        height: 1rem;
+        width: 1.08em;
+        height: 1.08em;
     }
 
     .pinned-status-copy {
@@ -152,24 +175,25 @@
 
     .pinned-status-heading {
         display: flex;
-        align-items: baseline;
+        align-items: center;
         gap: 0.6rem;
         min-width: 0;
+        min-height: 1.9em;
     }
 
     .pinned-status-title {
         min-width: 0;
         overflow-wrap: anywhere;
         font-weight: 700;
-        line-height: 1.35;
+        line-height: 1.2;
     }
 
     .pinned-status-value {
         flex: none;
         color: var(--pinned-icon-color);
-        font-size: 0.85rem;
+        font-size: 0.85em;
         font-weight: 700;
-        line-height: 1.35;
+        line-height: 1.2;
     }
 
     .pinned-status-message,
@@ -177,7 +201,7 @@
         margin: 0.25rem 0 0;
         overflow-wrap: anywhere;
         white-space: pre-wrap;
-        font-size: 0.85rem;
+        font-size: 0.85em;
         line-height: 1.35;
     }
 
@@ -189,13 +213,13 @@
         color: var(--risu-theme-textcolor2, #a3a3a3);
     }
 
-    .pinned-status-toggle {
+    .pinned-status-close {
         display: inline-flex;
         flex: none;
         align-items: center;
         justify-content: center;
-        width: 1.8rem;
-        height: 1.8rem;
+        width: 1.8em;
+        height: 1.8em;
         border-radius: 0.375rem;
         color: var(--risu-theme-textcolor2, #a3a3a3);
         transition:
@@ -203,12 +227,26 @@
             color 120ms ease;
     }
 
-    .pinned-status-toggle:hover {
+    .pinned-status-close:hover {
         background: color-mix(in srgb, var(--pinned-accent) 22%, transparent);
         color: var(--risu-theme-textcolor, #e5e5e5);
     }
 
-    .pinned-status-toggle :global(svg) {
+    .pinned-status-close :global(svg) {
         display: block;
+        width: 1.08em;
+        height: 1.08em;
+    }
+
+    @keyframes pinned-status-enter {
+        from {
+            opacity: 0;
+            transform: translateY(-130%) scale(0.96);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
     }
 </style>

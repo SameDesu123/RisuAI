@@ -24,7 +24,6 @@
     import { translateStackTrace } from "../../../ts/sourcemap";
     import { getDetailedOSLabel, getFallbackOSLabel, getRisuEnvironmentLabel } from "src/ts/platform";
     import versionData from "../../../../version.json";
-    import AlertPinnedStatus from "./AlertPinnedStatus.svelte";
     import AlertToast from "./AlertToast.svelte";
     import BranchesDialog from "./BranchesDialog.svelte";
     import RequestLogsDialog from "./RequestLogsDialog.svelte";
@@ -810,9 +809,6 @@
         onDone={() => dismissActiveToast($toastQueueStore.active?.id ?? -1)}
     />
 {/if}
-
-<AlertPinnedStatus />
-
 <style>
     .plugin-confirm-content .plugin-name {
         font-size: 1.25rem;
