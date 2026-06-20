@@ -7,6 +7,14 @@ import { alertStore as alertStoreImported } from "./stores.svelte"
 import type { AlertSeverity, LegacyAlertType, ToastOptions } from "./alertModel"
 import { enqueueToast } from "./toastQueue"
 
+export {
+    clearPinnedStatus,
+    pinnedStatusStore,
+    setPinnedStatus,
+    togglePinnedStatusCollapsed,
+    updatePinnedStatus,
+} from "./pinnedStatus"
+
 export interface alertData{
     type: LegacyAlertType,
     msg: string,
