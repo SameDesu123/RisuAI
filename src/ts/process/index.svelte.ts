@@ -4,10 +4,10 @@ import { DBState } from '../stores.svelte';
 import { CharEmotion, selectedCharID } from "../stores.svelte";
 import { ChatTokenizer, tokenize, tokenizeNum } from "../tokenizer";
 import { language } from "../../lang";
-import { alertError, alertToast } from "../alert";
+import { alertError, alertToast, clearPinnedStatus, setPinnedStatus, updatePinnedStatus } from "../alert";
 import { parseChatML } from "../parser/chatML";
 import { loadLoreBookV3Prompt } from "./lorebook.svelte";
-import { findCharacterbyId, getAuthorNoteDefaultText, getPersonaPrompt, getUserName, isLastCharPunctuation, trimUntilPunctuation, parseToggleSyntax, prebuiltAssetCommand } from "../util";
+import { findCharacterbyId, getAuthorNoteDefaultText, getPersonaPrompt, getUserName, isLastCharPunctuation, trimUntilPunctuation, parseToggleSyntax, prebuiltAssetCommand, sleep } from "../util";
 import { requestChatData } from "./request/request";
 import { stableDiff } from "./stableDiff";
 import { processScript, processScriptFull, risuChatParser } from "./scripts";
@@ -63,6 +63,132 @@ export const abortChat = writable(false)
 export let requestTokenParts:{[key:string]:requestTokenPart[]} = {}
 export let previewFormated:OpenAIChat[] = []
 export let previewBody:string = ''
+
+const STREAMING_TOKEN_COUNTER_THROTTLE_MS = 500;
+const STREAMING_TOKEN_COUNTER_FINAL_VISIBLE_MS = 1500;
+
+function formatStreamingTokenValue(tokens: number) {
+    return `${tokens.toLocaleString()} ${language.tokens}`;
+}
+
+function createStreamingTokenCounter(enabled: boolean, key: string) {
+    let disposed = !enabled;
+    let latestText = '';
+    let lastStartedAt = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let runId = 0;
+    const title = `${language.streaming} ${language.tokens}`;
+
+    const clearTimer = () => {
+        if(timer){
+            clearTimeout(timer);
+            timer = undefined;
+        }
+    };
+
+    const setCount = (tokens: number, severity: 'info' | 'success' = 'info') => {
+        updatePinnedStatus(key, {
+            title,
+            value: formatStreamingTokenValue(tokens),
+            severity,
+            kind: 'token',
+        });
+    };
+
+    const calculate = (severity: 'info' | 'success' = 'info') => {
+        if(disposed){
+            return;
+        }
+
+        lastStartedAt = Date.now();
+        const currentRunId = ++runId;
+        const text = latestText;
+        void (async () => {
+            try {
+                const tokens = await tokenize(text);
+                if(disposed || currentRunId !== runId){
+                    return;
+                }
+                setCount(tokens, severity);
+            }
+            catch(error){
+                console.error(error);
+            }
+        })();
+    };
+
+    if(enabled){
+        setPinnedStatus({
+            key,
+            title,
+            value: formatStreamingTokenValue(0),
+            severity: 'info',
+            kind: 'token',
+        });
+    }
+
+    return {
+        update(text: string) {
+            if(disposed){
+                return;
+            }
+
+            latestText = text;
+            const delay = Math.max(0, STREAMING_TOKEN_COUNTER_THROTTLE_MS - (Date.now() - lastStartedAt));
+            if(delay === 0){
+                clearTimer();
+                calculate();
+                return;
+            }
+            if(!timer){
+                timer = setTimeout(() => {
+                    timer = undefined;
+                    calculate();
+                }, delay);
+            }
+        },
+        finish(text: string) {
+            if(disposed){
+                return;
+            }
+
+            latestText = text;
+            clearTimer();
+            const currentRunId = ++runId;
+            void (async () => {
+                try {
+                    const tokens = await tokenize(latestText);
+                    if(disposed || currentRunId !== runId){
+                        return;
+                    }
+                    setCount(tokens, 'success');
+                    await sleep(STREAMING_TOKEN_COUNTER_FINAL_VISIBLE_MS);
+                    if(disposed || currentRunId !== runId){
+                        return;
+                    }
+                    disposed = true;
+                    clearPinnedStatus(key);
+                }
+                catch(error){
+                    console.error(error);
+                    if(!disposed){
+                        disposed = true;
+                        clearPinnedStatus(key);
+                    }
+                }
+            })();
+        },
+        clear() {
+            if(!enabled){
+                return;
+            }
+
+            disposed = true;
+            clearTimer();
+            clearPinnedStatus(key);
+        }
+    };
+}
 
 export async function sendChat(chatProcessIndex = -1,arg:{
     chatAdditonalTokens?:number,
@@ -1534,6 +1660,10 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
     else if(req.type === 'streaming'){
         const reader = req.result.getReader()
+        const streamingTokenCounter = createStreamingTokenCounter(
+            DBState.db.showStreamingTokenCounter === true,
+            `streaming-token-counter-${generationId}`,
+        );
         let msgIndex = DBState.db.characters[selectedChar].chats[selectedChat].message.length
         let prefix = ''
         if(arg.continue){
@@ -1585,6 +1715,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     }
                     let result2 = await processScriptFull(nowChatroom, reformatContent(prefix + result), 'editoutput', msgIndex)
                     DBState.db.characters[selectedChar].chats[selectedChat].message[msgIndex].data = result2.data
+                    streamingTokenCounter.update(result2.data)
                     emoChanged = result2.emoChanged
                     DBState.db.characters[selectedChar].reloadKeys += 1
                 }
@@ -1601,9 +1732,11 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
 
         if(streamAborted || abortSignal.aborted){
+            streamingTokenCounter.clear()
             return false
         }
 
+        streamingTokenCounter.finish(DBState.db.characters[selectedChar].chats[selectedChat].message[msgIndex].data)
         addRerolls(generationId, Object.values(lastResponseChunk))
 
         DBState.db.characters[selectedChar].chats[selectedChat] = runCurrentChatFunction(DBState.db.characters[selectedChar].chats[selectedChat])
