@@ -1199,7 +1199,7 @@ export const languageKorean = {
     "menuSideBar": "메뉴 사이드바",
     "home": "홈",
     "showSavingIcon": "저장 아이콘 표시",
-    "toastPosition": "토스트 위치",
+    "toastPosition": "알림 위치",
     "toastPositionTopCenter": "상단 중앙",
     "toastPositionTopRight": "우측 상단",
     "pluginVersionWarn": "이 플러그인은 {{plugin_version}} 버전입니다. 이 버전의 Risuai와 호환되지 않습니다. 플러그인을 {{required_version}} 버전으로 업데이트하세요.",

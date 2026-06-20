@@ -13,8 +13,12 @@
 
     const severity = $derived(item.options?.severity ?? 'info');
     const title = $derived.by(() => {
-        if (item.options?.titleKey && (language as any)[item.options.titleKey]) {
-            return (language as any)[item.options.titleKey] as string;
+        const titleKey = item.options?.titleKey;
+        if (titleKey && Object.prototype.hasOwnProperty.call(language, titleKey)) {
+            const localizedTitle = language[titleKey as keyof typeof language];
+            if (typeof localizedTitle === 'string') {
+                return localizedTitle;
+            }
         }
 
         return item.options?.title;

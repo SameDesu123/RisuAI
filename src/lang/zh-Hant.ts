@@ -1159,7 +1159,7 @@ export const languageChineseTraditional = {
     "menuSideBar": "選單側邊欄",
     "home": "首頁",
     "showSavingIcon": "顯示儲存圖示",
-    "toastPosition": "Toast 位置",
+    "toastPosition": "通知位置",
     "toastPositionTopCenter": "頂部置中",
     "toastPositionTopRight": "右上角",
     "pluginVersionWarn": "這是 {{plugin_version}} 版本的外掛，與當前 Risuai 版本不相容。請更新外掛至 {{required_version}} 版本。",
