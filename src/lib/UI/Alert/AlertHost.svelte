@@ -777,13 +777,6 @@
         </div>
     </div>
 
-{:else if alertDescriptor.surface === 'toast'}
-    <AlertToast
-        message={$alertStore.msg}
-        severity={$alertStore.severity ?? alertDescriptor.severity}
-        refreshKey={$alertStore}
-        onDone={() => alertStore.set({ type: 'none', msg: '' })}
-    />
 {:else if alertDescriptor.surface === 'dialog' && $alertStore.type === 'selectModule'}
     <ModuleChatMenu alertMode close={(d) => {
         alertStore.set({

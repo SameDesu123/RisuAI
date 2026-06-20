@@ -1,6 +1,6 @@
 export type AlertSeverity = 'info' | 'success' | 'warning' | 'error' | 'neutral';
 
-export type AlertSurface = 'modal' | 'toast' | 'inline' | 'dialog';
+export type AlertSurface = 'modal' | 'inline' | 'dialog';
 
 export type ToastKind =
     | 'export'
@@ -53,7 +53,6 @@ export type LegacyAlertType =
     | 'wait'
     | 'selectChar'
     | 'input'
-    | 'toast'
     | 'wait2'
     | 'markdown'
     | 'select'
@@ -88,16 +87,6 @@ const dialogAlertTypes = new Set<LegacyAlertType>([
 ]);
 
 export function getAlertDescriptor(type: LegacyAlertType): StandardAlertDescriptor {
-    if (type === 'toast') {
-        return {
-            severity: 'neutral',
-            surface: 'toast',
-            blocking: false,
-            dismissible: false,
-            autoDismiss: true,
-        };
-    }
-
     if (dialogAlertTypes.has(type)) {
         return {
             severity: type === 'requestlogs' ? 'info' : 'neutral',
