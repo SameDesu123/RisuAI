@@ -1042,6 +1042,8 @@ export const languageSpanish = {
     "normal": "Normal",
     "error": "Error",
     "input": "Entrada",
+    "output": "Salida",
+    "tokenCounter": "Contador de tokens",
     "select": "Seleccionar",
     "options": "Opciones",
     "alertContent": "Contenido de Alerta",

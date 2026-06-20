@@ -1196,6 +1196,8 @@ export const languageEnglish = {
     normal: "Normal",
     error: "Error",
     input: "Input",
+    output: "Output",
+    tokenCounter: "Token Counter",
     select: "Select",
     options: "Options",
     alertContent: "Alert Content",

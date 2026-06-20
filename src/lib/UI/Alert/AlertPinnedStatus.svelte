@@ -58,7 +58,7 @@
         {#each $pinnedStatusStore as item (item.key)}
             {@const config = severityConfig[item.severity]}
             <section
-                class="pinned-status-card pointer-events-auto"
+                class="pinned-status-card pointer-events-auto {item.kind === 'token' ? 'token-counter-card' : ''}"
                 style:--pinned-icon-color={config.iconColor}
                 style:--pinned-chip-bg={config.chipBg}
                 style:--pinned-accent={config.accent}
@@ -66,37 +66,49 @@
                 role="status"
                 aria-live="polite"
             >
-                <div class="pinned-status-row">
-                    <span class="pinned-status-chip" aria-hidden="true">
-                        {#if item.severity === 'success'}
-                            <CheckIcon size={16} strokeWidth={2.6} />
-                        {:else}
-                            <AlertSeverityIcon severity={item.severity} size={16} />
-                        {/if}
-                    </span>
-                    <div class="pinned-status-copy">
-                        <div class="pinned-status-heading">
-                            <span class="pinned-status-title">{item.title}</span>
-                            {#if item.value}
-                                <span class="pinned-status-value">{item.value}</span>
-                            {/if}
-                        </div>
-                        {#if item.message}
-                            <p class="pinned-status-message">{item.message}</p>
-                        {/if}
-                        {#if item.detail}
-                            <p class="pinned-status-detail">{item.detail}</p>
+                {#if item.kind === 'token'}
+                    <div class="pinned-token-counter">
+                        <span class="pinned-status-title">{item.title}</span>
+                        {#if item.value}
+                            <span class="pinned-token-counter-value">
+                                <span class="pinned-token-counter-separator" aria-hidden="true">|</span>
+                                {item.value}
+                            </span>
                         {/if}
                     </div>
-                    <button
-                        type="button"
-                        class="pinned-status-close"
-                        aria-label="Close pinned status"
-                        onclick={() => clearPinnedStatus(item.key)}
-                    >
-                        <XIcon size={16} />
-                    </button>
-                </div>
+                {:else}
+                    <div class="pinned-status-row">
+                        <span class="pinned-status-chip" aria-hidden="true">
+                            {#if item.severity === 'success'}
+                                <CheckIcon size={16} strokeWidth={2.6} />
+                            {:else}
+                                <AlertSeverityIcon severity={item.severity} size={16} />
+                            {/if}
+                        </span>
+                        <div class="pinned-status-copy">
+                            <div class="pinned-status-heading">
+                                <span class="pinned-status-title">{item.title}</span>
+                                {#if item.value}
+                                    <span class="pinned-status-value">{item.value}</span>
+                                {/if}
+                            </div>
+                            {#if item.message}
+                                <p class="pinned-status-message">{item.message}</p>
+                            {/if}
+                            {#if item.detail}
+                                <p class="pinned-status-detail">{item.detail}</p>
+                            {/if}
+                        </div>
+                        <button
+                            type="button"
+                            class="pinned-status-close"
+                            aria-label="Close pinned status"
+                            onclick={() => clearPinnedStatus(item.key)}
+                        >
+                            <XIcon size={16} />
+                        </button>
+                    </div>
+                {/if}
             </section>
         {/each}
     </div>
@@ -128,6 +140,7 @@
     .pinned-status-card {
         box-sizing: border-box;
         width: 100%;
+        max-height: min(18em, 70vh);
         padding: 0.6em 0.6em 0.6em 0.6em;
         border-radius: 0.375rem;
         border: 1px solid color-mix(in srgb, var(--pinned-accent) 70%, var(--risu-theme-darkborderc, rgb(75 75 75)));
@@ -137,10 +150,48 @@
         backdrop-filter: blur(10px);
         animation: pinned-status-enter 180ms cubic-bezier(0.16, 1, 0.3, 1);
         will-change: transform, opacity;
+        overflow-y: auto;
         box-shadow:
             0 10px 30px -8px rgb(0 0 0 / 0.55),
             0 0 0 1px color-mix(in srgb, var(--pinned-accent) 25%, transparent),
             0 0 22px -6px var(--pinned-glow);
+    }
+
+    .token-counter-card {
+        padding: 0.6em 1em;
+    }
+
+    .pinned-token-counter {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.1em;
+        min-width: min(30em, calc(100vw - 4rem));
+        min-height: 1.9em;
+    }
+
+    .pinned-token-counter .pinned-status-title {
+        flex: none;
+        text-align: left;
+    }
+
+    .pinned-token-counter-value {
+        display: inline-flex;
+        flex: 1 1 auto;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.7em;
+        min-width: 0;
+        color: var(--pinned-icon-color);
+        font-size: 0.9em;
+        font-weight: 700;
+        line-height: 1.2;
+        text-align: right;
+    }
+
+    .pinned-token-counter-separator {
+        color: color-mix(in srgb, var(--risu-theme-textcolor2, #a3a3a3) 85%, transparent);
+        font-weight: 600;
     }
 
     .pinned-status-row {

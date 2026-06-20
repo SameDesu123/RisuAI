@@ -1033,6 +1033,8 @@ export const languageChineseTraditional = {
     "normal": "正常",
     "error": "錯誤",
     "input": "輸入",
+    "output": "輸出",
+    "tokenCounter": "Token 計數器",
     "select": "選擇",
     "options": "選項",
     "alertContent": "提示內容",

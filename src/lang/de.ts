@@ -1042,6 +1042,8 @@ export const languageGerman = {
     "normal": "Normal",
     "error": "Fehler",
     "input": "Eingabe",
+    "output": "Ausgabe",
+    "tokenCounter": "Token-Zähler",
     "select": "Auswählen",
     "options": "Optionen",
     "alertContent": "Alarminhalt",
