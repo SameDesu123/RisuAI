@@ -294,6 +294,7 @@ export const displayOtherSettingsItems: SettingItem[] = [
         keywords: ['toast', 'notification', 'position'],
     },
     { id: 'display.showPromptComparison', type: 'check', labelKey: 'showPromptComparison', bindKey: 'showPromptComparison', keywords: ['prompt', 'comparison'] },
+    { id: 'display.showStreamingTokenCounter', type: 'check', labelKey: 'showStreamingTokenCounter', bindKey: 'showStreamingTokenCounter', keywords: ['streaming', 'token', 'counter'] },
     {
         id: 'display.textScreenBorder',
         type: 'custom',

@@ -1185,6 +1185,7 @@ export const languageChinese = {
     "banCharacterset": "字符集自动重新生成",
     "realmDirectOpen": "在 RisuRealm 中直接打开角色",
     "showPromptComparison": "显示提示词比较",
+    "showStreamingTokenCounter": "显示串流 Token 计数器",
     "inlayErrorResponse": "嵌入错误响应",
     "triggerOn": "触发于",
     "noConfig": "无配置",
