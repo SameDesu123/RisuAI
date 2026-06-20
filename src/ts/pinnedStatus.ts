@@ -11,12 +11,16 @@ export interface PinnedStatusInput {
     detail?: string;
     severity?: AlertSeverity;
     kind?: PinnedStatusKind;
+    tokenInput?: number;
+    tokenOutput?: number;
 }
 
 export interface PinnedStatusItem extends Required<Pick<PinnedStatusInput, 'key' | 'title' | 'severity' | 'kind'>> {
     message?: string;
     value?: string;
     detail?: string;
+    tokenInput?: number;
+    tokenOutput?: number;
     collapsed: boolean;
     createdAt: number;
     updatedAt: number;
