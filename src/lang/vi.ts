@@ -1179,7 +1179,7 @@ export const languageVietnamese = {
     "menuSideBar": "Thanh bên menu",
     "home": "Trang chủ",
     "showSavingIcon": "Hiển thị biểu tượng đang lưu",
-    "toastPosition": "Vị trí toast",
+    "toastPosition": "Vị trí thông báo",
     "toastPositionTopCenter": "Trên giữa",
     "toastPositionTopRight": "Trên phải",
     "pluginVersionWarn": "Đây là phiên bản {{plugin_version}} của plugin, không tương thích với phiên bản Risuai này. Vui lòng cập nhật plugin lên phiên bản {{required_version}}.",

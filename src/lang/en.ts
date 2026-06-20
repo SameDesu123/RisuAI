@@ -1335,7 +1335,7 @@ export const languageEnglish = {
     menuSideBar: "Menu Side Bar",
     home: "Home",
     showSavingIcon: "Show Saving Icon",
-    toastPosition: "Toast Position",
+    toastPosition: "Notification Position",
     toastPositionTopCenter: "Top Center",
     toastPositionTopRight: "Top Right",
     pluginVersionWarn:

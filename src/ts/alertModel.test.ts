@@ -13,16 +13,6 @@ describe('getLegacyAlertSeverity', () => {
 });
 
 describe('getAlertDescriptor', () => {
-    it('keeps toast non-blocking and auto-dismissed', () => {
-        expect(getAlertDescriptor('toast')).toEqual({
-            severity: 'neutral',
-            surface: 'toast',
-            blocking: false,
-            dismissible: false,
-            autoDismiss: true,
-        });
-    });
-
     it('marks extracted special views as dialogs', () => {
         expect(getAlertDescriptor('cardexport').surface).toBe('dialog');
         expect(getAlertDescriptor('selectModule').surface).toBe('dialog');

@@ -1179,7 +1179,7 @@ export const languageSpanish = {
     "menuSideBar": "Barra Lateral del Menú",
     "home": "Inicio",
     "showSavingIcon": "Mostrar Icono de Guardado",
-    "toastPosition": "Posición del toast",
+    "toastPosition": "Posición de notificación",
     "toastPositionTopCenter": "Superior central",
     "toastPositionTopRight": "Superior derecha",
     "pluginVersionWarn": "Esta es la versión {{plugin_version}} del plugin, que no es compatible con esta versión de Risuai. Por favor, actualiza el plugin a la versión {{required_version}}.",
