@@ -1,52 +1,14 @@
 <script lang="ts">
     import { ChevronDownIcon, ChevronUpIcon } from '@lucide/svelte';
-    import type { AlertSeverity } from 'src/ts/alertModel';
     import { pinnedStatusStore, togglePinnedStatusCollapsed } from 'src/ts/pinnedStatus';
     import AlertSeverityIcon from './AlertSeverityIcon.svelte';
-
-    const severityConfig: Record<AlertSeverity, {
-        iconColor: string;
-        chipBg: string;
-        accent: string;
-        glow: string;
-    }> = {
-        success: {
-            iconColor: 'rgb(52 211 153)',
-            chipBg: 'rgb(52 211 153 / 0.16)',
-            accent: 'rgb(52 211 153 / 0.55)',
-            glow: 'rgb(52 211 153 / 0.22)',
-        },
-        info: {
-            iconColor: 'rgb(96 165 250)',
-            chipBg: 'rgb(96 165 250 / 0.16)',
-            accent: 'rgb(96 165 250 / 0.55)',
-            glow: 'rgb(96 165 250 / 0.22)',
-        },
-        warning: {
-            iconColor: 'rgb(251 191 36)',
-            chipBg: 'rgb(251 191 36 / 0.16)',
-            accent: 'rgb(251 191 36 / 0.55)',
-            glow: 'rgb(251 191 36 / 0.22)',
-        },
-        error: {
-            iconColor: 'rgb(248 113 113)',
-            chipBg: 'rgb(248 113 113 / 0.16)',
-            accent: 'rgb(248 113 113 / 0.55)',
-            glow: 'rgb(248 113 113 / 0.22)',
-        },
-        neutral: {
-            iconColor: 'rgb(156 163 175)',
-            chipBg: 'rgb(156 163 175 / 0.16)',
-            accent: 'rgb(156 163 175 / 0.45)',
-            glow: 'rgb(0 0 0 / 0.2)',
-        },
-    };
+    import { alertSeverityStyles } from './alertSeverityStyles';
 </script>
 
 {#if $pinnedStatusStore.length > 0}
     <div class="pinned-status-stack fixed right-4 top-[4.25rem] z-40 flex flex-col gap-2 pointer-events-none">
         {#each $pinnedStatusStore as item (item.key)}
-            {@const config = severityConfig[item.severity]}
+            {@const config = alertSeverityStyles[item.severity]}
             <section
                 class:collapsed={item.collapsed}
                 class="pinned-status-card pointer-events-auto"
