@@ -1185,7 +1185,7 @@ export const languageSpanish = {
     "banCharacterset": "Regeneración Automática en Conjunto de Caracteres",
     "realmDirectOpen": "Abrir personaje directamente en RisuRealm",
     "showPromptComparison": "Mostrar Comparación de Prompt",
-    "showStreamingTokenCounter": "Mostrar contador de tokens en streaming",
+    "showResponseTokenCounter": "Mostrar contador de tokens de respuesta",
     "inlayErrorResponse": "Respuesta de Error de Incrustación",
     "triggerOn": "Trigger Activado",
     "noConfig": "Sin Configuración",

@@ -1207,7 +1207,7 @@ export const languageKorean = {
     "banCharacterset": "문자 집합으로 자동 재생성",
     "realmDirectOpen": "RisuRealm 미리보기에서 바로 열기",
     "showPromptComparison": "프롬프트 비교 보기",
-    "showStreamingTokenCounter": "스트리밍 토큰 카운터 표시",
+    "showResponseTokenCounter": "응답 토큰 카운터 표시",
     "inlayErrorResponse": "인레이 오류 응답",
     "triggerOn": "활성화 조건",
     "noConfig": "설정 없음",
