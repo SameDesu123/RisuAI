@@ -65,7 +65,7 @@ export let previewFormated:OpenAIChat[] = []
 export let previewBody:string = ''
 
 const RESPONSE_TOKEN_COUNTER_THROTTLE_MS = 500;
-const RESPONSE_TOKEN_COUNTER_FINAL_VISIBLE_MS = 1500;
+const RESPONSE_TOKEN_COUNTER_FINAL_VISIBLE_MS = 10000;
 
 function formatResponseTokenValue(tokens: number) {
     return `${tokens.toLocaleString()} ${language.tokens}`;
