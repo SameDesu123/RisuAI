@@ -19,7 +19,8 @@ app.use(express.text({ limit: '100mb' }));
 const {pipeline} = require('stream/promises')
 const https = require('https');
 const sslPath = path.join(process.cwd(), 'server/node/ssl/certificate');
-const hubURL = 'https://sv.risuai.xyz'; 
+const defaultHubURL = 'https://sv.risuai.xyz';
+const hubURL = normalizeHubURL(process.env.RISU_HUB_URL || defaultHubURL);
 const openid = require('openid-client');
 
 let password = ''
@@ -78,6 +79,22 @@ const loginRouteLimiter = rateLimit({
 });
 function isHex(str) {
     return hexRegex.test(str.toUpperCase().trim()) || str === '__password';
+}
+
+function normalizeHubURL(rawHubURL) {
+    try {
+        const parsed = new URL(rawHubURL);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            throw new Error('Hub URL must use http or https');
+        }
+        parsed.username = '';
+        parsed.password = '';
+        parsed.hash = '';
+        return parsed.toString().replace(/\/$/, '');
+    } catch (error) {
+        console.error(`[Server] Invalid RISU_HUB_URL: ${error.message}`);
+        return defaultHubURL;
+    }
 }
 
 async function hashJSON(json){
@@ -959,14 +976,15 @@ async function hubProxyFunc(req, res) {
     try {
         let externalURL = '';
 
-        const pathHeader = req.headers['x-risu-node-path'];
-        if (pathHeader) {
-            const decodedPath = decodeURIComponent(pathHeader);
-            externalURL = decodedPath;
-        } else {
-            const pathAndQuery = req.originalUrl.replace(/^\/hub-proxy/, '');
-            externalURL = hubURL + pathAndQuery;
+        if (Object.prototype.hasOwnProperty.call(req.headers, 'x-risu-node-path')) {
+            res.status(400).send({
+                error: 'Custom hub proxy targets are not allowed'
+            });
+            return;
         }
+
+        const pathAndQuery = req.originalUrl.replace(/^\/hub-proxy/, '');
+        externalURL = hubURL + pathAndQuery;
         
         const headersToSend = { ...req.headers };
         delete headersToSend.host;
