@@ -36,6 +36,7 @@
     import IrisModal from './lib/Others/IrisModal.svelte';
     import Legal from './lib/Others/Legal.svelte';
     import CustomSidebarConfig from './lib/Others/CustomSidebarConfig.svelte';
+    import { isLegalConfigured } from './ts/legal';
 
 
   
@@ -100,7 +101,7 @@
     }
 
 }}>
-    {#if !import.meta.env.VITE_RISU_LEGAL_CONFIGURED}
+    {#if !isLegalConfigured}
         <Legal />
     {:else if aprilFools}
 

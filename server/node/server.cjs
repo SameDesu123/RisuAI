@@ -55,6 +55,7 @@ const PROXY_STREAM_MAX_PENDING_EVENTS = 512;
 const PROXY_STREAM_MAX_PENDING_BYTES = 2 * 1024 * 1024;
 const PROXY_STREAM_MAX_BODY_BASE64_BYTES = 8 * 1024 * 1024;
 const proxyStreamJobs = new Map();
+const enabledEnvValues = new Set(['true', '1', 'yes', 'y', 'on']);
 const authenticatedRouteLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 2000,
@@ -78,6 +79,22 @@ const loginRouteLimiter = rateLimit({
 });
 function isHex(str) {
     return hexRegex.test(str.toUpperCase().trim()) || str === '__password';
+}
+
+function isEnabledEnv(value) {
+    return typeof value === 'string' && enabledEnvValues.has(value.trim().toLowerCase());
+}
+
+function isLegalConfigured() {
+    return isEnabledEnv(process.env.RISU_LEGAL_CONFIGURED) || isEnabledEnv(process.env.VITE_RISU_LEGAL_CONFIGURED);
+}
+
+function createRuntimeConfigScript() {
+    const runtimeConfig = JSON.stringify({
+        legalConfigured: isLegalConfigured()
+    }).replace(/</g, '\\u003c');
+
+    return `<script>globalThis.__NODE__ = true;globalThis.__RISU_RUNTIME_CONFIG__ = ${runtimeConfig}</script>`;
 }
 
 async function hashJSON(json){
@@ -615,7 +632,7 @@ app.get('/', async (req, res, next) => {
         const mainIndex = await fs.readFile(path.join(process.cwd(), 'dist', 'index.html'))
         const root = htmlparser.parse(mainIndex)
         const head = root.querySelector('head')
-        head.innerHTML = `<script>globalThis.__NODE__ = true</script>` + head.innerHTML
+        head.innerHTML = createRuntimeConfigScript() + head.innerHTML
         
         res.send(root.toString())
     } catch (error) {

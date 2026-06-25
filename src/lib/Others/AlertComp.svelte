@@ -28,6 +28,7 @@
     import { translateStackTrace } from "../../ts/sourcemap";
     import { getDetailedOSLabel, getFallbackOSLabel, getRisuEnvironmentLabel } from "src/ts/platform";
     import versionData from "../../../version.json";
+    import { isLegalConfigured } from "src/ts/legal";
 
     let showDetails = $state(false);
     let translatedStackTrace = $state('');
@@ -310,7 +311,7 @@
                         })
                     }}>NO</Button>
                 </div>
-            {:else if $alertStore.type === 'tos' && import.meta.env.VITE_RISU_LEGAL_CONFIGURED}
+            {:else if $alertStore.type === 'tos' && isLegalConfigured}
                 <div class="flex gap-2 w-full">
                     <Button className="mt-4 grow" onclick={() => {
                         alertStore.set({
