@@ -509,7 +509,7 @@
             }
 
             for (const trigger of importedTriggers) {
-                if (!trigger.hasOwnProperty('comment') || 
+                if (!trigger.hasOwnProperty('comment') ||
                     !trigger.hasOwnProperty('type') ||
                     !trigger.hasOwnProperty('conditions') ||
                     !trigger.hasOwnProperty('effect') ||

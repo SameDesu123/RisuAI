@@ -2,9 +2,6 @@ import { get, writable, type Writable } from "svelte/store"
 import type { Database, Message } from "./storage/database.svelte"
 import { getDatabase } from "./storage/database.svelte"
 import { DBState, selectedCharID } from "./stores.svelte"
-import {open} from '@tauri-apps/plugin-dialog'
-import { readFile } from "@tauri-apps/plugin-fs"
-import { basename } from "@tauri-apps/api/path"
 import { createBlankChar, getCharImage } from "./characters"
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { isIOS, isTauri } from "src/ts/platform"
@@ -50,98 +47,28 @@ export type SelectedFile = {
     data: Uint8Array
 }
 
-export type SelectedFileReference = {
-    name: string
-    file?: File
-    path?: string
-}
-
 const FILE_DIALOG_FOCUS_DELAY = 300
 
 function normalizeFileExtension(ext: string) {
     return ext.startsWith('.') ? ext.slice(1) : ext
 }
 
-function getDialogFilters(ext: string[]) {
-    if(getDatabase().allowAllExtentionFiles || ext[0] === '*'){
-        return undefined
-    }
-
-    return [{
-        name: ext.map(normalizeFileExtension).join(', '),
-        extensions: ext.map(normalizeFileExtension)
-    }]
-}
-
 export async function selectSingleFile(ext:string[]):Promise<SelectedFile|null>{
-    if(!isTauri){
-        const v = await selectFileByDom(ext, 'single')
-        const file = v[0]
-        if(!file){
-            return null
-        }
-        return {name: file.name,data:await readFileAsUint8Array(file)}
-    }
-
-    const selected = await open({
-        filters: getDialogFilters(ext)
-    });
-    if (Array.isArray(selected)) {
+    const v = await selectFileByDom(ext, 'single')
+    const file = v[0]
+    if(!file){
         return null
-    } else if (selected === null) {
-        return null
-    } else {
-        return {name: await basename(selected),data:await readFile(selected)}
     }
-}
-
-export async function selectSingleFileReference(ext:string[]):Promise<SelectedFileReference|null>{
-    if(!isTauri){
-        const v = await selectFileByDom(ext, 'single')
-        const file = v[0]
-        if(!file){
-            return null
-        }
-        return {name: file.name, file}
-    }
-
-    const selected = await open({
-        filters: getDialogFilters(ext)
-    });
-    if (Array.isArray(selected)) {
-        return null
-    } else if (selected === null) {
-        return null
-    } else {
-        return {name: await basename(selected), path: selected}
-    }
+    return {name: file.name,data:await readFileAsUint8Array(file)}
 }
 
 export async function selectMultipleFile(ext:string[]):Promise<SelectedFile[]>{
-    if(!isTauri){
-        const v = await selectFileByDom(ext, 'multiple')
-        let arr:SelectedFile[] = []
-        for(const file of v){
-            arr.push({name: file.name,data:await readFileAsUint8Array(file)})
-        }
-        return arr
+    const v = await selectFileByDom(ext, 'multiple')
+    let arr:SelectedFile[] = []
+    for(const file of v){
+        arr.push({name: file.name,data:await readFileAsUint8Array(file)})
     }
-
-    const selected = await open({
-        filters: getDialogFilters(ext),
-        multiple: true
-    });
-    if (Array.isArray(selected)) {
-        let arr:SelectedFile[] = []
-        for(const file of selected){
-            arr.push({name: await basename(file),data:await readFile(file)})
-        }
-        return arr
-    } else if (selected === null) {
-        return []
-    } else {
-        return [{name: await basename(selected),data:await readFile(selected)}]
-    }
+    return arr
 }
 
 export const replacePlaceholders = (msg:string, name:string) => {
@@ -232,7 +159,7 @@ export function selectFileByDom(allowedExtensions:string[], multiple:'multiple'|
         fileInput.style.height = '1px'
         fileInput.style.opacity = '0'
         fileInput.style.pointerEvents = 'none'
-    
+
         let settled = false
         const cleanup = () => {
             fileInput.remove()

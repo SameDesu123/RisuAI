@@ -11,7 +11,7 @@
     import { unMigrationAccount } from "src/ts/storage/accountStorage";
     import { checkDriver } from "src/ts/drive/drive";
     import { LoadLocalBackup, SaveLocalBackup, SavePartialLocalBackup } from "src/ts/drive/backuplocal";
-    import { selectSingleFileReference } from "src/ts/util";
+    import { selectFileByDom } from "src/ts/util";
     import Button from "src/lib/UI/GUI/Button.svelte";
     import { exportAsDataset } from "src/ts/storage/exportAsDataset";
     import { loginToSionyw, testSionywLogin } from "src/ts/sionyw";
@@ -65,7 +65,7 @@
 
 <Button
     onclick={async () => {
-        const selectedFile = await selectSingleFileReference(['bin'])
+        const selectedFile = (await selectFileByDom(['bin'], 'single'))[0]
         if(!selectedFile){
             return
         }

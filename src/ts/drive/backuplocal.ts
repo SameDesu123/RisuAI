@@ -1,4 +1,4 @@
-import { BaseDirectory, open as openFile, readFile, readDir, writeFile } from "@tauri-apps/plugin-fs";
+import { BaseDirectory, readFile, readDir, writeFile } from "@tauri-apps/plugin-fs";
 import localforage from "localforage";
 import { alertError, alertNormal, alertStore, alertWait, alertMd, alertConfirm } from "../alert";
 import { LocalWriter, forageStorage, requiresFullEncoderReload } from "../globalApi.svelte";
@@ -6,7 +6,7 @@ import { isTauri } from "src/ts/platform"
 import { decodeRisuSave, encodeRisuSaveLegacy } from "../storage/risuSave";
 import { getDatabase, setDatabaseLite } from "../storage/database.svelte";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { decryptBuffer, encryptBuffer, selectSingleFileReference, sleep, type SelectedFileReference } from "../util";
+import { decryptBuffer, encryptBuffer, selectFileByDom, sleep } from "../util";
 import { hubURL } from "../characterCards";
 import { language } from "src/lang";
 import { getColdStorageItem, listColdDataKeys, setColdStorageItem } from "../process/coldstorage.svelte";
@@ -425,28 +425,17 @@ export async function SavePartialLocalBackup(){
     }
 }
 
-export async function LoadLocalBackup(selectedFile?: SelectedFileReference | null){
+export async function LoadLocalBackup(selectedFile?: File | null){
     try {
-        const file = selectedFile === undefined ? await selectSingleFileReference(['bin']) : selectedFile
+        const file = selectedFile === undefined ? (await selectFileByDom(['bin'], 'single'))[0] : selectedFile
         if(!file){
             return
         }
 
-        await loadBackupFromSelectedFile(file)
+        await loadBackupFromBlob(file)
     } catch (error) {
         console.error(error);
         alertError('Failed, Is file corrupted?')
-    }
-}
-
-async function loadBackupFromSelectedFile(file: SelectedFileReference) {
-    if(file.file){
-        await loadBackupFromBlob(file.file)
-        return
-    }
-
-    if(file.path){
-        await loadBackupFromTauriPath(file.path)
     }
 }
 
@@ -459,24 +448,6 @@ async function loadBackupFromBlob(file: Blob) {
         }
         return value
     }, file.size)
-}
-
-async function loadBackupFromTauriPath(path: string) {
-    const file = await openFile(path, { read: true });
-    try {
-        const fileInfo = await file.stat()
-        const chunkSize = 1024 * 1024
-        await loadBackupFromChunks(async () => {
-            const buffer = new Uint8Array(chunkSize)
-            const bytesRead = await file.read(buffer)
-            if(bytesRead === null){
-                return null
-            }
-            return buffer.slice(0, bytesRead)
-        }, fileInfo.size)
-    } finally {
-        await file.close()
-    }
 }
 
 async function loadBackupFromChunks(readNextChunk: () => Promise<Uint8Array | null>, fileSize: number) {
