@@ -45,7 +45,12 @@ import { isTauri, isNodeServer } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
-import { saveEmergencyChatBackup } from "./storage/emergencyBackup";
+import {
+    cleanupResolvedEmergencyBackups,
+    isEmergencyBackupSupported,
+    registerEmergencyBackupBaseSnapshots,
+    saveEmergencyChatBackup
+} from "./storage/emergencyBackup";
 
 export const forageStorage = new AutoStorage()
 
@@ -327,6 +332,7 @@ export async function saveDb() {
     await encoder.init(getDatabase(), {
         compression: forageStorage.isAccount
     })
+    registerEmergencyBackupBaseSnapshots(getDatabase())
 
     $effect.root(() => {
 
@@ -478,6 +484,14 @@ export async function saveDb() {
                 if (forageStorage.isAccount) {
                     await sleep(3000)
                 }
+            }
+            if (isEmergencyBackupSupported()) {
+                try {
+                    await cleanupResolvedEmergencyBackups(db)
+                } catch (error) {
+                    console.warn('Failed to clean resolved emergency backups:', error)
+                }
+                registerEmergencyBackupBaseSnapshots(db, toSave.chat)
             }
             if (!forageStorage.isAccount) {
                 await getDbBackups()

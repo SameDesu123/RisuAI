@@ -691,6 +691,10 @@ export const languageKorean = {
         "recoveryPrompt": "Emergency backup에서 채팅 백업 {0}개, 메시지 {1}개를 찾았습니다. 새 채팅으로 복구할까요?",
         "recover": "복구",
         "discard": "버리기",
+        "discardConfirm": "선택한 Emergency backup 데이터를 버릴까요?",
+        "discardConfirm2": "이 작업은 되돌릴 수 없습니다. Emergency backup 데이터를 정말 버릴까요?",
+        "disableConfirm": "Emergency Backup을 끄면 기존 Emergency backup 데이터가 삭제됩니다. 계속할까요?",
+        "disableConfirm2": "이 작업은 되돌릴 수 없습니다. Emergency Backup을 끄고 데이터를 정말 삭제할까요?",
         "recoveredChatSuffix": "Emergency backup",
         "untitledChat": "이름 없는 채팅"
     },

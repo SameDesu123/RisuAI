@@ -144,12 +144,9 @@ export const advancedSettingsItems: SettingItem[] = [
     { id: 'adv.remIncomp', type: 'check', labelKey: 'removeIncompleteResponse', bindKey: 'removeIncompleteResponse', classes: 'mt-4' },
     {
         id: 'adv.emergencyBackup',
-        type: 'check',
-        labelKey: 'enableEmergencyBackup',
-        bindKey: 'enableEmergencyBackup',
-        helpKey: 'emergencyBackup',
+        type: 'custom',
+        componentId: 'EmergencyBackupToggle',
         condition: () => !isNodeServer && !isTauri,
-        classes: 'mt-4'
     },
     { id: 'adv.newOai', type: 'check', labelKey: 'newOAIHandle', bindKey: 'newOAIHandle', classes: 'mt-4' },
     { id: 'adv.noWaitTrans', type: 'check', labelKey: 'noWaitForTranslate', bindKey: 'noWaitForTranslate', classes: 'mt-4' },

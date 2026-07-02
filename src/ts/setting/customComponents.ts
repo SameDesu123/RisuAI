@@ -21,6 +21,7 @@ import BanCharacterSetSettings from 'src/lib/Setting/Pages/Advanced/BanCharacter
 import CustomModelsSettings from 'src/lib/Setting/Pages/Advanced/CustomModelsSettings.svelte';
 import SettingsExportButtons from 'src/lib/Setting/Pages/Advanced/SettingsExportButtons.svelte';
 import CustomSidebarConfigButton from 'src/lib/Setting/Pages/Advanced/CustomSidebarConfigButton.svelte';
+import EmergencyBackupToggle from 'src/lib/Setting/Pages/Advanced/EmergencyBackupToggle.svelte';
 import ColorSchemeSelect from 'src/lib/Setting/Pages/Display/ColorSchemeSelect.svelte';
 import CustomColorSchemeEditor from 'src/lib/Setting/Pages/Display/CustomColorSchemeEditor.svelte';
 import CustomTextThemeEditor from 'src/lib/Setting/Pages/Display/CustomTextThemeEditor.svelte';
@@ -39,6 +40,7 @@ export const customComponents: Record<string, Component<any>> = {
     'CustomModelsSettings': CustomModelsSettings,
     'SettingsExportButtons': SettingsExportButtons,
     'CustomSidebarConfig': CustomSidebarConfigButton,
+    'EmergencyBackupToggle': EmergencyBackupToggle,
     'ColorSchemeSelect': ColorSchemeSelect,
     'CustomColorSchemeEditor': CustomColorSchemeEditor,
     'CustomTextThemeEditor': CustomTextThemeEditor,

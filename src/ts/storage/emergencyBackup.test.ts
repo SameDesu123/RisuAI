@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
     applyEmergencyRecoveryCandidates,
+    clearEmergencyBackups,
+    cleanupResolvedEmergencyBackups,
     createEmergencyBackupRecord,
     getEmergencyChatFingerprint,
     getEmergencyRecoveryCandidates,
@@ -108,21 +110,29 @@ describe('emergencyBackup', () => {
     });
 
     it('creates a chat backup record', () => {
-        const sourceDb = db();
+        const baseChat = chat('chat-1', ['hello'], 3000);
+        const targetChat = chat('chat-1', ['hello', 'newer'], 3000);
+        const sourceDb = db({ chat: targetChat });
         const record = createEmergencyBackupRecord({
             db: sourceDb,
             charId: 'char-1',
             chatId: 'chat-1',
             appVer: 'test',
+            baseChat,
             now: 1234,
         });
 
         expect(record?.savedAt).toBe(1234);
-        expect(record?.messageCount).toBe(1);
-        expect(record?.fingerprint).toBe(getEmergencyChatFingerprint(sourceDb.characters[0].chats[0]));
+        expect(record?.version).toBe(2);
+        expect(record?.baseFingerprint).toBe(getEmergencyChatFingerprint(baseChat));
+        expect(record?.targetFingerprint).toBe(getEmergencyChatFingerprint(targetChat));
+        expect(record?.targetMessageCount).toBe(2);
+        expect(record?.messageStart).toBe(1);
+        expect(record?.messages).toEqual([targetChat.message[1]]);
+        expect((record as any)?.chat).toBeUndefined();
     });
 
-    it('keeps the latest record per chat and prunes old records', async () => {
+    it('keeps the latest record per chat and prunes invalid records', async () => {
         const storage = new MemoryStorage();
         const recent = createEmergencyBackupRecord({
             db: db({ chat: chat('chat-1', ['new'], 2000) }),
@@ -138,23 +148,22 @@ describe('emergencyBackup', () => {
             appVer: 'test',
             now: 1000,
         });
-        const now = 3000;
-        const expiredAt = now - (31 * 24 * 60 * 60 * 1000);
-        const expired = createEmergencyBackupRecord({
-            db: db({ chat: chat('chat-2', ['expired'], expiredAt) }),
+        const other = createEmergencyBackupRecord({
+            db: db({ chat: chat('chat-2', ['kept'], 500) }),
             charId: 'char-1',
             chatId: 'chat-2',
             appVer: 'test',
-            now: expiredAt,
+            now: 500,
         });
 
         await storage.setItem('chat:char-1:chat-1:old', old);
         await storage.setItem('chat:char-1:chat-1', recent);
-        await storage.setItem('chat:char-1:chat-2', expired);
+        await storage.setItem('chat:char-1:chat-2', other);
+        await storage.setItem('chat:broken', { nope: true });
 
-        await pruneEmergencyBackups(storage, now);
+        await pruneEmergencyBackups(storage, 3000);
 
-        expect(await storage.keys()).toEqual(['chat:char-1:chat-1']);
+        expect((await storage.keys()).sort()).toEqual(['chat:char-1:chat-1', 'chat:char-1:chat-2']);
     });
 
     it('returns only newer recovery candidates', async () => {
@@ -166,14 +175,15 @@ describe('emergencyBackup', () => {
             chatId: 'chat-1',
             appVer: 'test',
             storage,
+            baseChat: chat('chat-1', ['hello'], 3000),
             now: 3000,
         });
 
-        const currentDb = db({ chat: chat('chat-1', ['hello'], 1000) });
+        const currentDb = db({ chat: chat('chat-1', ['hello'], 3000) });
         const candidates = await getEmergencyRecoveryCandidates(currentDb, storage);
 
         expect(candidates).toHaveLength(1);
-        expect(candidates[0].record.messageCount).toBe(2);
+        expect(candidates[0].record.targetMessageCount).toBe(2);
     });
 
     it('restores candidates as new chats without overwriting the original', async () => {
@@ -185,10 +195,11 @@ describe('emergencyBackup', () => {
             chatId: 'chat-1',
             appVer: 'test',
             storage,
+            baseChat: chat('chat-1', ['hello'], 3000),
             now: 3000,
         });
 
-        const currentDb = db({ chat: chat('chat-1', ['hello'], 1000) });
+        const currentDb = db({ chat: chat('chat-1', ['hello'], 3000) });
         const candidates = await getEmergencyRecoveryCandidates(currentDb, storage);
         const recovered = await applyEmergencyRecoveryCandidates({
             db: currentDb,
@@ -202,7 +213,69 @@ describe('emergencyBackup', () => {
         expect(currentDb.characters[0].chats[0].id).toBe('chat-1');
         expect(currentDb.characters[0].chats[1].id).toBe('restored-chat');
         expect(currentDb.characters[0].chats[1].message).toHaveLength(2);
+        expect(await storage.keys()).toEqual(['chat:char-1:chat-1']);
+        expect((await storage.getItem('chat:char-1:chat-1') as any)?.restoredChatId).toBe('restored-chat');
+    });
+
+    it('cleans restored backups only after they are present in the saved database', async () => {
+        const storage = new MemoryStorage();
+        const sourceDb = db({ chat: chat('chat-1', ['hello', 'newer'], 3000) });
+        await saveEmergencyChatBackup({
+            db: sourceDb,
+            charId: 'char-1',
+            chatId: 'chat-1',
+            appVer: 'test',
+            storage,
+            baseChat: chat('chat-1', ['hello'], 3000),
+            now: 3000,
+        });
+
+        const currentDb = db({ chat: chat('chat-1', ['hello'], 3000) });
+        const candidates = await getEmergencyRecoveryCandidates(currentDb, storage);
+        await applyEmergencyRecoveryCandidates({
+            db: currentDb,
+            candidates,
+            storage,
+            createId: () => 'restored-chat',
+        });
+
+        const cleaned = await cleanupResolvedEmergencyBackups(currentDb, storage);
+
+        expect(cleaned).toBe(1);
         expect(await storage.keys()).toEqual([]);
+    });
+
+    it('keeps restored metadata when the same backup is saved again before cleanup', async () => {
+        const storage = new MemoryStorage();
+        const sourceDb = db({ chat: chat('chat-1', ['hello', 'newer'], 3000) });
+        await saveEmergencyChatBackup({
+            db: sourceDb,
+            charId: 'char-1',
+            chatId: 'chat-1',
+            appVer: 'test',
+            storage,
+            baseChat: chat('chat-1', ['hello'], 3000),
+            now: 3000,
+        });
+
+        const currentDb = db({ chat: chat('chat-1', ['hello'], 3000) });
+        const candidates = await getEmergencyRecoveryCandidates(currentDb, storage);
+        await applyEmergencyRecoveryCandidates({
+            db: currentDb,
+            candidates,
+            storage,
+            createId: () => 'restored-chat',
+        });
+        await saveEmergencyChatBackup({
+            db: sourceDb,
+            charId: 'char-1',
+            chatId: 'chat-1',
+            appVer: 'test',
+            storage,
+            now: 3001,
+        });
+
+        expect((await storage.getItem('chat:char-1:chat-1') as any)?.restoredChatId).toBe('restored-chat');
     });
 
     it('does not duplicate an already restored fingerprint', async () => {
@@ -215,11 +288,119 @@ describe('emergencyBackup', () => {
             chatId: 'chat-1',
             appVer: 'test',
             storage,
+            baseChat: chat('chat-1', ['hello'], 3000),
             now: 3000,
         });
 
         const currentDb = db({ chat: backupChat });
         const candidates = await getEmergencyRecoveryCandidates(currentDb, storage);
+
+        expect(candidates).toHaveLength(0);
+    });
+
+    it('keeps a recovery candidate when the current chat no longer matches its base', async () => {
+        const storage = new MemoryStorage();
+        const sourceDb = db({ chat: chat('chat-1', ['current', 'local unsaved'], 2000) });
+        await saveEmergencyChatBackup({
+            db: sourceDb,
+            charId: 'char-1',
+            chatId: 'chat-1',
+            appVer: 'test',
+            storage,
+            baseChat: chat('chat-1', ['current'], 2000),
+            now: 3000,
+        });
+
+        const currentDb = db({ chat: chat('chat-1', ['other device save'], 4000) });
+        const candidates = await getEmergencyRecoveryCandidates(currentDb, storage);
+        const cleaned = await cleanupResolvedEmergencyBackups(currentDb, storage);
+        const recovered = await applyEmergencyRecoveryCandidates({
+            db: currentDb,
+            candidates,
+            storage,
+            createId: () => 'restored-conflict',
+        });
+
+        expect(candidates).toHaveLength(1);
+        expect(cleaned).toBe(0);
+        expect(recovered).toBe(1);
+        expect(currentDb.characters[0].chats[1].id).toBe('restored-conflict');
+        expect(currentDb.characters[0].chats[1].message).toEqual([sourceDb.characters[0].chats[0].message[1]]);
+        expect(await storage.keys()).toEqual(['chat:char-1:chat-1']);
+    });
+
+    it('clears all emergency backup entries', async () => {
+        const storage = new MemoryStorage();
+        await storage.setItem('chat:char-1:chat-1', createEmergencyBackupRecord({
+            db: db({ chat: chat('chat-1', ['hello', 'newer'], 3000) }),
+            charId: 'char-1',
+            chatId: 'chat-1',
+            appVer: 'test',
+            baseChat: chat('chat-1', ['hello'], 3000),
+        }));
+        await storage.setItem('other:key', { kept: true });
+
+        const cleared = await clearEmergencyBackups(storage);
+
+        expect(cleared).toBe(1);
+        expect(await storage.keys()).toEqual(['other:key']);
+    });
+
+    it('returns an equal-length recovery candidate when the backed up chat has newer message time', async () => {
+        const storage = new MemoryStorage();
+        const sourceDb = db({ chat: chat('chat-1', ['newer edit'], 3000) });
+        await saveEmergencyChatBackup({
+            db: sourceDb,
+            charId: 'char-1',
+            chatId: 'chat-1',
+            appVer: 'test',
+            storage,
+            baseChat: chat('chat-1', ['old edit'], 1000),
+            now: 3000,
+        });
+
+        const currentDb = db({ chat: chat('chat-1', ['old edit'], 1000) });
+        const candidates = await getEmergencyRecoveryCandidates(currentDb, storage);
+
+        expect(candidates).toHaveLength(1);
+    });
+
+    it('does not recover a backup that matches the resolved cold-storage chat', async () => {
+        const storage = new MemoryStorage();
+        const fullChat = chat('chat-1', ['hello', 'cold'], 3000);
+        await saveEmergencyChatBackup({
+            db: db({ chat: fullChat }),
+            charId: 'char-1',
+            chatId: 'chat-1',
+            appVer: 'test',
+            storage,
+            baseChat: chat('chat-1', ['hello'], 3000),
+            now: 3000,
+        });
+
+        const coldChat: Chat = {
+            ...fullChat,
+            message: [{
+                role: 'char',
+                data: 'cold:key-1',
+                time: 4000,
+            }],
+            hypaV2Data: {
+                chunks: [],
+                mainChunks: [],
+                lastMainChunkID: 0,
+            },
+            hypaV3Data: {
+                summaries: [],
+            },
+            scriptstate: {},
+            localLore: [],
+        } as Chat;
+        const currentDb = db({ chat: coldChat });
+        const candidates = await getEmergencyRecoveryCandidates(currentDb, {
+            storage,
+            resolveCurrentChat: (candidateChat) => candidateChat.message[0]?.data === 'cold:key-1' ? fullChat : null,
+        });
 
         expect(candidates).toHaveLength(0);
     });

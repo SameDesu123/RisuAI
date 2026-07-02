@@ -10,7 +10,7 @@ import {
 import { changeFullscreen, checkNullish, sleep } from "./util"
 import { v4 as uuidv4 } from 'uuid';
 import { get } from "svelte/store";
-import { setDatabase, defaultSdDataFunc, getDatabase } from "./storage/database.svelte";
+import { setDatabase, defaultSdDataFunc, getDatabase, type Chat } from "./storage/database.svelte";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { checkRisuUpdate } from "./update";
 import { MobileGUI, botMakerMode, selectedCharID, loadedStore, DBState, LoadingStatusState } from "./stores.svelte";
@@ -31,7 +31,7 @@ import { updateLorebooks } from "./characters";
 import { initMobileGesture } from "./hotkey";
 import { moduleUpdate } from "./process/modules";
 import type { AccountStorage } from "./storage/accountStorage";
-import { makeColdData } from "./process/coldstorage.svelte";
+import { coldStorageHeader, getColdStorageItem, makeColdData } from "./process/coldstorage.svelte";
 import {
     forageStorage,
     saveDb,
@@ -286,7 +286,9 @@ async function recoverEmergencyBackupsOnLoad() {
     }
 
     try {
-        const candidates = await getEmergencyRecoveryCandidates(db)
+        const candidates = await getEmergencyRecoveryCandidates(db, {
+            resolveCurrentChat: resolveColdStorageChat,
+        })
         if (candidates.length === 0) {
             return
         }
@@ -301,12 +303,43 @@ async function recoverEmergencyBackupsOnLoad() {
                 db,
                 candidates,
             })
-        } else {
+        } else if (
+            await alertConfirm(language.emergencyBackup.discardConfirm) &&
+            await alertConfirm(language.emergencyBackup.discardConfirm2)
+        ) {
             await discardEmergencyRecoveryCandidates(candidates)
         }
     } catch (error) {
         console.warn('Failed to recover emergency backups:', error)
     }
+}
+
+async function resolveColdStorageChat(chat: Chat): Promise<Chat | null> {
+    const coldStorageData = chat.message?.[0]?.data
+    if (typeof coldStorageData !== 'string' || !coldStorageData.startsWith(coldStorageHeader)) {
+        return null
+    }
+
+    const coldData = await getColdStorageItem(coldStorageData.slice(coldStorageHeader.length))
+    if (Array.isArray(coldData)) {
+        return {
+            ...chat,
+            message: coldData,
+        }
+    }
+
+    if (coldData?.message) {
+        return {
+            ...chat,
+            message: coldData.message,
+            hypaV2Data: coldData.hypaV2Data,
+            hypaV3Data: coldData.hypaV3Data,
+            scriptstate: coldData.scriptstate,
+            localLore: coldData.localLore,
+        }
+    }
+
+    return null
 }
 
 
