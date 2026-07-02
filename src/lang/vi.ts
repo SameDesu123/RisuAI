@@ -87,7 +87,7 @@ export const languageVietnamese = {
         "showUnrecommended": "Nếu được bật, nó sẽ hiển thị các cài đặt không được khuyến nghị, không còn được dùng nữa. KHÔNG KHUYẾN NGHỊ sử dụng các cài đặt này.",
         "imageCompression": "Nếu được bật, nó sẽ nén hình ảnh khi xuất nhân vật. Nếu hình ảnh động không hoạt động, hãy thử tắt tùy chọn này.",
         "useExperimental": "Nếu được bật, nó sẽ hiển thị một số tính năng thử nghiệm.",
-        "emergencyBackup": "Lưu các cuộc trò chuyện vừa thay đổi vào một kho cục bộ riêng của trình duyệt trước khi toàn bộ dữ liệu web được mã hóa để lưu. Ở lần khởi động tiếp theo, Risuai có thể đề nghị khôi phục các bản sao khẩn cấp mới hơn thành cuộc trò chuyện riêng.",
+        "emergencyBackup": "Lưu các cuộc trò chuyện vừa thay đổi vào một kho cục bộ riêng của trình duyệt trước khi toàn bộ dữ liệu web được mã hóa để lưu. Ở lần khởi động tiếp theo, Risuai có thể đề nghị khôi phục các bản sao khẩn cấp mới hơn thành cuộc trò chuyện riêng. Nếu cuộc trò chuyện gốc đã thay đổi sau khi sao lưu, cuộc trò chuyện được khôi phục có thể chỉ chứa phần đã thay đổi thay vì toàn bộ cuộc trò chuyện.",
         "forceProxyAsOpenAI": "Nếu được bật, nó sẽ buộc sử dụng định dạng OpenAI khi sử dụng proxy ngược.",
         "forcePlainFetch": "Nếu được bật, nó sẽ sử dụng api fetch của trình duyệt thay vì yêu cầu http gốc. Điều này có thể gây ra lỗi CORS.",
         "autoFillRequestURL": "Nếu được bật, nó sẽ tự động điền url yêu cầu để khớp với mô hình hiện tại.",
@@ -669,9 +669,12 @@ export const languageVietnamese = {
     "backupLoadConfirm": "Bạn có thực sự muốn tải bản sao lưu? Tất cả dữ liệu sẽ bị mất!",
     "backupLoadConfirm2": "Bạn có thực sự muốn tải bản sao lưu không? Tất cả dữ liệu sẽ bị mất!",
     "emergencyBackup": {
-        "recoveryPrompt": "Emergency backup tìm thấy {0} bản sao lưu cuộc trò chuyện, chứa {1} tin nhắn. Khôi phục chúng thành cuộc trò chuyện mới?",
+        "recoveryPrompt": "Emergency backup tìm thấy {0} bản sao lưu cuộc trò chuyện, chứa {1} tin nhắn đã thay đổi.\nBạn có thể khôi phục chúng thành cuộc trò chuyện mới, kiểm tra cuộc trò chuyện hiện tại trước, hoặc bỏ qua và xóa dữ liệu sao lưu.",
         "recover": "Khôi phục",
-        "discard": "Bỏ qua",
+        "check": "Kiểm tra",
+        "discard": "Bỏ qua (Xóa)",
+        "discardConfirm": "Bỏ qua và xóa dữ liệu Emergency backup đã chọn?",
+        "discardConfirm2": "Không thể hoàn tác thao tác này. Xóa dữ liệu Emergency backup?",
         "recoveredChatSuffix": "Emergency backup",
         "untitledChat": "Cuộc trò chuyện chưa đặt tên"
     },

@@ -8,6 +8,7 @@ import {
     getEmergencyRecoveryCandidates,
     pruneEmergencyBackups,
     saveEmergencyChatBackup,
+    type EmergencyBackupRecord,
     type EmergencyBackupStorage,
 } from './emergencyBackup';
 import type { Chat, Database } from './database.svelte';
@@ -129,7 +130,7 @@ describe('emergencyBackup', () => {
         expect(record?.targetMessageCount).toBe(2);
         expect(record?.messageStart).toBe(1);
         expect(record?.messages).toEqual([targetChat.message[1]]);
-        expect((record as any)?.chat).toBeUndefined();
+        expect(record).not.toHaveProperty('chat');
     });
 
     it('keeps the latest record per chat and prunes invalid records', async () => {
@@ -214,7 +215,8 @@ describe('emergencyBackup', () => {
         expect(currentDb.characters[0].chats[1].id).toBe('restored-chat');
         expect(currentDb.characters[0].chats[1].message).toHaveLength(2);
         expect(await storage.keys()).toEqual(['chat:char-1:chat-1']);
-        expect((await storage.getItem('chat:char-1:chat-1') as any)?.restoredChatId).toBe('restored-chat');
+        const backup = await storage.getItem<EmergencyBackupRecord>('chat:char-1:chat-1');
+        expect(backup?.restoredChatId).toBe('restored-chat');
     });
 
     it('cleans restored backups only after they are present in the saved database', async () => {
@@ -275,7 +277,8 @@ describe('emergencyBackup', () => {
             now: 3001,
         });
 
-        expect((await storage.getItem('chat:char-1:chat-1') as any)?.restoredChatId).toBe('restored-chat');
+        const backup = await storage.getItem<EmergencyBackupRecord>('chat:char-1:chat-1');
+        expect(backup?.restoredChatId).toBe('restored-chat');
     });
 
     it('does not duplicate an already restored fingerprint', async () => {
@@ -403,5 +406,133 @@ describe('emergencyBackup', () => {
         });
 
         expect(candidates).toHaveLength(0);
+    });
+
+    it('cleans a resolved backup when the current chat is cold-stored', async () => {
+        const storage = new MemoryStorage();
+        const fullChat = chat('chat-1', ['hello', 'cold'], 3000);
+        await saveEmergencyChatBackup({
+            db: db({ chat: fullChat }),
+            charId: 'char-1',
+            chatId: 'chat-1',
+            appVer: 'test',
+            storage,
+            baseChat: chat('chat-1', ['hello'], 3000),
+            now: 3000,
+        });
+
+        const coldChat: Chat = {
+            ...fullChat,
+            message: [{
+                role: 'char',
+                data: 'cold:key-1',
+                time: 4000,
+            }],
+            hypaV2Data: {
+                chunks: [],
+                mainChunks: [],
+                lastMainChunkID: 0,
+            },
+            hypaV3Data: {
+                summaries: [],
+            },
+            scriptstate: {},
+            localLore: [],
+        } as Chat;
+        const currentDb = db({ chat: coldChat });
+        const cleaned = await cleanupResolvedEmergencyBackups(currentDb, {
+            storage,
+            resolveCurrentChat: (candidateChat) => candidateChat.message[0]?.data === 'cold:key-1' ? fullChat : null,
+        });
+
+        expect(cleaned).toBe(1);
+        expect(await storage.keys()).toEqual([]);
+    });
+
+    it('restores the full chat when the base chat is resolved from cold storage', async () => {
+        const storage = new MemoryStorage();
+        const baseChat = chat('chat-1', ['hello'], 3000);
+        const targetChat = chat('chat-1', ['hello', 'newer'], 3000);
+        await saveEmergencyChatBackup({
+            db: db({ chat: targetChat }),
+            charId: 'char-1',
+            chatId: 'chat-1',
+            appVer: 'test',
+            storage,
+            baseChat,
+            now: 3000,
+        });
+
+        const coldBaseChat: Chat = {
+            ...baseChat,
+            message: [{
+                role: 'char',
+                data: 'cold:key-1',
+                time: 4000,
+            }],
+        } as Chat;
+        const currentDb = db({ chat: coldBaseChat });
+        const resolveCurrentChat = (candidateChat: Chat) => (
+            candidateChat.message[0]?.data === 'cold:key-1' ? baseChat : null
+        );
+        const candidates = await getEmergencyRecoveryCandidates(currentDb, {
+            storage,
+            resolveCurrentChat,
+        });
+        const recovered = await applyEmergencyRecoveryCandidates({
+            db: currentDb,
+            candidates,
+            storage,
+            resolveCurrentChat,
+            createId: () => 'restored-chat',
+        });
+
+        expect(candidates).toHaveLength(1);
+        expect(recovered).toBe(1);
+        expect(currentDb.characters[0].chats[1].message).toEqual(targetChat.message);
+    });
+
+    it('finds diff backups inside a resolved cold-storage character', async () => {
+        const storage = new MemoryStorage();
+        const baseChat = chat('chat-1', ['hello'], 3000);
+        const targetChat = chat('chat-1', ['hello', 'newer'], 3000);
+        await saveEmergencyChatBackup({
+            db: db({ chat: targetChat }),
+            charId: 'char-1',
+            chatId: 'chat-1',
+            appVer: 'test',
+            storage,
+            baseChat,
+            now: 3000,
+        });
+
+        const fullCharacter = db({ chat: baseChat }).characters[0];
+        const coldCharacter = {
+            ...fullCharacter,
+            chats: [chat('placeholder-chat', ['placeholder'], 4000)],
+            coldstorage: 'character-cold',
+        } as Database['characters'][number];
+        const currentDb = db();
+        currentDb.characters = [coldCharacter];
+        const resolveCurrentCharacter = (characterData: Database['characters'][number]) => (
+            characterData.coldstorage === 'character-cold' ? fullCharacter : null
+        );
+
+        const candidates = await getEmergencyRecoveryCandidates(currentDb, {
+            storage,
+            resolveCurrentCharacter,
+        });
+        const recovered = await applyEmergencyRecoveryCandidates({
+            db: currentDb,
+            candidates,
+            storage,
+            resolveCurrentCharacter,
+            createId: () => 'restored-chat',
+        });
+
+        expect(candidates).toHaveLength(1);
+        expect(recovered).toBe(1);
+        expect(currentDb.characters[0].chats[0].id).toBe('chat-1');
+        expect(currentDb.characters[0].chats[1].message).toEqual(targetChat.message);
     });
 });

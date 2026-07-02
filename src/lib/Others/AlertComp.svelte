@@ -329,15 +329,17 @@
                 {@const hasDisplay = $alertStore.msg.startsWith('__DISPLAY__')}
                 {#if hasDisplay}
                     {@const parts = $alertStore.msg.substring(11).split('||')}
-                    <div class="mb-4 text-textcolor">{parts[0]}</div>
-                    {#each parts.slice(1) as n, i}
-                        <Button className="mt-4" onclick={() => {
-                            alertStore.set({
-                                type: 'none',
-                                msg: i.toString()
-                            })
-                        }}>{n}</Button>
-                    {/each}
+                    <div class="text-textcolor whitespace-pre-wrap">{parts[0]}</div>
+                    <div class="flex gap-2 w-full mt-2">
+                        {#each parts.slice(1) as n, i}
+                            <Button className="grow basis-0 mt-0" onclick={() => {
+                                alertStore.set({
+                                    type: 'none',
+                                    msg: i.toString()
+                                })
+                            }}>{n}</Button>
+                        {/each}
+                    </div>
                 {:else}
                     {@const parts = $alertStore.msg.split('||')}
                     {#each parts as n, i}

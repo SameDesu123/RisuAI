@@ -6,6 +6,7 @@ import { safeStructuredClone } from '../polyfill';
 import type { Chat, Database } from './database.svelte';
 
 const BACKUP_PREFIX = 'chat:';
+type DatabaseCharacter = Database['characters'][number];
 
 export interface EmergencyBackupRecord {
     version: 2;
@@ -58,6 +59,9 @@ export interface EmergencyBackupStorage {
 export interface EmergencyRecoveryCandidateOptions {
     storage?: EmergencyBackupStorage;
     resolveCurrentChat?: (chat: Chat) => Chat | null | Promise<Chat | null>;
+    resolveCurrentCharacter?: (
+        character: DatabaseCharacter
+    ) => DatabaseCharacter | null | Promise<DatabaseCharacter | null>;
 }
 
 const emergencyBackupStorage = localforage.createInstance({
@@ -240,12 +244,28 @@ async function getComparableChat(
     }
 }
 
-function hasResolvedEmergencyBackup(character: Database['characters'][number], record: EmergencyBackupRecord) {
+async function getComparableCharacter(
+    character: DatabaseCharacter,
+    resolveCurrentCharacter?: EmergencyRecoveryCandidateOptions['resolveCurrentCharacter'],
+) {
+    if (!resolveCurrentCharacter) {
+        return character;
+    }
+
+    try {
+        return (await resolveCurrentCharacter(character)) ?? character;
+    } catch (error) {
+        console.warn('Failed to resolve character for emergency backup comparison:', error);
+        return character;
+    }
+}
+
+function hasResolvedEmergencyBackup(character: DatabaseCharacter, record: EmergencyBackupRecord) {
     return !!record.restoredChatId && character.chats.some((chat) => chat.id === record.restoredChatId);
 }
 
 async function hasMatchingChatFingerprint(
-    character: Database['characters'][number],
+    character: DatabaseCharacter,
     fingerprint: string,
     resolveCurrentChat?: EmergencyRecoveryCandidateOptions['resolveCurrentChat'],
 ) {
@@ -257,6 +277,39 @@ async function hasMatchingChatFingerprint(
     }
 
     return false;
+}
+
+async function getCandidateCharacter(
+    db: Database,
+    record: EmergencyBackupRecord,
+    resolveCurrentCharacter?: EmergencyRecoveryCandidateOptions['resolveCurrentCharacter'],
+) {
+    const characterIndex = db.characters?.findIndex((char) => char.chaId === record.charId) ?? -1;
+    if (characterIndex < 0) {
+        return null;
+    }
+
+    const character = db.characters[characterIndex];
+    if (!character) {
+        return null;
+    }
+
+    return {
+        character,
+        characterIndex,
+        comparableCharacter: await getComparableCharacter(character, resolveCurrentCharacter),
+    };
+}
+
+async function isBackupResolvedInCharacter(
+    character: DatabaseCharacter,
+    record: EmergencyBackupRecord,
+    resolveCurrentChat?: EmergencyRecoveryCandidateOptions['resolveCurrentChat'],
+) {
+    return (
+        hasResolvedEmergencyBackup(character, record) ||
+        await hasMatchingChatFingerprint(character, record.targetFingerprint, resolveCurrentChat)
+    );
 }
 
 async function readEntries(storage: EmergencyBackupStorage) {
@@ -373,8 +426,8 @@ export async function saveEmergencyChatBackup(arg: {
         previousRecord?.targetFingerprint === record.targetFingerprint &&
         previousRecord.restoredChatId
     ) {
-        record.restoredChatId = previousRecord?.restoredChatId;
-        record.restoredAt = previousRecord?.restoredAt;
+        record.restoredChatId = previousRecord.restoredChatId;
+        record.restoredAt = previousRecord.restoredAt;
     }
 
     await storage.setItem(key, record);
@@ -413,24 +466,23 @@ export async function getEmergencyRecoveryCandidates(
     const {
         storage = emergencyBackupStorage,
         resolveCurrentChat,
+        resolveCurrentCharacter,
     } = normalizeRecoveryOptions(options);
     const candidates: EmergencyRecoveryCandidate[] = [];
     const records = await readRecords(storage);
 
     for (const candidate of records) {
-        const character = db.characters?.find((char) => char.chaId === candidate.record.charId);
-        if (!character) {
+        const candidateCharacter = await getCandidateCharacter(db, candidate.record, resolveCurrentCharacter);
+        if (!candidateCharacter) {
+            continue;
+        }
+        const { comparableCharacter } = candidateCharacter;
+
+        if (await isBackupResolvedInCharacter(comparableCharacter, candidate.record, resolveCurrentChat)) {
             continue;
         }
 
-        if (
-            hasResolvedEmergencyBackup(character, candidate.record) ||
-            await hasMatchingChatFingerprint(character, candidate.record.targetFingerprint, resolveCurrentChat)
-        ) {
-            continue;
-        }
-
-        const currentChat = character.chats.find((chat) => chat.id === candidate.record.chatId);
+        const currentChat = comparableCharacter.chats.find((chat) => chat.id === candidate.record.chatId);
         if (!currentChat) {
             if (candidate.record.messageStart === 0) {
                 candidates.push(candidate);
@@ -469,6 +521,8 @@ export async function applyEmergencyRecoveryCandidates(arg: {
     db: Database;
     candidates: EmergencyRecoveryCandidate[];
     storage?: EmergencyBackupStorage;
+    resolveCurrentChat?: EmergencyRecoveryCandidateOptions['resolveCurrentChat'];
+    resolveCurrentCharacter?: EmergencyRecoveryCandidateOptions['resolveCurrentCharacter'];
     createId?: () => string;
 }) {
     const storage = arg.storage ?? emergencyBackupStorage;
@@ -476,17 +530,27 @@ export async function applyEmergencyRecoveryCandidates(arg: {
     let recovered = 0;
 
     for (const candidate of arg.candidates) {
-        const character = arg.db.characters?.find((char) => char.chaId === candidate.record.charId);
-        if (!character) {
+        const candidateCharacter = await getCandidateCharacter(arg.db, candidate.record, arg.resolveCurrentCharacter);
+        if (!candidateCharacter) {
+            continue;
+        }
+        const { characterIndex, comparableCharacter } = candidateCharacter;
+
+        if (await isBackupResolvedInCharacter(comparableCharacter, candidate.record, arg.resolveCurrentChat)) {
             continue;
         }
 
-        if (character.chats.some((chat) => getEmergencyChatFingerprint(chat) === candidate.record.targetFingerprint)) {
-            continue;
+        let character = candidateCharacter.character;
+        if (comparableCharacter !== character) {
+            arg.db.characters[characterIndex] = comparableCharacter;
+            character = comparableCharacter;
         }
 
-        const baseChat = character.chats.find((chat) => chat.id === candidate.record.chatId);
-        const restoredChat = buildRecoveredChat(candidate.record, baseChat);
+        const baseChat = comparableCharacter.chats.find((chat) => chat.id === candidate.record.chatId);
+        const comparableBaseChat = baseChat
+            ? await getComparableChat(baseChat, arg.resolveCurrentChat)
+            : undefined;
+        const restoredChat = buildRecoveredChat(candidate.record, comparableBaseChat);
         if (!restoredChat) {
             continue;
         }
@@ -507,16 +571,32 @@ export async function applyEmergencyRecoveryCandidates(arg: {
 
 export async function cleanupResolvedEmergencyBackups(
     db: Database,
-    storage: EmergencyBackupStorage = emergencyBackupStorage,
+    options?: EmergencyBackupStorage | EmergencyRecoveryCandidateOptions,
 ) {
+    const {
+        storage = emergencyBackupStorage,
+        resolveCurrentChat,
+        resolveCurrentCharacter,
+    } = normalizeRecoveryOptions(options);
     const records = await readRecords(storage);
-    const toRemove = records.filter((candidate) => {
-        const character = db.characters?.find((char) => char.chaId === candidate.record.charId);
-        return !!character && (
-            hasResolvedEmergencyBackup(character, candidate.record) ||
-            character.chats.some((chat) => getEmergencyChatFingerprint(chat) === candidate.record.targetFingerprint)
-        );
-    });
+    const toRemove: EmergencyRecoveryCandidate[] = [];
+
+    for (const candidate of records) {
+        const candidateCharacter = await getCandidateCharacter(db, candidate.record, resolveCurrentCharacter);
+        if (!candidateCharacter) {
+            continue;
+        }
+
+        if (
+            await isBackupResolvedInCharacter(
+                candidateCharacter.comparableCharacter,
+                candidate.record,
+                resolveCurrentChat,
+            )
+        ) {
+            toRemove.push(candidate);
+        }
+    }
 
     await Promise.all(toRemove.map((candidate) => storage.removeItem(candidate.key)));
     return toRemove.length;

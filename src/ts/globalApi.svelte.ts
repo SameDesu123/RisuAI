@@ -40,7 +40,7 @@ import { initMobileGesture } from "./hotkey";
 import { fetch as TauriHTTPFetch } from '@tauri-apps/plugin-http';
 import { moduleUpdate } from "./process/modules";
 import type { AccountStorage } from "./storage/accountStorage";
-import { getColdStorageItem, makeColdData } from "./process/coldstorage.svelte";
+import { getColdStorageItem, resolveColdStorageCharacter, resolveColdStorageChat } from "./process/coldstorage.svelte";
 import { isTauri, isNodeServer } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
@@ -487,7 +487,10 @@ export async function saveDb() {
             }
             if (isEmergencyBackupSupported()) {
                 try {
-                    await cleanupResolvedEmergencyBackups(db)
+                    await cleanupResolvedEmergencyBackups(db, {
+                        resolveCurrentChat: resolveColdStorageChat,
+                        resolveCurrentCharacter: resolveColdStorageCharacter,
+                    })
                 } catch (error) {
                     console.warn('Failed to clean resolved emergency backups:', error)
                 }

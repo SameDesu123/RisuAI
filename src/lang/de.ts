@@ -87,7 +87,7 @@ export const languageGerman = {
         "showUnrecommended": "Wenn aktiviert, werden nicht empfohlene, veraltete Einstellungen angezeigt. Es wird NICHT EMPFOHLEN, diese Einstellungen zu verwenden.",
         "imageCompression": "Wenn aktiviert, werden Bilder beim Exportieren des Charakters komprimiert. Wenn animierte Bilder nicht funktionieren, versuchen Sie, diese Option zu deaktivieren.",
         "useExperimental": "Wenn aktiviert, werden einige experimentelle Funktionen angezeigt.",
-        "emergencyBackup": "Speichert kürzlich geänderte Chats in einem separaten lokalen Browserspeicher, bevor der vollständige Web-Speicherstand kodiert wird. Beim nächsten Start kann Risuai anbieten, neuere Notfallkopien als separate Chats wiederherzustellen.",
+        "emergencyBackup": "Speichert kürzlich geänderte Chats in einem separaten lokalen Browserspeicher, bevor der vollständige Web-Speicherstand kodiert wird. Beim nächsten Start kann Risuai anbieten, neuere Notfallkopien als separate Chats wiederherzustellen. Wenn der ursprüngliche Chat nach dem Backup geändert wurde, kann die Wiederherstellung nur den geänderten Teil statt des vollständigen Chats enthalten.",
         "forceProxyAsOpenAI": "Wenn aktiviert, wird bei Verwendung eines Reverse-Proxys das OpenAI-Format erzwungen.",
         "forcePlainFetch": "Wenn aktiviert, wird die Browser-Fetch-API anstelle der nativen HTTP-Anfrage verwendet. Dies kann zu CORS-Fehlern führen.",
         "autoFillRequestURL": "Wenn aktiviert, wird die Anfrage-URL automatisch ausgefüllt, um dem aktuellen Modell zu entsprechen.",
@@ -669,9 +669,12 @@ export const languageGerman = {
     "backupLoadConfirm": "Möchten Sie wirklich das Backup laden? Alle Daten gehen verloren!",
     "backupLoadConfirm2": "Bitte seien Sie vorsichtig: Sind Sie wirklich sicher, dass Sie das Backup laden möchten? Alle Ihre vorigen Daten gehen dadurch verloren!",
     "emergencyBackup": {
-        "recoveryPrompt": "Emergency backup hat {0} Chat-Backup(s) mit {1} Nachricht(en) gefunden. Als neue Chats wiederherstellen?",
+        "recoveryPrompt": "Emergency backup hat {0} Chat-Backup(s) mit {1} geänderten Nachricht(en) gefunden.\nSie können sie als neue Chats wiederherstellen, zuerst die aktuellen Chats prüfen oder die Backup-Daten ignorieren und löschen.",
         "recover": "Wiederherstellen",
-        "discard": "Verwerfen",
+        "check": "Prüfen",
+        "discard": "Ignorieren (löschen)",
+        "discardConfirm": "Die ausgewählten Emergency backup-Daten ignorieren und löschen?",
+        "discardConfirm2": "Dies kann nicht rückgängig gemacht werden. Emergency backup-Daten löschen?",
         "recoveredChatSuffix": "Emergency backup",
         "untitledChat": "Unbenannter Chat"
     },

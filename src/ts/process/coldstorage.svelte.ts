@@ -14,7 +14,7 @@ import { compress as fflateCompress, decompress as fflateDecompress } from "ffla
 import { fetchProtectedResource } from "../sionyw"
 import { alertClear, alertError, alertWait } from "../alert"
 import { language } from "src/lang"
-import type { character } from "../storage/database.svelte"
+import type { character, Chat, Database } from "../storage/database.svelte"
 
 export const coldStorageHeader = '\uEF01COLDSTORAGE\uEF01'
 
@@ -211,6 +211,49 @@ export async function listColdStorageItems():Promise<{items:string[]}> {
             items: keys
         }
     }
+}
+
+export async function resolveColdStorageChat(chat: Chat): Promise<Chat | null> {
+    const coldStorageData = chat.message?.[0]?.data
+    if (typeof coldStorageData !== 'string' || !coldStorageData.startsWith(coldStorageHeader)) {
+        return null
+    }
+
+    const coldData = await getColdStorageItem(coldStorageData.slice(coldStorageHeader.length))
+    if (Array.isArray(coldData)) {
+        return {
+            ...chat,
+            message: coldData,
+        }
+    }
+
+    if (coldData?.message) {
+        return {
+            ...chat,
+            message: coldData.message,
+            hypaV2Data: coldData.hypaV2Data,
+            hypaV3Data: coldData.hypaV3Data,
+            scriptstate: coldData.scriptstate,
+            localLore: coldData.localLore,
+        }
+    }
+
+    return null
+}
+
+export async function resolveColdStorageCharacter(
+    characterData: Database['characters'][number],
+): Promise<Database['characters'][number] | null> {
+    if (!characterData?.coldstorage) {
+        return null
+    }
+
+    const coldData = await getColdStorageItem(characterData.coldstorage)
+    if (coldData?.character?.chaId === characterData.chaId) {
+        return coldData.character
+    }
+
+    return null
 }
 
 export async function cleanColdStorage(){

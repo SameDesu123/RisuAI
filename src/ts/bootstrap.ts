@@ -31,7 +31,7 @@ import { updateLorebooks } from "./characters";
 import { initMobileGesture } from "./hotkey";
 import { moduleUpdate } from "./process/modules";
 import type { AccountStorage } from "./storage/accountStorage";
-import { coldStorageHeader, getColdStorageItem, makeColdData } from "./process/coldstorage.svelte";
+import { makeColdData, resolveColdStorageCharacter, resolveColdStorageChat } from "./process/coldstorage.svelte";
 import {
     forageStorage,
     saveDb,
@@ -41,7 +41,7 @@ import {
     setUsingSw,
     checkCharOrder
 } from "./globalApi.svelte";
-import { isNodeServer, isTauri } from "./platform";
+import { isTauri } from "./platform";
 import { registerModelDynamic } from "./model/modellist";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
@@ -253,8 +253,8 @@ export async function loadData() {
                 initMobileGesture()
                 MobileGUI.set(true)
             }
-            await makeColdData()
             await recoverEmergencyBackupsOnLoad()
+            await makeColdData()
             loadedStore.set(true)
             selectedCharID.set(-1)
             startObserveDom()
@@ -276,7 +276,7 @@ export async function loadData() {
 }
 
 async function recoverEmergencyBackupsOnLoad() {
-    if (!isEmergencyBackupSupported() || isNodeServer || isTauri) {
+    if (!isEmergencyBackupSupported()) {
         return
     }
 
@@ -288,13 +288,14 @@ async function recoverEmergencyBackupsOnLoad() {
     try {
         const candidates = await getEmergencyRecoveryCandidates(db, {
             resolveCurrentChat: resolveColdStorageChat,
+            resolveCurrentCharacter: resolveColdStorageCharacter,
         })
         if (candidates.length === 0) {
             return
         }
 
         const selected = await alertSelect(
-            [language.emergencyBackup.recover, language.emergencyBackup.discard],
+            [language.emergencyBackup.recover, language.emergencyBackup.check, language.emergencyBackup.discard],
             getEmergencyRecoveryMessage(candidates)
         )
 
@@ -302,8 +303,10 @@ async function recoverEmergencyBackupsOnLoad() {
             await applyEmergencyRecoveryCandidates({
                 db,
                 candidates,
+                resolveCurrentChat: resolveColdStorageChat,
+                resolveCurrentCharacter: resolveColdStorageCharacter,
             })
-        } else if (
+        } else if (selected === '2' &&
             await alertConfirm(language.emergencyBackup.discardConfirm) &&
             await alertConfirm(language.emergencyBackup.discardConfirm2)
         ) {
@@ -313,35 +316,6 @@ async function recoverEmergencyBackupsOnLoad() {
         console.warn('Failed to recover emergency backups:', error)
     }
 }
-
-async function resolveColdStorageChat(chat: Chat): Promise<Chat | null> {
-    const coldStorageData = chat.message?.[0]?.data
-    if (typeof coldStorageData !== 'string' || !coldStorageData.startsWith(coldStorageHeader)) {
-        return null
-    }
-
-    const coldData = await getColdStorageItem(coldStorageData.slice(coldStorageHeader.length))
-    if (Array.isArray(coldData)) {
-        return {
-            ...chat,
-            message: coldData,
-        }
-    }
-
-    if (coldData?.message) {
-        return {
-            ...chat,
-            message: coldData.message,
-            hypaV2Data: coldData.hypaV2Data,
-            hypaV3Data: coldData.hypaV3Data,
-            scriptstate: coldData.scriptstate,
-            localLore: coldData.localLore,
-        }
-    }
-
-    return null
-}
-
 
 /**
  * Registers the service worker and initializes it.

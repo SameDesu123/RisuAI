@@ -87,7 +87,7 @@ export const languageSpanish = {
         "showUnrecommended": "Si está habilitado, mostrará configuraciones no recomendadas y obsoletas. NO SE RECOMIENDA usar estas configuraciones.",
         "imageCompression": "Si está habilitado, comprimirá las imágenes al exportar el personaje. Si las imágenes animadas no funcionan, intenta desactivar esta opción.",
         "useExperimental": "Si está habilitado, mostrará algunas características experimentales.",
-        "emergencyBackup": "Guarda los chats modificados recientemente en un almacenamiento local separado del navegador antes de codificar el guardado web completo. En el siguiente inicio, Risuai puede ofrecer restaurar copias de emergencia más recientes como chats separados.",
+        "emergencyBackup": "Guarda los chats modificados recientemente en un almacenamiento local separado del navegador antes de codificar el guardado web completo. En el siguiente inicio, Risuai puede ofrecer restaurar copias de emergencia más recientes como chats separados. Si el chat original cambió después del respaldo, la recuperación puede incluir solo la parte modificada en vez del chat completo.",
         "forceProxyAsOpenAI": "Si está habilitado, forzará el uso del formato OpenAI al usar un proxy inverso.",
         "forcePlainFetch": "Si está habilitado, usará la API de fetch del navegador en lugar de la solicitud HTTP nativa. Esto puede causar errores de CORS.",
         "autoFillRequestURL": "Si está habilitado, completará automáticamente la URL de la solicitud para que coincida con el modelo actual.",
@@ -669,9 +669,12 @@ export const languageSpanish = {
     "backupLoadConfirm": "¿Realmente deseas cargar el respaldo? ¡Todos los datos se perderán!",
     "backupLoadConfirm2": "¿Realmente, realmente deseas cargar el respaldo? ¡Todos los datos se perderán!",
     "emergencyBackup": {
-        "recoveryPrompt": "Emergency backup encontró {0} respaldo(s) de chat, con {1} mensaje(s). ¿Restaurarlos como chats nuevos?",
+        "recoveryPrompt": "Emergency backup encontró {0} respaldo(s) de chat, con {1} mensaje(s) modificado(s).\nPuedes restaurarlos como chats nuevos, revisar primero los chats actuales, o ignorar y eliminar los datos de respaldo.",
         "recover": "Restaurar",
-        "discard": "Descartar",
+        "check": "Revisar",
+        "discard": "Ignorar (eliminar)",
+        "discardConfirm": "¿Ignorar y eliminar los datos seleccionados de Emergency backup?",
+        "discardConfirm2": "Esto no se puede deshacer. ¿Eliminar los datos de Emergency backup?",
         "recoveredChatSuffix": "Emergency backup",
         "untitledChat": "Chat sin título"
     },

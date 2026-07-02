@@ -87,7 +87,7 @@ export const languageChineseTraditional = {
         "showUnrecommended": "啟用後，將顯示不建議使用的過時設定。不建議使用這些設定。",
         "imageCompression": "啟用後，在匯出角色時會壓縮圖片。如果動畫圖片無法顯示，請嘗試關閉此選項。",
         "useExperimental": "啟用後，將顯示部分實驗性功能。",
-        "emergencyBackup": "在網頁端完整存檔編碼前，將最近變更的聊天儲存到獨立的瀏覽器本機儲存空間。下次啟動時，如果找到更新的緊急副本，Risuai 可以將其恢復為新的聊天。",
+        "emergencyBackup": "在網頁端完整存檔編碼前，將最近變更的聊天儲存到獨立的瀏覽器本機儲存空間。下次啟動時，如果找到更新的緊急副本，Risuai 可以將其恢復為新的聊天。如果原聊天在備份後發生變化，恢復出的新聊天可能只包含變更部分，而不是完整聊天。",
         "forceProxyAsOpenAI": "啟用後，使用反向代理（Reverse proxy）時將強制使用 OpenAI 格式。",
         "forcePlainFetch": "啟用後，將使用瀏覽器的 Fetch API 來替代原生 HTTP 請求。這可能會導致 CORS 錯誤。",
         "autoFillRequestURL": "啟用後，將自動填入請求 URL 以匹配當前模型。",
@@ -681,9 +681,12 @@ export const languageChineseTraditional = {
     "backupLoadConfirm": "確定要載入備份嗎？目前的資料將會被覆蓋！",
     "backupLoadConfirm2": "**最後警告**：確定要載入備份嗎？這將會清除當前所有的資料！",
     "emergencyBackup": {
-        "recoveryPrompt": "Emergency backup 找到 {0} 個聊天備份，包含 {1} 則訊息。要將它們恢復為新的聊天嗎？",
+        "recoveryPrompt": "Emergency backup 找到 {0} 個聊天備份，包含 {1} 則已變更訊息。\n你可以將它們恢復為新聊天，先檢查目前聊天，或忽略並刪除備份資料。",
         "recover": "恢復",
-        "discard": "丟棄",
+        "check": "檢查",
+        "discard": "忽略（刪除）",
+        "discardConfirm": "忽略並刪除所選 Emergency backup 資料？",
+        "discardConfirm2": "此操作無法復原。確定要刪除 Emergency backup 資料嗎？",
         "recoveredChatSuffix": "Emergency backup",
         "untitledChat": "未命名聊天"
     },
