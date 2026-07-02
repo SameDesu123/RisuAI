@@ -255,6 +255,7 @@ export class RisuSaveEncoder {
         const savedId = new Set<string>();
         const savedChatBlockNames = new Set<string>();
         const changedChats = new Set(toSave.chat.map(([chaId, chatId]) => getChatBlockName(chaId, chatId)));
+        const currentCharacterIds = new Set(data.characters.map((character) => character.chaId));
         for(const character of data.characters) {
             const index = toSave.character.indexOf(character.chaId);
             if (index !== -1) {
@@ -294,7 +295,7 @@ export class RisuSaveEncoder {
             if(savedId.has(blockName) || savedChatBlockNames.has(blockName)){
                 continue
             }
-            if(data.characters.some((character) => character.chaId === blockName)){
+            if(currentCharacterIds.has(blockName)){
                 continue
             }
             delete this.blocks[blockName]
