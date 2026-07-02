@@ -12,6 +12,9 @@ import {
     readFile,
 } from "@tauri-apps/plugin-fs"
 
+type RisuCharacter = Database['characters'][number]
+type RisuChat = RisuCharacter['chats'][number]
+
 const packr = new Packr({
     useRecords:false
 });
@@ -118,6 +121,49 @@ type EncodeBlockOption = {
     remote: 'none'|'prefer'|'force'
 }
 
+type RisuChatBlock = {
+    v: 1
+    chaId: string
+    chatId: string
+    chat: RisuChat
+}
+
+const reservedBlockNames = new Set([
+    'root',
+    'preset',
+    'modules',
+    'loadouts',
+    'plugins',
+    'pluginStorage',
+    'config'
+])
+
+function hashBlockName(input:string){
+    let hash = 0xcbf29ce484222325n
+    const prime = 0x100000001b3n
+    for(let i = 0; i < input.length; i++){
+        hash ^= BigInt(input.charCodeAt(i))
+        hash = BigInt.asUintN(64, hash * prime)
+    }
+    return hash.toString(16).padStart(16, '0')
+}
+
+function getChatBlockName(chaId:string, chatId:string){
+    return `chat_${hashBlockName(`${chaId}\0${chatId}`)}`
+}
+
+function getCharacterMetadataBlock(character:RisuCharacter):RisuCharacter{
+    return {
+        ...character,
+        chats: (character.chats ?? []).map((chat) => {
+            if(chat?.id){
+                return { id: chat.id } as RisuChat
+            }
+            return chat
+        })
+    }
+}
+
 const risuSaveCacheForage = localforage.createInstance({
     name: 'risuSaveCache'
 });
@@ -179,15 +225,10 @@ export class RisuSaveEncoder {
             name: 'pluginStorage'
         });
         for( const character of data.characters) {
-            this.blocks[character.chaId] = await this.encodeBlock({
-                compression,
-                data: JSON.stringify(character),
-                type: RisuSaveType.CHARACTER_WITH_CHAT,
-                name: character.chaId,
-                skipRemoteSaving: skipRemoteSavingOnCharacters
-            }, {
-                remote: 'prefer'
-            });
+            await this.setCharacterBlock(character, skipRemoteSavingOnCharacters);
+            for(const chat of character.chats ?? []){
+                await this.setChatBlock(character.chaId, chat, skipRemoteSavingOnCharacters);
+            }
         }
         this.blocks['config'] = await this.encodeBlock({
             compression,
@@ -212,30 +253,29 @@ export class RisuSaveEncoder {
         }
 
         const savedId = new Set<string>();
+        const savedChatBlockNames = new Set<string>();
+        const changedChats = new Set(toSave.chat.map(([chaId, chatId]) => getChatBlockName(chaId, chatId)));
         for(const character of data.characters) {
             const index = toSave.character.indexOf(character.chaId);
             if (index !== -1) {
-                this.blocks[character.chaId] = await this.encodeBlock({
-                    compression: this.compression,
-                    data: JSON.stringify(character),
-                    type: RisuSaveType.CHARACTER_WITH_CHAT,
-                    name: character.chaId
-                }, {
-                    remote: 'prefer'
-                });
+                await this.setCharacterBlock(character);
                 savedId.add(character.chaId);
                 toSave.character.splice(index, 1);
             }
             else if(!this.blocks[character.chaId]){
-                this.blocks[character.chaId] = await this.encodeBlock({
-                    compression: this.compression,
-                    data: JSON.stringify(character),
-                    type: RisuSaveType.CHARACTER_WITH_CHAT,
-                    name: character.chaId
-                }, {
-                    remote: 'prefer'
-                });
+                await this.setCharacterBlock(character);
                 savedId.add(character.chaId);
+            }
+
+            for(const chat of character.chats ?? []){
+                if(!chat?.id){
+                    continue
+                }
+                const chatBlockName = getChatBlockName(character.chaId, chat.id);
+                savedChatBlockNames.add(chatBlockName);
+                if(!this.blocks[chatBlockName] || changedChats.has(chatBlockName)){
+                    await this.setChatBlock(character.chaId, chat);
+                }
             }
         }
         if(toSave.character.length > 0){
@@ -246,6 +286,18 @@ export class RisuSaveEncoder {
                     delete this.blocks[chaId];
                 }
             }
+        }
+        for(const blockName of Object.keys(this.blocks)){
+            if(reservedBlockNames.has(blockName)){
+                continue
+            }
+            if(savedId.has(blockName) || savedChatBlockNames.has(blockName)){
+                continue
+            }
+            if(data.characters.some((character) => character.chaId === blockName)){
+                continue
+            }
+            delete this.blocks[blockName]
         }
 
         if(toSave.botPreset){
@@ -298,6 +350,39 @@ export class RisuSaveEncoder {
             data: JSON.stringify(obj),
             type: RisuSaveType.ROOT,
             name: 'root'
+        });
+    }
+
+    async setCharacterBlock(character:RisuCharacter, skipRemoteSaving = false){
+        this.blocks[character.chaId] = await this.encodeBlock({
+            compression: this.compression,
+            data: JSON.stringify(getCharacterMetadataBlock(character)),
+            type: RisuSaveType.CHARACTER_WITHOUT_CHAT,
+            name: character.chaId,
+            skipRemoteSaving
+        }, {
+            remote: 'prefer'
+        });
+    }
+
+    async setChatBlock(chaId:string, chat:RisuChat, skipRemoteSaving = false){
+        if(!chaId || !chat?.id){
+            return
+        }
+        const chatBlock:RisuChatBlock = {
+            v: 1,
+            chaId,
+            chatId: chat.id,
+            chat
+        }
+        this.blocks[getChatBlockName(chaId, chat.id)] = await this.encodeBlock({
+            compression: this.compression,
+            data: JSON.stringify(chatBlock),
+            type: RisuSaveType.CHAT,
+            name: getChatBlockName(chaId, chat.id),
+            skipRemoteSaving
+        }, {
+            remote: 'prefer'
         });
     }
 
@@ -435,6 +520,7 @@ export class RisuSaveDecoder {
         //@ts-expect-error Database has required fields, but we initialize empty and populate incrementally during decode
         let db:Database = {}
         const loadedBlocks = new Set<string>();
+        const chatBlocks: RisuChatBlock[] = [];
         while (offset < data.length) {
             try {
                 const type = data[offset];
@@ -524,8 +610,13 @@ export class RisuSaveDecoder {
                     case RisuSaveType.CHARACTER_WITHOUT_CHAT:{
                         db.characters ??= [];
                         const character = JSON.parse(this.blocks[key].content);
+                        character.chats ??= [];
                         db.characters.push(character);
                         break
+                    }
+                    case RisuSaveType.CHAT:{
+                        chatBlocks.push(JSON.parse(this.blocks[key].content));
+                        break;
                     }
                     case RisuSaveType.BOTPRESET:{
                         db.botPresets = JSON.parse(this.blocks[key].content);
@@ -607,6 +698,27 @@ export class RisuSaveDecoder {
 
                 if(this.blocks[key].type === RisuSaveType.ROOT){
                     throw new Error('Failed to decode root block, cannot proceed with decoding RisuSave data');
+                }
+            }
+        }
+        if(chatBlocks.length > 0 && Array.isArray(db.characters)){
+            const charactersById = new Map(db.characters.map((character) => [character.chaId, character]))
+            for(const chatBlock of chatBlocks){
+                if(!chatBlock?.chaId || !chatBlock?.chat){
+                    continue
+                }
+                const character = charactersById.get(chatBlock.chaId)
+                if(!character){
+                    continue
+                }
+                character.chats ??= []
+                const chatId = chatBlock.chatId ?? chatBlock.chat.id
+                const chatIndex = character.chats.findIndex((chat) => chat?.id === chatId)
+                if(chatIndex === -1){
+                    character.chats.push(chatBlock.chat)
+                }
+                else{
+                    character.chats[chatIndex] = chatBlock.chat
                 }
             }
         }

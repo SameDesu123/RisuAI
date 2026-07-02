@@ -347,6 +347,27 @@ export async function saveDb() {
             }, debounceTime);
         }
 
+        function trackCharacterChange(charId?: string) {
+            if (!charId) {
+                return
+            }
+            if (changeTracker.character[0] !== charId) {
+                changeTracker.character.unshift(charId)
+            }
+        }
+
+        function trackChatChange(charId?: string, chatId?: string) {
+            if (!charId || !chatId) {
+                return
+            }
+            if (
+                changeTracker.chat[0]?.[0] !== charId ||
+                changeTracker.chat[0]?.[1] !== chatId
+            ) {
+                changeTracker.chat.unshift([charId, chatId])
+            }
+        }
+
         $effect(() => {
             DBState.db.botPresetsId
             DBState.db.botPresets.length
@@ -388,17 +409,19 @@ export async function saveDb() {
                         $state.snapshot(DBState.db.characters[selIdState][key])
                     }
                 }
-                $state.snapshot(DBState.db.characters[selIdState].chats)
-                if (changeTracker.character[0] !== DBState.db.characters[selIdState]?.chaId) {
-                    changeTracker.character.unshift(DBState.db.characters[selIdState]?.chaId)
-                }
-                if (
-                    changeTracker.chat[0]?.[0] !== DBState.db.characters[selIdState]?.chaId ||
-                    changeTracker.chat[0]?.[1] !== DBState.db.characters[selIdState]?.chats[DBState.db.characters[selIdState]?.chatPage].id
-                ) {
-                    changeTracker.chat.unshift([DBState.db.characters[selIdState]?.chaId, DBState.db.characters[selIdState]?.chats[DBState.db.characters[selIdState]?.chatPage].id])
-                }
+                DBState.db.characters[selIdState].chats?.map((chat) => chat?.id)
+                trackCharacterChange(DBState.db.characters[selIdState]?.chaId)
             }
+            saveTimeoutExecute()
+        })
+        $effect(() => {
+            const character = DBState?.db?.characters?.[selIdState]
+            const chat = character?.chats?.[character?.chatPage]
+            if (!character || !chat) {
+                return
+            }
+            $state.snapshot(chat)
+            trackChatChange(character.chaId, chat.id)
             saveTimeoutExecute()
         })
     })
@@ -430,6 +453,9 @@ export async function saveDb() {
             changeTracker.chat = changeTracker.chat.length === 0 ? [] : [changeTracker.chat[0]]
             changeTracker.botPreset = false
             changeTracker.modules = false
+            changeTracker.loadouts = false
+            changeTracker.plugins = false
+            changeTracker.pluginCustomStorage = false
             if (gotChannel) {
                 //Data is saved in other tab
                 await sleep(1000)
