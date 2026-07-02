@@ -45,6 +45,13 @@ import { isTauri } from "./platform";
 import { registerModelDynamic } from "./model/modellist";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
+import { getRemoteSaveBlockNames } from "./storage/risuSaveBlocks";
+import {
+    decodeRemoteSaveMeta,
+    encodeRemoteSaveMeta,
+    getRemoteSaveCleanupAction,
+    getRemoteSaveMetaPath,
+} from "./storage/remoteSaveCleanup";
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
 
@@ -542,37 +549,35 @@ async function cleanChunks(options:{
 
         const remotes = await readDir('remotes', { baseDir: BaseDirectory.AppData })
 
-        const remoteUncleanables = new Set<string>(
-            db.characters.map((v) => v.chaId)
-        )
+        const remoteUncleanables = getRemoteSaveBlockNames(db)
         for (const remote of remotes) {
             try {
-                const name = getBasename(remote.name).slice(0, -10) //remove .local.bin
-                const fexists = remoteUncleanables.has(name)
-                if(!fexists){
+                const remotePath = 'remotes/' + remote.name
+                const metaPath = getRemoteSaveMetaPath(remotePath)
+                let metaExists = false
+                let metaLastUsed: number | null = null
+                try {
+                    metaExists = await exists(metaPath, { baseDir: BaseDirectory.AppData })
+                    if (metaExists) {
+                        const meta = await readFile(metaPath, { baseDir: BaseDirectory.AppData })
+                        metaLastUsed = decodeRemoteSaveMeta(meta)?.lastUsed ?? null
+                    }
+                } catch (error) {}
 
-                    let okayToDelete = false
-                    try {
-                        const metaPath = 'remotes/' + remote.name + '.meta'
-                        const metaExists = await exists(metaPath, { baseDir: BaseDirectory.AppData })
-                        if (metaExists) {
-                            const meta = await readFile(metaPath, { baseDir: BaseDirectory.AppData })
-                            const metaJson = JSON.parse(new TextDecoder().decode(meta))
-                            const lastUsed = metaJson.lastUsed as number
-
-                            if(Date.now() - lastUsed > 1000 * 60 * 60 * 24 * 7) { //not used for 7 days
-                                okayToDelete = true
-                            }
-                        }
-                        else{
-                            //write meta for next time
-                            const metaJson = {
-                                lastUsed: Date.now()
-                            }
-                            await writeFile(metaPath, new TextEncoder().encode(JSON.stringify(metaJson)), { baseDir: BaseDirectory.AppData })
-                        }
-                    } catch (error) {}
-                    await remove('remotes/' + remote.name, { baseDir: BaseDirectory.AppData })
+                const action = getRemoteSaveCleanupAction({
+                    path: remote.name,
+                    activeBlockNames: remoteUncleanables,
+                    metaExists,
+                    metaLastUsed,
+                })
+                if(action === 'create-meta'){
+                    await writeFile(metaPath, encodeRemoteSaveMeta(), { baseDir: BaseDirectory.AppData })
+                }
+                else if(action === 'delete'){
+                    await remove(remotePath, { baseDir: BaseDirectory.AppData })
+                    if(metaExists){
+                        await remove(metaPath, { baseDir: BaseDirectory.AppData })
+                    }
                 }
             } catch (error) {
                 console.log('error', remote.name)
@@ -581,9 +586,8 @@ async function cleanChunks(options:{
     }
     else {
         const indexes = await forageStorage.keys()
-        const characterIds = new Set<string>(
-            db.characters.map((v) => v.chaId)
-        )
+        const indexSet = new Set(indexes)
+        const remoteUncleanables = getRemoteSaveBlockNames(db)
         for (const asset of indexes) {
             if (asset.startsWith('assets/')) {
                 const n = getBasename(asset)
@@ -595,31 +599,28 @@ async function cleanChunks(options:{
                 continue
             }
             else if (asset.startsWith('remotes/')) {
-                const name = getBasename(asset).slice(0, -10) //remove .local.bin
-                const exists = characterIds.has(name)
-                if(!exists){
-                    let okayToDelete = false
-                    try {
-                        const metaPath = asset + '.meta'
-                        const metaExists = (await forageStorage.keys()).includes(metaPath)
-                        if (metaExists) {
-                            const metaData: Uint8Array = await forageStorage.getItem(metaPath) as unknown as Uint8Array
-                            const metaJson = JSON.parse(new TextDecoder().decode(metaData))
-                            const lastUsed = metaJson.lastUsed as number
-                            if(Date.now() - lastUsed > 1000 * 60 * 60 * 24 * 7) { //not used for 7 days
-                                okayToDelete = true
-                            }
-                        }
-                        else{
-                            //write meta for next time
-                            const metaJson = {
-                                lastUsed: Date.now()
-                            }
-                            await forageStorage.setItem(metaPath, new TextEncoder().encode(JSON.stringify(metaJson)))
-                        }
-                    } catch (error) {}
-                    if (okayToDelete) {
-                        await forageStorage.removeItem(asset)
+                const metaPath = getRemoteSaveMetaPath(asset)
+                const metaExists = indexSet.has(metaPath)
+                let metaLastUsed: number | null = null
+                try {
+                    if (metaExists) {
+                        const metaData: Uint8Array = await forageStorage.getItem(metaPath) as unknown as Uint8Array
+                        metaLastUsed = decodeRemoteSaveMeta(metaData)?.lastUsed ?? null
+                    }
+                } catch (error) {}
+                const action = getRemoteSaveCleanupAction({
+                    path: asset,
+                    activeBlockNames: remoteUncleanables,
+                    metaExists,
+                    metaLastUsed,
+                })
+                if(action === 'create-meta'){
+                    await forageStorage.setItem(metaPath, encodeRemoteSaveMeta())
+                }
+                else if(action === 'delete'){
+                    await forageStorage.removeItem(asset)
+                    if(metaExists){
+                        await forageStorage.removeItem(metaPath)
                     }
                 }
             }
