@@ -15,7 +15,7 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { checkRisuUpdate } from "./update";
 import { MobileGUI, botMakerMode, selectedCharID, loadedStore, DBState, LoadingStatusState } from "./stores.svelte";
 import { loadPlugins } from "./plugins/plugins.svelte";
-import { alertError, alertMd, alertTOS, waitAlert, alertConfirm, alertInput } from "./alert";
+import { alertError, alertMd, alertTOS, waitAlert, alertConfirm, alertInput, alertSelect } from "./alert";
 import { checkDriverInit } from "./drive/drive";
 import { characterURLImport } from "./characterCards";
 import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
@@ -41,10 +41,17 @@ import {
     setUsingSw,
     checkCharOrder
 } from "./globalApi.svelte";
-import { isTauri } from "./platform";
+import { isNodeServer, isTauri } from "./platform";
 import { registerModelDynamic } from "./model/modellist";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
+import {
+    applyEmergencyRecoveryCandidates,
+    discardEmergencyRecoveryCandidates,
+    getEmergencyRecoveryCandidates,
+    getEmergencyRecoveryMessage,
+    isEmergencyBackupSupported,
+} from "./storage/emergencyBackup";
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
 
@@ -247,6 +254,7 @@ export async function loadData() {
                 MobileGUI.set(true)
             }
             await makeColdData()
+            await recoverEmergencyBackupsOnLoad()
             loadedStore.set(true)
             selectedCharID.set(-1)
             startObserveDom()
@@ -264,6 +272,40 @@ export async function loadData() {
         } catch (error) {
             alertError(error)
         }
+    }
+}
+
+async function recoverEmergencyBackupsOnLoad() {
+    if (!isEmergencyBackupSupported() || isNodeServer || isTauri) {
+        return
+    }
+
+    const db = getDatabase()
+    if (!db.enableEmergencyBackup) {
+        return
+    }
+
+    try {
+        const candidates = await getEmergencyRecoveryCandidates(db)
+        if (candidates.length === 0) {
+            return
+        }
+
+        const selected = await alertSelect(
+            [language.emergencyBackup.recover, language.emergencyBackup.discard],
+            getEmergencyRecoveryMessage(candidates)
+        )
+
+        if (selected === '0') {
+            await applyEmergencyRecoveryCandidates({
+                db,
+                candidates,
+            })
+        } else {
+            await discardEmergencyRecoveryCandidates(candidates)
+        }
+    } catch (error) {
+        console.warn('Failed to recover emergency backups:', error)
     }
 }
 

@@ -700,6 +700,7 @@ export function setDatabase(data:Database){
     data.customSidebarItems ??= []
     data.moveInsteadOfCopyOnCMPConvert ??= false
     data.skipSavingAssetsOnWebSync ??= true
+    data.enableEmergencyBackup ??= false
     data.coldstorage ??= data?.plugins?.length === 0
     changeLanguage(data.language)
     setDatabaseLite(data)
@@ -1257,6 +1258,7 @@ export interface Database{
     lastLoadedLoadoutName: string
     moveInsteadOfCopyOnCMPConvert?:boolean
     skipSavingAssetsOnWebSync?:boolean
+    enableEmergencyBackup?:boolean
 }
 
 export interface CustomSideBarItem{

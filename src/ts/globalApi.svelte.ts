@@ -45,6 +45,7 @@ import { isTauri, isNodeServer } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
+import { saveEmergencyChatBackup } from "./storage/emergencyBackup";
 
 export const forageStorage = new AutoStorage()
 
@@ -442,6 +443,19 @@ export async function saveDb() {
             if (!db.characters) {
                 await sleep(1000)
                 continue
+            }
+
+            for (const [charId, chatId] of toSave.chat) {
+                try {
+                    await saveEmergencyChatBackup({
+                        db,
+                        charId,
+                        chatId,
+                        appVer,
+                    })
+                } catch (error) {
+                    console.warn('Failed to save emergency chat backup:', error)
+                }
             }
 
             await encoder.set(db, toSave)
