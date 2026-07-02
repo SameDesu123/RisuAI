@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Chat, Database } from './database.svelte'
 import { decodeRisuSave, RisuSaveEncoder, type toSaveType } from './risuSave'
+import { getChatBlockName } from './risuSaveBlocks'
 
 const mocks = vi.hoisted(() => {
     const cacheStore = new Map<string, unknown>()
@@ -52,6 +53,7 @@ const RISU_SAVE_HEADER = new TextEncoder().encode('RISUSAVE\0')
 const ROOT = 1
 const CHARACTER_WITH_CHAT = 2
 const CHAT = 3
+const CHARACTER_WITHOUT_CHAT = 7
 
 function makeChat(id: string, data: string): Chat {
     return {
@@ -67,43 +69,47 @@ function makeChat(id: string, data: string): Chat {
     }
 }
 
+function makeCharacter(chaId = 'char-1', chats = [
+    makeChat('chat-1', 'hello'),
+    makeChat('chat-2', 'world'),
+]) {
+    return {
+        type: 'character',
+        chaId,
+        name: `Character ${chaId}`,
+        chats,
+        chatFolders: [],
+        chatPage: 0,
+        firstMessage: '',
+        desc: '',
+        notes: '',
+        viewScreen: 'none',
+        bias: [],
+        emotionImages: [],
+        globalLore: [],
+        sdData: [],
+        customscript: [],
+        triggerscript: [],
+        utilityBot: false,
+        exampleMessage: '',
+        creatorNotes: '',
+        systemPrompt: '',
+        postHistoryInstructions: '',
+        alternateGreetings: [],
+        tags: [],
+        creator: '',
+        characterVersion: '',
+        personality: '',
+        scenario: '',
+        firstMsgIndex: 0,
+        replaceGlobalNote: '',
+        additionalText: '',
+    }
+}
+
 function makeDb(): Database {
     return {
-        characters: [{
-            type: 'character',
-            chaId: 'char-1',
-            name: 'Character',
-            chats: [
-                makeChat('chat-1', 'hello'),
-                makeChat('chat-2', 'world'),
-            ],
-            chatFolders: [],
-            chatPage: 0,
-            firstMessage: '',
-            desc: '',
-            notes: '',
-            viewScreen: 'none',
-            bias: [],
-            emotionImages: [],
-            globalLore: [],
-            sdData: [],
-            customscript: [],
-            triggerscript: [],
-            utilityBot: false,
-            exampleMessage: '',
-            creatorNotes: '',
-            systemPrompt: '',
-            postHistoryInstructions: '',
-            alternateGreetings: [],
-            tags: [],
-            creator: '',
-            characterVersion: '',
-            personality: '',
-            scenario: '',
-            firstMsgIndex: 0,
-            replaceGlobalNote: '',
-            additionalText: '',
-        }],
+        characters: [makeCharacter()],
         botPresets: [],
         botPresetsId: 0,
         modules: [],
@@ -214,6 +220,21 @@ describe('RisuSave chat blocks', () => {
         expect(decoded.characters[0].chats.map((chat) => chat.message[0].data)).toEqual(['hello', 'world'])
     })
 
+    it('round-trips multiple characters with split chat blocks', async () => {
+        const db = makeDb()
+        db.characters.push(makeCharacter('char-2', [
+            makeChat('chat-3', 'third'),
+            makeChat('chat-4', 'fourth'),
+        ]) as any)
+        const encoder = new RisuSaveEncoder()
+        await encoder.init(db)
+
+        const decoded = await decodeRisuSave(new Uint8Array(encoder.encode()!))
+
+        expect(decoded.characters.map((character) => character.chaId)).toEqual(['char-1', 'char-2'])
+        expect(decoded.characters[1].chats.map((chat) => chat.message[0].data)).toEqual(['third', 'fourth'])
+    })
+
     it('re-encodes only the changed chat on chat-only saves', async () => {
         const db = makeDb()
         const encoder = new RisuSaveEncoder()
@@ -233,6 +254,25 @@ describe('RisuSave chat blocks', () => {
         expect(changedChatIds).toEqual(['chat-1'])
     })
 
+    it('re-encodes only a non-active chat when that chat is marked dirty', async () => {
+        const db = makeDb()
+        const encoder = new RisuSaveEncoder()
+        await encoder.init(db)
+        mocks.cacheSetItem.mockClear()
+
+        db.characters[0].chats[1].message[0].data = 'changed background chat'
+        await encoder.set(db, emptyToSave({
+            chat: [['char-1', 'chat-2']],
+        }))
+
+        const changedChatIds = mocks.cacheSetItem.mock.calls
+            .map(([, value]) => value as { type: number; data: string })
+            .filter((value) => value.type === CHAT)
+            .map((value) => JSON.parse(value.data).chatId)
+
+        expect(changedChatIds).toEqual(['chat-2'])
+    })
+
     it('removes stale chat blocks after chat deletion', async () => {
         const db = makeDb()
         const encoder = new RisuSaveEncoder()
@@ -248,5 +288,53 @@ describe('RisuSave chat blocks', () => {
         expect(chatBlocks(encoded!).map((block) => block.chatId)).toEqual(['chat-1'])
         const decoded = await decodeRisuSave(new Uint8Array(encoded!))
         expect(decoded.characters[0].chats.map((chat) => chat.id)).toEqual(['chat-1'])
+    })
+
+    it('removes character and chat blocks after character deletion', async () => {
+        const db = makeDb()
+        db.characters.push(makeCharacter('char-2', [
+            makeChat('chat-3', 'third'),
+        ]) as any)
+        const encoder = new RisuSaveEncoder()
+        await encoder.init(db)
+
+        db.characters = [db.characters[0]]
+        await encoder.set(db, emptyToSave({
+            character: ['char-2'],
+        }))
+        const blocks = parseBlocks(encoder.encode()!)
+        const names = blocks.map((block) => block.name)
+
+        expect(names).not.toContain('char-2')
+        expect(names).not.toContain(getChatBlockName('char-2', 'chat-3'))
+        expect(chatBlocks(encoder.encode()!).map((block) => block.chatId)).toEqual(['chat-1', 'chat-2'])
+    })
+
+    it('decodes mixed legacy and split character blocks', async () => {
+        const db = makeDb()
+        const legacyCharacter = db.characters[0]
+        const splitCharacter = makeCharacter('char-2', [
+            makeChat('chat-3', 'split'),
+        ])
+        const save = makeRisuSave([
+            makeBlock(ROOT, 'root', JSON.stringify({})),
+            makeBlock(CHARACTER_WITH_CHAT, 'char-1', JSON.stringify(legacyCharacter)),
+            makeBlock(CHARACTER_WITHOUT_CHAT, 'char-2', JSON.stringify({
+                ...splitCharacter,
+                chats: [{ id: 'chat-3' }],
+            })),
+            makeBlock(CHAT, 'chat-block', JSON.stringify({
+                v: 1,
+                chaId: 'char-2',
+                chatId: 'chat-3',
+                chat: splitCharacter.chats[0],
+            })),
+        ])
+
+        const decoded = await decodeRisuSave(save)
+
+        expect(decoded.characters.map((character) => character.chaId)).toEqual(['char-1', 'char-2'])
+        expect(decoded.characters[0].chats.map((chat) => chat.message[0].data)).toEqual(['hello', 'world'])
+        expect(decoded.characters[1].chats.map((chat) => chat.message[0].data)).toEqual(['split'])
     })
 })

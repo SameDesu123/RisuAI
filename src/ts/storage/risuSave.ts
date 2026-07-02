@@ -11,6 +11,7 @@ import {
     mkdir,
     readFile,
 } from "@tauri-apps/plugin-fs"
+import { getChatBlockName } from "./risuSaveBlocks";
 
 type RisuCharacter = Database['characters'][number]
 type RisuChat = RisuCharacter['chats'][number]
@@ -137,20 +138,6 @@ const reservedBlockNames = new Set([
     'pluginStorage',
     'config'
 ])
-
-function hashBlockName(input:string){
-    let hash = 0xcbf29ce484222325n
-    const prime = 0x100000001b3n
-    for(let i = 0; i < input.length; i++){
-        hash ^= BigInt(input.charCodeAt(i))
-        hash = BigInt.asUintN(64, hash * prime)
-    }
-    return hash.toString(16).padStart(16, '0')
-}
-
-function getChatBlockName(chaId:string, chatId:string){
-    return `chat_${hashBlockName(`${chaId}\0${chatId}`)}`
-}
 
 function getCharacterMetadataBlock(character:RisuCharacter):RisuCharacter{
     return {

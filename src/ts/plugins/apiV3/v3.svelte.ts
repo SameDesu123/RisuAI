@@ -8,7 +8,7 @@ import { v4 } from "uuid";
 import { sleep } from "src/ts/util";
 import { alertConfirm, alertError, alertNormal } from "src/ts/alert";
 import { language } from "src/lang";
-import { checkCharOrder, forageStorage, getFetchLogs } from "src/ts/globalApi.svelte";
+import { checkCharOrder, forageStorage, getFetchLogs, requestCharacterSave, requestChatSave } from "src/ts/globalApi.svelte";
 import { changeColorScheme, updateColorScheme, updateTextThemeAndCSS, type ColorScheme } from "src/ts/gui/colorscheme";
 import { isNodeServer, isTauri } from "src/ts/platform";
 import { get } from "svelte/store";
@@ -840,7 +840,13 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             const charIds = Object.keys(db.characters);
             const charId = charIds[index];
             if(charId){
+                const previousChaId = DBState.db.characters[charId]?.chaId
                 DBState.db.characters[charId] = char
+                requestCharacterSave(previousChaId)
+                requestCharacterSave(char?.chaId)
+                for(const chatData of char?.chats ?? []){
+                    requestChatSave(char?.chaId ?? previousChaId, chatData?.id)
+                }
             }
         },
         getChatFromIndex: (characterIndex:number, chatIndex:number) => {
@@ -860,9 +866,12 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             const charIds = Object.keys(db.characters);
             const charId = charIds[characterIndex];
             if(charId){
+                const character = DBState.db.characters[charId];
                 const chats = db.characters[charId].chats;
                 if(chats && chats[chatIndex]){
+                    const previousChatId = chats[chatIndex]?.id
                     DBState.db.characters[charId].chats[chatIndex] = chat
+                    requestChatSave(character?.chaId, chat?.id ?? previousChatId)
                 }
             }
         },

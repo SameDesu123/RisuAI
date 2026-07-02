@@ -25,7 +25,7 @@ import { hasher } from "./parser/parser.svelte";
 import { characterURLImport, hubURL } from "./characterCards";
 import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
 import { loadRisuAccountData } from "./drive/accounter";
-import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder, type toSaveType } from "./storage/risuSave";
+import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder } from "./storage/risuSave";
 import { AutoStorage } from "./storage/autoStorage";
 import { updateAnimationSpeed } from "./gui/animation";
 import { updateColorScheme, updateTextThemeAndCSS } from "./gui/colorscheme";
@@ -45,6 +45,7 @@ import { isTauri, isNodeServer } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
+import { SaveDirtyTracker, type SaveDirtyFlag } from "./storage/saveDirtyTracker";
 
 export const forageStorage = new AutoStorage()
 
@@ -289,6 +290,26 @@ export let saving = $state({
 export let requiresFullEncoderReload = $state({
     state: false
 })
+
+let activeSaveDirtyTracker: SaveDirtyTracker | null = null
+let activeSaveScheduler: (() => void) | null = null
+
+export function requestCharacterSave(charId?: string) {
+    if (!charId || !activeSaveDirtyTracker) {
+        return
+    }
+    activeSaveDirtyTracker.markCharacter(charId)
+    activeSaveScheduler?.()
+}
+
+export function requestChatSave(charId?: string, chatId?: string) {
+    if (!charId || !chatId || !activeSaveDirtyTracker) {
+        return
+    }
+    activeSaveDirtyTracker.markChat(charId, chatId)
+    activeSaveScheduler?.()
+}
+
 export async function saveDb() {
     let changed = false
     syncDrive()
@@ -312,15 +333,8 @@ export async function saveDb() {
         }
     }
 
-    const changeTracker: toSaveType = {
-        character: [],
-        chat: [],
-        botPreset: false,
-        modules: false,
-        loadouts: false,
-        plugins: false,
-        pluginCustomStorage: false
-    }
+    const dirtyTracker = new SaveDirtyTracker()
+    activeSaveDirtyTracker = dirtyTracker
 
     let encoder = new RisuSaveEncoder()
     await encoder.init(getDatabase(), {
@@ -334,7 +348,7 @@ export async function saveDb() {
         const debounceTime = 500; // 500 milliseconds
         let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
-        selectedCharID.subscribe((v) => {
+        const unsubscribeSelectedChar = selectedCharID.subscribe((v) => {
             selIdState = v
         })
 
@@ -347,52 +361,82 @@ export async function saveDb() {
             }, debounceTime);
         }
 
-        function trackCharacterChange(charId?: string) {
-            if (!charId) {
-                return
-            }
-            if (changeTracker.character[0] !== charId) {
-                changeTracker.character.unshift(charId)
+        activeSaveScheduler = saveTimeoutExecute
+
+        function trackFlagChange(flag: SaveDirtyFlag) {
+            dirtyTracker.markFlag(flag)
+            saveTimeoutExecute()
+        }
+
+        const chatWatcherCleanups = new Map<string, () => void>()
+        function chatWatcherKey(charId: string, chatId: string) {
+            return `${charId}\0${chatId}`
+        }
+
+        function cleanupChatWatchers(activeKeys?: Set<string>) {
+            for (const [key, cleanup] of chatWatcherCleanups) {
+                if (!activeKeys?.has(key)) {
+                    cleanup()
+                    chatWatcherCleanups.delete(key)
+                }
             }
         }
 
-        function trackChatChange(charId?: string, chatId?: string) {
-            if (!charId || !chatId) {
-                return
+        function syncChatWatchers(character: Database['characters'][number]) {
+            const activeKeys = new Set<string>()
+            for (const chat of character.chats ?? []) {
+                if (!character.chaId || !chat?.id) {
+                    continue
+                }
+                const charId = character.chaId
+                const chatId = chat.id
+                const key = chatWatcherKey(charId, chatId)
+                activeKeys.add(key)
+                if (chatWatcherCleanups.has(key)) {
+                    continue
+                }
+                const cleanup = $effect.root(() => {
+                    let initialized = false
+                    $effect(() => {
+                        const currentCharacter = DBState.db.characters?.find((candidate) => candidate?.chaId === charId)
+                        const currentChat = currentCharacter?.chats?.find((candidate) => candidate?.id === chatId)
+                        if (!currentChat) {
+                            return
+                        }
+                        $state.snapshot(currentChat)
+                        if (initialized) {
+                            requestChatSave(charId, chatId)
+                        }
+                        else {
+                            initialized = true
+                        }
+                    })
+                })
+                chatWatcherCleanups.set(key, cleanup)
             }
-            if (
-                changeTracker.chat[0]?.[0] !== charId ||
-                changeTracker.chat[0]?.[1] !== chatId
-            ) {
-                changeTracker.chat.unshift([charId, chatId])
-            }
+            cleanupChatWatchers(activeKeys)
         }
 
         $effect(() => {
             DBState.db.botPresetsId
             DBState.db.botPresets.length
-            changeTracker.botPreset = true
-            saveTimeoutExecute()
+            trackFlagChange('botPreset')
         })
         $effect(() => {
             $state.snapshot(DBState.db.modules)
-            changeTracker.modules = true
-            saveTimeoutExecute()
+            trackFlagChange('modules')
         })
         $effect(() => {
             $state.snapshot(DBState.db.loadouts)
-            changeTracker.loadouts = true
-            saveTimeoutExecute()
+            trackFlagChange('loadouts')
         })
         $effect(() => {
             $state.snapshot(DBState.db.plugins)
-            changeTracker.plugins = true
-            saveTimeoutExecute()
+            trackFlagChange('plugins')
         })
         $effect(() => {
             $state.snapshot(DBState.db.pluginCustomStorage)
-            changeTracker.pluginCustomStorage = true
-            saveTimeoutExecute()
+            trackFlagChange('pluginCustomStorage')
         })
         $effect(() => {
             for (const key in DBState.db) {
@@ -404,26 +448,29 @@ export async function saveDb() {
                 }
             }
             if (DBState?.db?.characters?.[selIdState]) {
-                for (const key in DBState.db.characters[selIdState]) {
+                const character = DBState.db.characters[selIdState]
+                for (const key in character) {
                     if (key !== 'chats') {
-                        $state.snapshot(DBState.db.characters[selIdState][key])
+                        $state.snapshot(character[key])
                     }
                 }
-                DBState.db.characters[selIdState].chats?.map((chat) => chat?.id)
-                trackCharacterChange(DBState.db.characters[selIdState]?.chaId)
+                character.chats?.map((chat) => chat?.id)
+                requestCharacterSave(character.chaId)
+                syncChatWatchers(character)
+            }
+            else {
+                cleanupChatWatchers()
             }
             saveTimeoutExecute()
         })
-        $effect(() => {
-            const character = DBState?.db?.characters?.[selIdState]
-            const chat = character?.chats?.[character?.chatPage]
-            if (!character || !chat) {
-                return
+        return () => {
+            unsubscribeSelectedChar()
+            cleanupChatWatchers()
+            if (activeSaveDirtyTracker === dirtyTracker) {
+                activeSaveDirtyTracker = null
+                activeSaveScheduler = null
             }
-            $state.snapshot(chat)
-            trackChatChange(character.chaId, chat.id)
-            saveTimeoutExecute()
-        })
+        }
     })
 
     let savetrys = 0
@@ -448,16 +495,16 @@ export async function saveDb() {
                 requiresFullEncoderReload.state = false
             }
 
-            let toSave = safeStructuredClone(changeTracker)
-            changeTracker.character = changeTracker.character.length === 0 ? [] : [changeTracker.character[0]]
-            changeTracker.chat = changeTracker.chat.length === 0 ? [] : [changeTracker.chat[0]]
-            changeTracker.botPreset = false
-            changeTracker.modules = false
-            changeTracker.loadouts = false
-            changeTracker.plugins = false
-            changeTracker.pluginCustomStorage = false
+            if (!dirtyTracker.hasChanges()) {
+                saving.state = false
+                continue
+            }
+            const saveSnapshot = dirtyTracker.snapshot()
+            let toSave = saveSnapshot.toSave
             if (gotChannel) {
                 //Data is saved in other tab
+                changed = dirtyTracker.hasChanges()
+                saving.state = false
                 await sleep(1000)
                 continue
             }
@@ -466,6 +513,8 @@ export async function saveDb() {
             }
             let db = getDatabase()
             if (!db.characters) {
+                changed = dirtyTracker.hasChanges()
+                saving.state = false
                 await sleep(1000)
                 continue
             }
@@ -473,17 +522,23 @@ export async function saveDb() {
             await encoder.set(db, toSave)
             const encoded = encoder.encode()
             if (!encoded) {
+                changed = dirtyTracker.hasChanges()
+                saving.state = false
                 await sleep(1000)
                 continue
             }
             const dbData = new Uint8Array(encoded)
             if (isTauri) {
                 await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
+                dirtyTracker.ack(saveSnapshot)
+                changed = dirtyTracker.hasChanges()
                 await writeFile(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData, { baseDir: BaseDirectory.AppData });
             }
             else {
 
                 await forageStorage.setItem('database/database.bin', dbData)
+                dirtyTracker.ack(saveSnapshot)
+                changed = dirtyTracker.hasChanges()
                 if (!forageStorage.isAccount) {
                     await forageStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData)
                 }
@@ -498,6 +553,7 @@ export async function saveDb() {
             await saveDbKei()
             await sleep(500)
         } catch (error) {
+            changed = dirtyTracker.hasChanges()
             savetrys += 1
             if (savetrys > 4) {
                 alertError(error)
