@@ -871,7 +871,11 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                 if(chats && chats[chatIndex]){
                     const previousChatId = chats[chatIndex]?.id
                     DBState.db.characters[charId].chats[chatIndex] = chat
-                    requestChatSave(character?.chaId, chat?.id ?? previousChatId)
+                    const nextChatId = chat?.id ?? previousChatId
+                    if(chat?.id && chat.id !== previousChatId){
+                        requestCharacterSave(character?.chaId)
+                    }
+                    requestChatSave(character?.chaId, nextChatId)
                 }
             }
         },

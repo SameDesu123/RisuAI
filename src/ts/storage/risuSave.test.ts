@@ -290,6 +290,27 @@ describe('RisuSave chat blocks', () => {
         expect(decoded.characters[0].chats.map((chat) => chat.id)).toEqual(['chat-1'])
     })
 
+    it('updates character chat metadata when a chat id changes', async () => {
+        const db = makeDb()
+        const encoder = new RisuSaveEncoder()
+        await encoder.init(db)
+
+        db.characters[0].chats[0] = makeChat('chat-renamed', 'renamed')
+        await encoder.set(db, emptyToSave({
+            character: ['char-1'],
+            chat: [['char-1', 'chat-renamed']],
+        }))
+        const encoded = encoder.encode()
+        expect(encoded).not.toBeNull()
+
+        const blocks = parseBlocks(encoded!)
+        const characterBlock = blocks.find((block) => block.name === 'char-1')
+        expect(JSON.parse(characterBlock!.content).chats).toEqual([{ id: 'chat-renamed' }, { id: 'chat-2' }])
+
+        const decoded = await decodeRisuSave(new Uint8Array(encoded!))
+        expect(decoded.characters[0].chats.map((chat) => chat.id)).toEqual(['chat-renamed', 'chat-2'])
+    })
+
     it('removes character and chat blocks after character deletion', async () => {
         const db = makeDb()
         db.characters.push(makeCharacter('char-2', [

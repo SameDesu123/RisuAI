@@ -368,6 +368,12 @@ export async function saveDb() {
             saveTimeoutExecute()
         }
 
+        $effect(() => {
+            if (requiresFullEncoderReload.state) {
+                saveTimeoutExecute()
+            }
+        })
+
         const chatWatcherCleanups = new Map<string, () => void>()
         function chatWatcherKey(charId: string, chatId: string) {
             return `${charId}\0${chatId}`
@@ -486,6 +492,7 @@ export async function saveDb() {
         changed = false
         try {
 
+            let didFullEncoderReload = false
             if (requiresFullEncoderReload.state) {
                 encoder = new RisuSaveEncoder()
                 await encoder.init(getDatabase(), {
@@ -493,9 +500,10 @@ export async function saveDb() {
                     skipRemoteSavingOnCharacters: false
                 })
                 requiresFullEncoderReload.state = false
+                didFullEncoderReload = true
             }
 
-            if (!dirtyTracker.hasChanges()) {
+            if (!didFullEncoderReload && !dirtyTracker.hasChanges()) {
                 saving.state = false
                 continue
             }
