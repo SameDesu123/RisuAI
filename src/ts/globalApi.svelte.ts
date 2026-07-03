@@ -245,14 +245,21 @@ export async function saveAsset(data: Uint8Array, customId: string = '', fileNam
     if (fileName && fileName.split('.').length > 0) {
         fileExtension = fileName.split('.').pop()
     }
+    const form = `assets/${id}.${fileExtension}`
     if (isTauri) {
-        await writeFile(`assets/${id}.${fileExtension}`, data, {
+        const folderEnd = form.lastIndexOf('/')
+        if(folderEnd > 0){
+            await mkdir(form.slice(0, folderEnd), {
+                baseDir: BaseDirectory.AppData,
+                recursive: true
+            })
+        }
+        await writeFile(form, data, {
             baseDir: BaseDirectory.AppData
         });
-        return `assets/${id}.${fileExtension}`
+        return form
     }
     else {
-        let form = `assets/${id}.${fileExtension}`
         const replacer = await forageStorage.setItem(form, data)
         if (replacer) {
             return replacer
@@ -1005,6 +1012,9 @@ export function getUncleanablesSync(db: Database, uptype: 'basename' | 'pure' = 
         if (cha.image) {
             addUncleanable(cha.image);
         }
+        if (cha.imageThumbnail) {
+            addUncleanable(cha.imageThumbnail);
+        }
         if (cha.emotionImages) {
             for (const em of cha.emotionImages) {
                 addUncleanable(em[1]);
@@ -1101,6 +1111,9 @@ export function replaceDbResources(db: Database, replacer: { [key: string]: stri
     for (const cha of db.characters) {
         if (cha.image) {
             cha.image = replaceData(cha.image);
+        }
+        if (cha.imageThumbnail) {
+            cha.imageThumbnail = replaceData(cha.imageThumbnail);
         }
         if (cha.emotionImages) {
             for (let i = 0; i < cha.emotionImages.length; i++) {

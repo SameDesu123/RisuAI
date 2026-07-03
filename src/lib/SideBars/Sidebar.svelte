@@ -35,6 +35,7 @@
   addCharacter,
     changeChar,
     getCharImage,
+    getCharacterSidebarImage,
   } from "../../ts/characters";
     import CharConfig from "./CharConfig.svelte";
     import { language } from "../../lang";
@@ -591,7 +592,7 @@
           >
           {#if char.type === 'normal'}
             <SidebarAvatar 
-              src={char.img ? getCharImage(char.img, "plain") : "/none.webp"} 
+              src={getCharacterSidebarImage(char.index)}
               size="56" 
               rounded={IconRounded} 
               name={char.name}
@@ -753,7 +754,7 @@
                   }}
                 >
                 <SidebarAvatar 
-                  src={char2.img ? getCharImage(char2.img, "plain") : "/none.webp"} 
+                  src={getCharacterSidebarImage(char2.index)}
                   size="56" 
                   rounded={IconRounded} 
                   name={char2.name}
