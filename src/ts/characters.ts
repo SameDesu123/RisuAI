@@ -6,7 +6,7 @@ import { asBuffer, checkNullish, findCharacterbyId, findCharacterIndexbyId, getU
 import { v4 as uuidv4, v4 } from 'uuid';
 import { getImageType } from "./media";
 import { DBState, MobileGUIStack, OpenRealmStore, selectedCharID } from "./stores.svelte";
-import { AppendableBuffer, changeChatTo, checkCharOrder, downloadFile, getFileSrc, readImage, requiresFullEncoderReload } from "./globalApi.svelte";
+import { AppendableBuffer, assetExists, changeChatTo, checkCharOrder, downloadFile, getFileSrc, readImage, requiresFullEncoderReload } from "./globalApi.svelte";
 import { updateInlayScreen } from "./process/inlayScreen";
 import { hasher, parseMarkdownSafe } from "./parser/parser.svelte";
 import { translateHTML } from "./translator/translator";
@@ -55,6 +55,11 @@ type CharacterImageType = 'plain'|'css'|'contain'|'lgcss'
 
 const thumbnailPromises = new Map<string, Promise<string>>()
 const characterImageThumbnailVersion = 2
+
+function clearImageThumbnail(char: { imageThumbnail?: string, imageThumbnailVersion?: number }) {
+    char.imageThumbnail = ''
+    char.imageThumbnailVersion = undefined
+}
 
 async function createImageThumbnail(data: Uint8Array, maxSize = 192) {
     if(typeof document === 'undefined'){
@@ -128,11 +133,13 @@ async function ensureCharacterImageThumbnail(charIndex: number) {
     }
     if(char.imageThumbnail){
         if(char.imageThumbnailVersion !== characterImageThumbnailVersion){
-            char.imageThumbnail = ''
-            char.imageThumbnailVersion = undefined
+            clearImageThumbnail(char)
+        }
+        else if(await assetExists(char.imageThumbnail)) {
+            return char.imageThumbnail
         }
         else {
-            return char.imageThumbnail
+            clearImageThumbnail(char)
         }
     }
 
@@ -176,12 +183,16 @@ export async function getCharacterSidebarImage(charIndex: number) {
     }
 
     if(char.imageThumbnail && char.imageThumbnailVersion === characterImageThumbnailVersion){
-        const thumbnailSrc = await getCharImage(char.imageThumbnail, 'plain')
-        if(thumbnailSrc){
-            return thumbnailSrc
+        if(!await assetExists(char.imageThumbnail)){
+            clearImageThumbnail(char)
         }
-        char.imageThumbnail = ''
-        char.imageThumbnailVersion = undefined
+        else {
+            const thumbnailSrc = await getCharImage(char.imageThumbnail, 'plain')
+            if(thumbnailSrc){
+                return thumbnailSrc
+            }
+            clearImageThumbnail(char)
+        }
     }
 
     const thumbnail = await ensureCharacterImageThumbnail(charIndex)
@@ -289,8 +300,7 @@ export function dumpCharImage(charIndex:number) {
         ext: 'png'
     })
     char.image = ''
-    char.imageThumbnail = ''
-    char.imageThumbnailVersion = undefined
+    clearImageThumbnail(char)
     DBState.db.characters[charIndex] = char
 }
 
@@ -300,8 +310,7 @@ export function changeCharImage(charIndex:number,changeIndex:number) {
     char.ccAssets.splice(changeIndex, 1)
     dumpCharImage(charIndex)
     char.image = image
-    char.imageThumbnail = ''
-    char.imageThumbnailVersion = undefined
+    clearImageThumbnail(char)
     DBState.db.characters[charIndex] = char
 }
 

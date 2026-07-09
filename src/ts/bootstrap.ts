@@ -523,18 +523,31 @@ async function cleanChunks(options:{
 
     const uncleanable = new Set(await getUncleanables(db))
     if (isTauri) {
-        const assets = await readDir('assets', { baseDir: BaseDirectory.AppData })
-        console.log(assets)
-        for (const asset of assets) {
-            try {
-                const n = getBasename(asset.name)
-                if (!uncleanable.has(n)) {
-                    await remove('assets/' + asset.name, { baseDir: BaseDirectory.AppData })
+        async function cleanAssetDirectory(dir: string) {
+            const assets = await readDir(dir, { baseDir: BaseDirectory.AppData })
+            for (const asset of assets) {
+                const assetPath = `${dir}/${asset.name}`
+                try {
+                    if(asset.isDirectory){
+                        await cleanAssetDirectory(assetPath)
+                        try {
+                            await remove(assetPath, { baseDir: BaseDirectory.AppData })
+                        } catch (error) {}
+                        continue
+                    }
+                    if(!asset.isFile){
+                        continue
+                    }
+                    const n = getBasename(asset.name)
+                    if (!uncleanable.has(n)) {
+                        await remove(assetPath, { baseDir: BaseDirectory.AppData })
+                    }
+                } catch (error) {
+                    console.log('error', assetPath)
                 }
-            } catch (error) {
-                console.log('error', asset.name)
             }
         }
+        await cleanAssetDirectory('assets')
 
         
         if(!await exists('remotes', { baseDir: BaseDirectory.AppData })) {

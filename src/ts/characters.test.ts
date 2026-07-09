@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
     saveImage: vi.fn(),
     readImage: vi.fn(),
+    assetExists: vi.fn(),
     getFileSrc: vi.fn(),
     hasher: vi.fn(),
     dbState: {
@@ -33,6 +34,7 @@ vi.mock('./globalApi.svelte', () => ({
     changeChatTo: vi.fn(),
     checkCharOrder: vi.fn(),
     downloadFile: vi.fn(),
+    assetExists: (...args: any[]) => mocks.assetExists(...args),
     getFileSrc: (...args: any[]) => mocks.getFileSrc(...args),
     readImage: (...args: any[]) => mocks.readImage(...args),
     requiresFullEncoderReload: { state: false },
@@ -119,6 +121,7 @@ beforeEach(() => {
         characters: [],
     }
     mocks.getFileSrc.mockImplementation(async (loc: string) => `resolved:${loc}`)
+    mocks.assetExists.mockResolvedValue(true)
     mocks.hasher.mockResolvedValue('thumbhash')
     mocks.saveImage.mockImplementation(async (_data: Uint8Array, customId: string, fileName: string) => {
         const ext = fileName.split('.').pop() ?? 'png'
@@ -139,8 +142,29 @@ describe('getCharacterSidebarImage', () => {
         await expect(getCharacterSidebarImage(0)).resolves.toBe('resolved:assets/thumbnail/existing.webp')
 
         expect(mocks.getFileSrc).toHaveBeenCalledWith('assets/thumbnail/existing.webp')
+        expect(mocks.assetExists).toHaveBeenCalledWith('assets/thumbnail/existing.webp')
         expect(mocks.readImage).not.toHaveBeenCalled()
         expect(mocks.saveImage).not.toHaveBeenCalled()
+    })
+
+    test('regenerates a missing cached thumbnail from the original icon', async () => {
+        installImageAndCanvasMocks()
+        mocks.assetExists.mockResolvedValueOnce(false)
+        mocks.readImage.mockResolvedValue(new Uint8Array([1, 2, 3]))
+        ;(DBState.db as any).characters = [{
+            chaId: 'char-1',
+            image: 'assets/full.png',
+            imageThumbnail: 'assets/thumbnail/missing.webp',
+            imageThumbnailVersion: 2,
+        }]
+
+        await expect(getCharacterSidebarImage(0)).resolves.toBe('resolved:assets/thumbnail/thumbhash.webp')
+
+        expect(mocks.assetExists).toHaveBeenCalledWith('assets/thumbnail/missing.webp')
+        expect(mocks.getFileSrc).not.toHaveBeenCalledWith('assets/thumbnail/missing.webp')
+        expect(mocks.readImage).toHaveBeenCalledWith('assets/full.png')
+        expect(DBState.db.characters[0].imageThumbnail).toBe('assets/thumbnail/thumbhash.webp')
+        expect(DBState.db.characters[0].imageThumbnailVersion).toBe(2)
     })
 
     test('regenerates stale thumbnails from an older thumbnail version', async () => {

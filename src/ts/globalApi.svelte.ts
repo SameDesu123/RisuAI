@@ -45,6 +45,7 @@ import { isTauri, isNodeServer } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
+import { safeStructuredClone } from "./polyfill";
 
 export const forageStorage = new AutoStorage()
 
@@ -218,6 +219,25 @@ export async function readImage(data: string) {
     }
     else {
         return (await forageStorage.getItem(data) as unknown as Uint8Array)
+    }
+}
+
+export async function assetExists(data: string) {
+    if(!data){
+        return false
+    }
+    try {
+        if(isTauri){
+            if(data.startsWith('assets')){
+                return await exists(data, { baseDir: BaseDirectory.AppData })
+            }
+            return await exists(data)
+        }
+        const item = await forageStorage.getItem(data)
+        return !!item
+    }
+    catch (error) {
+        return false
     }
 }
 
@@ -1081,6 +1101,35 @@ export function getUncleanablesSync(db: Database, uptype: 'basename' | 'pure' = 
         })
     }
     return Array.from(uncleanable);
+}
+
+type ImageThumbnailCacheHolder = {
+    imageThumbnail?: string
+    imageThumbnailVersion?: number
+}
+
+function stripImageThumbnailCacheFields(data: ImageThumbnailCacheHolder) {
+    delete data.imageThumbnail
+    delete data.imageThumbnailVersion
+}
+
+export function stripImageThumbnailCache(db: Database): Database {
+    const stripped = safeStructuredClone(db)
+    for(const cha of stripped.characters ?? []){
+        stripImageThumbnailCacheFields(cha)
+    }
+    return stripped
+}
+
+export function stripColdStorageImageThumbnailCache<T>(data: T): T {
+    const stripped = safeStructuredClone(data)
+    if(stripped && typeof stripped === 'object' && !Array.isArray(stripped) && 'character' in stripped){
+        const character = (stripped as { character?: ImageThumbnailCacheHolder }).character
+        if(character){
+            stripImageThumbnailCacheFields(character)
+        }
+    }
+    return stripped
 }
 
 

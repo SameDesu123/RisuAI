@@ -1,7 +1,7 @@
 import { BaseDirectory, readFile, readDir, writeFile } from "@tauri-apps/plugin-fs";
 import localforage from "localforage";
 import { alertError, alertNormal, alertStore, alertWait, alertMd, alertConfirm } from "../alert";
-import { LocalWriter, forageStorage, requiresFullEncoderReload } from "../globalApi.svelte";
+import { LocalWriter, forageStorage, requiresFullEncoderReload, stripImageThumbnailCache } from "../globalApi.svelte";
 import { isTauri } from "src/ts/platform"
 import { decodeRisuSave, encodeRisuSaveLegacy } from "../storage/risuSave";
 import { getDatabase, setDatabaseLite } from "../storage/database.svelte";
@@ -158,7 +158,7 @@ export async function SaveLocalBackup(){
         await writer.writeBackup(payload.backupName, payload.encoded)
     }
 
-    const dbWithoutAccount = { ...db, account: undefined }
+    const dbWithoutAccount = stripImageThumbnailCache({ ...db, account: undefined })
     let dbData = encodeRisuSaveLegacy(dbWithoutAccount, 'compression')
 
     if(forageStorage.isAccount && location.origin.endsWith('risuai.xyz')){
@@ -378,7 +378,7 @@ export async function SavePartialLocalBackup(){
         await writer.writeBackup(payload.backupName, payload.encoded)
     }
 
-    const dbWithoutAccount = { ...db, account: undefined }
+    const dbWithoutAccount = stripImageThumbnailCache({ ...db, account: undefined })
     const dbData = encodeRisuSaveLegacy(dbWithoutAccount, 'compression')
 
     alertWait(`Saving partial local backup... (Saving database)`) 

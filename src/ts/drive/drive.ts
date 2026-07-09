@@ -1,6 +1,6 @@
 import { alertError, alertInput, alertNormal, alertSelect, alertStore } from "../alert";
 import { getDatabase, type Database } from "../storage/database.svelte";
-import { forageStorage, getUncleanables, openURL } from "../globalApi.svelte";
+import { forageStorage, getUncleanables, openURL, stripImageThumbnailCache } from "../globalApi.svelte";
 import { isTauri } from "src/ts/platform"
 import { BaseDirectory, exists, readFile, readDir, writeFile } from "@tauri-apps/plugin-fs";
 import { language } from "../../lang";
@@ -183,7 +183,7 @@ async function backupDrive(ACCESS_TOKEN:string) {
         await createFileInFolder(ACCESS_TOKEN, payload.backupName, payload.encoded)
     }
 
-    const dbData = encodeRisuSaveLegacy(getDatabase(), 'compression')
+    const dbData = encodeRisuSaveLegacy(stripImageThumbnailCache(getDatabase()), 'compression')
 
     alertStore.set({
         type: "wait",
