@@ -25,9 +25,15 @@ function database(): Database {
             trigger: [],
             lorebook: [],
         }],
-        botPresets: [{ id: "preset-1", name: "Preset", mainPrompt: "Prompt" }],
+        botPresets: [
+            { name: "Preset 1", mainPrompt: "Prompt 1" },
+            { name: "Preset 2", mainPrompt: "Prompt 2" },
+        ],
         modules: [{ id: "module-1", name: "Module", description: "Description" }],
-        plugins: [{ id: "plugin-1", name: "Plugin", enabled: true }],
+        plugins: [
+            { name: "Plugin 1", enabled: true },
+            { name: "Plugin 2", enabled: false },
+        ],
         pluginCustomStorage: { "plugin-1": { counter: 1 } },
         loadouts: [{ id: "loadout-1", name: "Loadout", favorite: false }],
     } as unknown as Database
@@ -86,15 +92,33 @@ describe("SaveSectionTracker", () => {
         const tracker = new SaveSectionTracker(data)
 
         data.modules.reverse()
-        data.botPresets = []
+        data.botPresets.splice(0, 1)
+        data.plugins.reverse()
         data.loadouts.push({ id: "loadout-2", name: "Second" } as any)
         const changes = prepare(tracker, data).report.changes
 
         expect(changes).toEqual(expect.arrayContaining([
             expect.objectContaining({ scope: "module", section: "order", kind: "reordered" }),
-            expect.objectContaining({ scope: "preset", resourceId: "preset-1", kind: "removed" }),
+            expect.objectContaining({ scope: "preset", resourceId: "Preset 1", kind: "removed" }),
+            expect.objectContaining({ scope: "plugin", section: "order", kind: "reordered" }),
             expect.objectContaining({ scope: "loadout", resourceId: "loadout-2", kind: "added" }),
         ]))
+    })
+
+    it("does not duplicate fields across character sections", () => {
+        const data = database()
+        const tracker = new SaveSectionTracker(data)
+        const character = data.characters[0] as any
+        character.replaceGlobalNote = "Replacement"
+        character.license = "CC0"
+
+        const changes = prepare(tracker, data).report.changes
+        expect(changes.filter((change) => change.fields.includes("replaceGlobalNote"))).toEqual([
+            expect.objectContaining({ scope: "character", section: "prompt", kind: "added" }),
+        ])
+        expect(changes.filter((change) => change.fields.includes("license"))).toEqual([
+            expect.objectContaining({ scope: "character", section: "profile", kind: "updated" }),
+        ])
     })
 
     it("advances the baseline only when the prepared batch is committed", () => {

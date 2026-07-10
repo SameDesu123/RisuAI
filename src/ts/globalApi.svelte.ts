@@ -330,7 +330,7 @@ export async function saveDb() {
         compression: forageStorage.isAccount
     })
     const saveSectionTracker = shouldTrackSaveSectionDiagnostics
-        ? new SaveSectionTracker(getDatabase({ snapshot: true }))
+        ? new SaveSectionTracker(getDatabase())
         : null
 
     $effect.root(() => {
@@ -454,7 +454,7 @@ export async function saveDb() {
 
             let preparedSaveDiagnostics: PreparedSaveSectionDiagnostics | null = null
             if (saveSectionTracker) {
-                preparedSaveDiagnostics = saveSectionTracker.prepare(getDatabase({ snapshot: true }), {
+                preparedSaveDiagnostics = saveSectionTracker.prepare(db, {
                     reason: didFullEncoderReload ? 'forced-full-reload' : 'dirty',
                     legacyTargets: toSave,
                 })

@@ -101,7 +101,7 @@ const characterSections: SectionDefinition = {
     ],
     scripts: ["backgroundHTML", "backgroundCSS", "virtualscript", "scriptstate"],
     advanced: [
-        "utilityBot", "supaMemory", "replaceGlobalNote", "reloadKeys", "extentions", "license", "removedQuotes",
+        "utilityBot", "supaMemory", "reloadKeys", "extentions", "removedQuotes",
         "loreSettings", "loreExt", "realmId", "imported", "trashTime", "private", "source", "creation_date",
         "modification_date", "lowLevelAccess", "hideChatIcon", "lastInteraction", "translatorNote",
         "doNotChangeSeperateModels", "escapeOutput", "modules", "coldstorage", "coldStoragedChats", "depth_prompt",
@@ -179,14 +179,73 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === "object" && !Array.isArray(value)
 }
 
-function fingerprint(value: unknown): string {
-    if (value === undefined) return "undefined"
-    if (value === null || typeof value !== "object") return JSON.stringify(value) ?? String(value)
-    if (Array.isArray(value)) return `[${value.map(fingerprint).join(",")}]`
-    if (value instanceof Uint8Array) return `uint8:${Array.from(value).join(",")}`
+class FingerprintHasher {
+    private first = 0x811c9dc5
+    private second = 0x9e3779b9
 
-    const source = value as Record<string, unknown>
-    return `{${Object.keys(source).sort().map((key) => `${JSON.stringify(key)}:${fingerprint(source[key])}`).join(",")}}`
+    update(text: string) {
+        for (let index = 0; index < text.length; index += 1) {
+            const code = text.charCodeAt(index)
+            this.first = Math.imul(this.first ^ code, 0x01000193)
+            this.second = Math.imul(this.second ^ code, 0x5bd1e995)
+        }
+        this.first = Math.imul(this.first ^ text.length, 0x01000193)
+        this.second = Math.imul(this.second ^ text.length, 0x5bd1e995)
+    }
+
+    digest(): string {
+        return `${(this.first >>> 0).toString(16).padStart(8, "0")}${(this.second >>> 0).toString(16).padStart(8, "0")}`
+    }
+}
+
+function updateFingerprint(hasher: FingerprintHasher, value: unknown, ancestors: Set<object>) {
+    if (value === null) {
+        hasher.update("null")
+        return
+    }
+
+    const valueType = typeof value
+    if (valueType !== "object") {
+        hasher.update(valueType)
+        hasher.update(String(value))
+        return
+    }
+
+    const object = value as object
+    if (ancestors.has(object)) {
+        hasher.update("circular")
+        return
+    }
+    ancestors.add(object)
+
+    if (Array.isArray(value)) {
+        hasher.update("array")
+        hasher.update(String(value.length))
+        value.forEach((item) => updateFingerprint(hasher, item, ancestors))
+    }
+    else if (value instanceof Uint8Array) {
+        hasher.update("uint8")
+        hasher.update(String(value.length))
+        for (const byte of value) hasher.update(String.fromCharCode(byte))
+    }
+    else {
+        hasher.update("object")
+        const source = value as Record<string, unknown>
+        const keys = Object.keys(source).sort()
+        hasher.update(String(keys.length))
+        for (const key of keys) {
+            hasher.update(key)
+            updateFingerprint(hasher, source[key], ancestors)
+        }
+    }
+
+    ancestors.delete(object)
+}
+
+function fingerprint(value: unknown): string {
+    const hasher = new FingerprintHasher()
+    updateFingerprint(hasher, value, new Set())
+    return hasher.digest()
 }
 
 function recordKey(record: Omit<SectionRecord, "fields">): string {
@@ -197,9 +256,14 @@ function orderKey(record: Omit<OrderRecord, "ids">): string {
     return [record.scope, record.section, record.ownerId ?? ""].join("\0")
 }
 
-function getResourceId(value: unknown, index: number, prefix: string): string {
+function getResourceId(
+    value: unknown,
+    index: number,
+    prefix: string,
+    identityKeys: readonly string[] = ["chaId", "id", "chatId"],
+): string {
     if (isRecord(value)) {
-        for (const key of ["chaId", "id", "chatId"]) {
+        for (const key of identityKeys) {
             if (typeof value[key] === "string" && value[key].length > 0) return value[key]
         }
     }
@@ -253,10 +317,17 @@ function addCollection(
     definitions: SectionDefinition,
     prefix: string,
     ownerId?: string,
+    identityKeys?: readonly string[],
     ignoredKeys: ReadonlySet<string> = new Set(),
 ) {
     const list = Array.isArray(values) ? values : []
-    const ids = list.map((value, index) => getResourceId(value, index, prefix))
+    const identityCounts = new Map<string, number>()
+    const ids = list.map((value, index) => {
+        const identity = getResourceId(value, index, prefix, identityKeys)
+        const count = identityCounts.get(identity) ?? 0
+        identityCounts.set(identity, count + 1)
+        return count === 0 ? identity : `${identity}#${count + 1}`
+    })
     const order = { scope, section: "order", ownerId, ids }
     snapshot.orders.set(orderKey(order), order)
 
@@ -300,9 +371,9 @@ function createSnapshot(data: Database): SaveSectionSnapshot {
     const snapshot: SaveSectionSnapshot = { records: new Map(), orders: new Map() }
     const root = data as unknown as Record<string, unknown>
     addObject(snapshot, root, "root", rootSections, rootCollections)
-    addCollection(snapshot, root.botPresets, "preset", presetSections, "preset")
+    addCollection(snapshot, root.botPresets, "preset", presetSections, "preset", undefined, ["name"])
     addCollection(snapshot, root.modules, "module", moduleSections, "module")
-    addCollection(snapshot, root.plugins, "plugin", pluginSections, "plugin")
+    addCollection(snapshot, root.plugins, "plugin", pluginSections, "plugin", undefined, ["name"])
     addCollection(snapshot, root.loadouts, "loadout", loadoutSections, "loadout")
     addPluginStorage(snapshot, root.pluginCustomStorage)
 
