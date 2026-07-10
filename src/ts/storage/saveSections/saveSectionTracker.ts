@@ -407,7 +407,11 @@ export class SaveSectionTracker {
         return {
             report: {
                 reason: context.reason,
-                legacyTargets: context.legacyTargets,
+                legacyTargets: {
+                    ...context.legacyTargets,
+                    character: [...context.legacyTargets.character],
+                    chat: context.legacyTargets.chat.map(([characterId, chatId]) => [characterId, chatId]),
+                },
                 changes: diffSnapshots(this.baseline, snapshot),
             },
             snapshot,

@@ -26,6 +26,7 @@ import { characterURLImport, hubURL } from "./characterCards";
 import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
 import { loadRisuAccountData } from "./drive/accounter";
 import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder, type toSaveType } from "./storage/risuSave";
+import { SaveSectionTracker, type PreparedSaveSectionDiagnostics } from "./storage/saveSections/saveSectionTracker";
 import { AutoStorage } from "./storage/autoStorage";
 import { updateAnimationSpeed } from "./gui/animation";
 import { updateColorScheme, updateTextThemeAndCSS } from "./gui/colorscheme";
@@ -289,6 +290,8 @@ export let saving = $state({
 export let requiresFullEncoderReload = $state({
     state: false
 })
+const shouldTrackSaveSectionDiagnostics = import.meta.env.DEV
+
 export async function saveDb() {
     let changed = false
     syncDrive()
@@ -326,6 +329,9 @@ export async function saveDb() {
     await encoder.init(getDatabase(), {
         compression: forageStorage.isAccount
     })
+    const saveSectionTracker = shouldTrackSaveSectionDiagnostics
+        ? new SaveSectionTracker(getDatabase({ snapshot: true }))
+        : null
 
     $effect.root(() => {
 
@@ -415,6 +421,7 @@ export async function saveDb() {
         saving.state = true
         changed = false
         try {
+            let didFullEncoderReload = false
 
             if (requiresFullEncoderReload.state) {
                 encoder = new RisuSaveEncoder()
@@ -423,6 +430,7 @@ export async function saveDb() {
                     skipRemoteSavingOnCharacters: false
                 })
                 requiresFullEncoderReload.state = false
+                didFullEncoderReload = true
             }
 
             let toSave = safeStructuredClone(changeTracker)
@@ -442,6 +450,14 @@ export async function saveDb() {
             if (!db.characters) {
                 await sleep(1000)
                 continue
+            }
+
+            let preparedSaveDiagnostics: PreparedSaveSectionDiagnostics | null = null
+            if (saveSectionTracker) {
+                preparedSaveDiagnostics = saveSectionTracker.prepare(getDatabase({ snapshot: true }), {
+                    reason: didFullEncoderReload ? 'forced-full-reload' : 'dirty',
+                    legacyTargets: toSave,
+                })
             }
 
             await encoder.set(db, toSave)
@@ -470,6 +486,13 @@ export async function saveDb() {
             }
             savetrys = 0
             await saveDbKei()
+            if (saveSectionTracker && preparedSaveDiagnostics) {
+                saveSectionTracker.commit(preparedSaveDiagnostics)
+                console.info('[RisuAI save diagnostics]', {
+                    timestamp: new Date().toISOString(),
+                    ...preparedSaveDiagnostics.report,
+                })
+            }
             await sleep(500)
         } catch (error) {
             savetrys += 1

@@ -121,4 +121,21 @@ describe("SaveSectionTracker", () => {
 
         expect(prepared.report).toMatchObject({ reason: "forced-full-reload", changes: [] })
     })
+
+    it("keeps a diagnostic copy when the encoder mutates legacy targets", () => {
+        const data = database()
+        const tracker = new SaveSectionTracker(data)
+        const legacyTargets = emptyTargets()
+        legacyTargets.character.push("character-1")
+        legacyTargets.chat.push(["character-1", "chat-1"])
+
+        const prepared = tracker.prepare(data, { reason: "dirty", legacyTargets })
+        legacyTargets.character.splice(0)
+        legacyTargets.chat[0][1] = "changed-by-encoder"
+
+        expect(prepared.report.legacyTargets).toMatchObject({
+            character: ["character-1"],
+            chat: [["character-1", "chat-1"]],
+        })
+    })
 })
