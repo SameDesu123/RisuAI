@@ -1343,6 +1343,7 @@ export interface character{
     image?:string
     imageThumbnail?:string
     imageThumbnailVersion?:number
+    imageThumbnailSource?:string
     firstMessage:string
     desc:string
     notes:string
@@ -1510,6 +1511,7 @@ export interface groupChat{
     image?:string
     imageThumbnail?:string
     imageThumbnailVersion?:number
+    imageThumbnailSource?:string
     firstMessage:string
     chats:Chat[]
     chatFolders: ChatFolder[]

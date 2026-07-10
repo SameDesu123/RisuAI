@@ -3,7 +3,6 @@ import {
     BaseDirectory,
     readFile,
     exists,
-    mkdir,
     readDir,
     remove
 } from "@tauri-apps/plugin-fs"
@@ -265,21 +264,14 @@ export async function saveAsset(data: Uint8Array, customId: string = '', fileNam
     if (fileName && fileName.split('.').length > 0) {
         fileExtension = fileName.split('.').pop()
     }
-    const form = `assets/${id}.${fileExtension}`
     if (isTauri) {
-        const folderEnd = form.lastIndexOf('/')
-        if(folderEnd > 0){
-            await mkdir(form.slice(0, folderEnd), {
-                baseDir: BaseDirectory.AppData,
-                recursive: true
-            })
-        }
-        await writeFile(form, data, {
+        await writeFile(`assets/${id}.${fileExtension}`, data, {
             baseDir: BaseDirectory.AppData
         });
-        return form
+        return `assets/${id}.${fileExtension}`
     }
     else {
+        let form = `assets/${id}.${fileExtension}`
         const replacer = await forageStorage.setItem(form, data)
         if (replacer) {
             return replacer
@@ -1103,36 +1095,6 @@ export function getUncleanablesSync(db: Database, uptype: 'basename' | 'pure' = 
     return Array.from(uncleanable);
 }
 
-type ImageThumbnailCacheHolder = {
-    imageThumbnail?: string
-    imageThumbnailVersion?: number
-}
-
-function stripImageThumbnailCacheFields(data: ImageThumbnailCacheHolder) {
-    delete data.imageThumbnail
-    delete data.imageThumbnailVersion
-}
-
-export function stripImageThumbnailCache(db: Database): Database {
-    const stripped = safeStructuredClone(db)
-    for(const cha of stripped.characters ?? []){
-        stripImageThumbnailCacheFields(cha)
-    }
-    return stripped
-}
-
-export function stripColdStorageImageThumbnailCache<T>(data: T): T {
-    const stripped = safeStructuredClone(data)
-    if(stripped && typeof stripped === 'object' && !Array.isArray(stripped) && 'character' in stripped){
-        const character = (stripped as { character?: ImageThumbnailCacheHolder }).character
-        if(character){
-            stripImageThumbnailCacheFields(character)
-        }
-    }
-    return stripped
-}
-
-
 /**
  * Replaces database resources with the provided replacer object.
  * 
@@ -1163,6 +1125,9 @@ export function replaceDbResources(db: Database, replacer: { [key: string]: stri
         }
         if (cha.imageThumbnail) {
             cha.imageThumbnail = replaceData(cha.imageThumbnail);
+        }
+        if (cha.imageThumbnailSource) {
+            cha.imageThumbnailSource = replaceData(cha.imageThumbnailSource);
         }
         if (cha.emotionImages) {
             for (let i = 0; i < cha.emotionImages.length; i++) {

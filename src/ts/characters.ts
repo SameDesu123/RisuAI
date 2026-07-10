@@ -56,9 +56,35 @@ type CharacterImageType = 'plain'|'css'|'contain'|'lgcss'
 const thumbnailPromises = new Map<string, Promise<string>>()
 const characterImageThumbnailVersion = 2
 
-function clearImageThumbnail(char: { imageThumbnail?: string, imageThumbnailVersion?: number }) {
+type CharacterImageThumbnailHolder = {
+    chaId?: string
+    image?: string
+    imageThumbnail?: string
+    imageThumbnailVersion?: number
+    imageThumbnailSource?: string
+}
+
+type CharacterImageThumbnailSource = {
+    chaId?: string
+    image: string
+}
+
+function clearImageThumbnail(char: CharacterImageThumbnailHolder) {
     char.imageThumbnail = ''
     char.imageThumbnailVersion = undefined
+    char.imageThumbnailSource = undefined
+}
+
+export function clearCharacterImageThumbnail(charIndex: number) {
+    const char = DBState.db.characters[charIndex]
+    if(!char){
+        return
+    }
+    clearImageThumbnail(char)
+}
+
+function getThumbnailPromiseKey(charIndex: number, image: string, chaId?: string) {
+    return `${chaId || charIndex}:${image}`
 }
 
 async function createImageThumbnail(data: Uint8Array, maxSize = 192) {
@@ -123,16 +149,47 @@ async function saveImageThumbnail(data: Uint8Array) {
         return ''
     }
 
-    return await saveImage(thumb.data, `thumbnail/${await hasher(thumb.data)}`, `thumbnail.${thumb.ext}`)
+    return await saveImage(thumb.data, await hasher(thumb.data), `thumbnail.${thumb.ext}`)
 }
 
-async function ensureCharacterImageThumbnail(charIndex: number) {
+function characterMatchesThumbnailSource(char: CharacterImageThumbnailHolder | undefined, source: CharacterImageThumbnailSource) {
+    return !!char && char.chaId === source.chaId && char.image === source.image
+}
+
+async function setCharacterImageThumbnail(charIndex: number, data: Uint8Array, source: CharacterImageThumbnailSource) {
+    let thumbnail = ''
+    try {
+        thumbnail = await saveImageThumbnail(data)
+    }
+    catch (error) {
+        console.error(error)
+    }
+
     const char = DBState.db.characters[charIndex]
-    if(!char?.image){
+    if(!characterMatchesThumbnailSource(char, source)){
+        return ''
+    }
+    if(thumbnail){
+        char.imageThumbnail = thumbnail
+        char.imageThumbnailVersion = characterImageThumbnailVersion
+        char.imageThumbnailSource = source.image
+    }
+    else {
+        clearImageThumbnail(char)
+    }
+    return thumbnail
+}
+
+export async function ensureCharacterSidebarImageThumbnail(charIndex: number) {
+    const char = DBState.db.characters[charIndex]
+    if(!char?.image || DBState.db.hideAllImages){
         return ''
     }
     if(char.imageThumbnail){
-        if(char.imageThumbnailVersion !== characterImageThumbnailVersion){
+        if(
+            char.imageThumbnailVersion !== characterImageThumbnailVersion ||
+            char.imageThumbnailSource !== char.image
+        ){
             clearImageThumbnail(char)
         }
         else if(await assetExists(char.imageThumbnail)) {
@@ -143,7 +200,11 @@ async function ensureCharacterImageThumbnail(charIndex: number) {
         }
     }
 
-    const key = char.chaId || `${charIndex}:${char.image}`
+    const source = {
+        chaId: char.chaId,
+        image: char.image,
+    }
+    const key = getThumbnailPromiseKey(charIndex, source.image, source.chaId)
     const pending = thumbnailPromises.get(key)
     if(pending){
         return await pending
@@ -151,13 +212,11 @@ async function ensureCharacterImageThumbnail(charIndex: number) {
 
     const promise = (async () => {
         try {
-            const data = await readImage(char.image ?? '')
-            const thumbnail = await saveImageThumbnail(data)
-            if(thumbnail && DBState.db.characters[charIndex]?.image === char.image){
-                DBState.db.characters[charIndex].imageThumbnail = thumbnail
-                DBState.db.characters[charIndex].imageThumbnailVersion = characterImageThumbnailVersion
+            const data = await readImage(source.image)
+            if(!characterMatchesThumbnailSource(DBState.db.characters[charIndex], source)){
+                return ''
             }
-            return thumbnail
+            return await setCharacterImageThumbnail(charIndex, data, source)
         }
         catch (error) {
             console.error(error)
@@ -182,28 +241,32 @@ export async function getCharacterSidebarImage(charIndex: number) {
         return '/none.webp'
     }
 
-    if(char.imageThumbnail && char.imageThumbnailVersion === characterImageThumbnailVersion){
-        if(!await assetExists(char.imageThumbnail)){
-            clearImageThumbnail(char)
-        }
-        else {
+    if(
+        char.imageThumbnail &&
+        char.imageThumbnailVersion === characterImageThumbnailVersion &&
+        char.imageThumbnailSource === char.image
+    ){
+        if(await assetExists(char.imageThumbnail)){
             const thumbnailSrc = await getCharImage(char.imageThumbnail, 'plain')
             if(thumbnailSrc){
                 return thumbnailSrc
             }
-            clearImageThumbnail(char)
         }
     }
 
-    const thumbnail = await ensureCharacterImageThumbnail(charIndex)
-    if(thumbnail){
-        const thumbnailSrc = await getCharImage(thumbnail, 'plain')
-        if(thumbnailSrc){
-            return thumbnailSrc
+    const pending = thumbnailPromises.get(getThumbnailPromiseKey(charIndex, char.image, char.chaId))
+    if(pending){
+        const thumbnail = await pending
+        if(thumbnail){
+            const thumbnailSrc = await getCharImage(thumbnail, 'plain')
+            if(thumbnailSrc){
+                return thumbnailSrc
+            }
         }
     }
 
-    return (await getCharImage(char.image, 'plain')) ?? '/none.webp'
+    const originalSrc = await getCharImage(char.image, 'plain')
+    return originalSrc || '/none.webp'
 }
 
 export async function getCharImage(loc:string, type:CharacterImageType) {
@@ -281,10 +344,20 @@ export async function selectCharImg(charIndex:number) {
 
 
 
+    const charId = DBState.db.characters[charIndex]?.chaId
+    const image = await saveImage(img)
+    if(DBState.db.characters[charIndex]?.chaId !== charId){
+        return
+    }
+
     dumpCharImage(charIndex)
-    DBState.db.characters[charIndex].image = await saveImage(img)
-    DBState.db.characters[charIndex].imageThumbnail = await saveImageThumbnail(img)
-    DBState.db.characters[charIndex].imageThumbnailVersion = DBState.db.characters[charIndex].imageThumbnail ? characterImageThumbnailVersion : undefined
+    const char = DBState.db.characters[charIndex]
+    char.image = image
+    clearImageThumbnail(char)
+    await setCharacterImageThumbnail(charIndex, img, {
+        chaId: char.chaId,
+        image,
+    })
 }
 
 export function dumpCharImage(charIndex:number) {
@@ -889,6 +962,7 @@ export async function makeGroupImage() {
         if(group.type !== 'group'){
             return
         }
+        const groupId = group.chaId
     
         const imageUrls = await Promise.all(group.characters.map((v) => {
             return getCharImage(findCharacterbyId(v).image, 'plain')
@@ -944,8 +1018,23 @@ export async function makeGroupImage() {
         // Return the image URI
     
         const uri = canvas.toDataURL()
+        const imageData = dataURLtoBuffer(uri)
         canvas.remove()
-        db.characters[charID].image = await saveImage(dataURLtoBuffer(uri));
+        const image = await saveImage(imageData);
+        const char = db.characters[charID]
+        if(char?.chaId !== groupId){
+            alertStore.set({
+                type: 'none',
+                msg: ''
+            })
+            return
+        }
+        char.image = image
+        clearImageThumbnail(char)
+        await setCharacterImageThumbnail(charID, imageData, {
+            chaId: char.chaId,
+            image,
+        })
         alertStore.set({
             type: 'none',
             msg: ''
