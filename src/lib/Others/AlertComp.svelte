@@ -74,6 +74,37 @@
     let allExpanded = $state(false)
     let copiedKey: string | null = $state(null)
 
+    const requestContextColors:Record<string, string> = {
+        prompt: 'var(--risu-theme-textcolor)',
+        character: 'var(--risu-theme-selected)',
+        lorebook: 'var(--risu-theme-draculared)',
+        module: 'color-mix(in srgb, var(--risu-theme-textcolor2) 70%, var(--risu-theme-selected))',
+        previousMessages: 'var(--risu-theme-textcolor2)',
+        currentMessage: 'color-mix(in srgb, var(--risu-theme-textcolor) 55%, var(--risu-theme-selected))',
+        longTermMemory: 'color-mix(in srgb, var(--risu-theme-draculared) 55%, var(--risu-theme-selected))',
+        other: 'var(--risu-theme-borderc)',
+    }
+
+    function getRequestContextLabel(name:string){
+        switch(name){
+            case 'prompt': return language.prompt
+            case 'character': return language.character
+            case 'lorebook': return language.loreBook
+            case 'module': return language.module
+            case 'previousMessages': return language.previousMessages
+            case 'currentMessage': return language.currentMessage
+            case 'longTermMemory': return language.longTermMemory
+            default: return language.otherContext
+        }
+    }
+
+    function getRequestContextPercentage(tokens:number, total:number){
+        if(!total || total <= 0){
+            return 0
+        }
+        return Math.min(100, Math.max(0, tokens / total * 100))
+    }
+
     // Register JSON language for syntax highlighting
     if (!hljs.getLanguage('json')) {
         hljs.registerLanguage('json', json)
@@ -455,6 +486,39 @@
                         <span class="text-gray-400">{language.maxContextSize}</span>
                         <span class="text-gray-400 justify-self-end">{$alertGenerationInfoStore.genInfo.maxContext ?? '?'} {language.tokens}</span>
                     </div>
+                    {#if $alertGenerationInfoStore.genInfo.inputTokenBreakdown?.length}
+                        <div class="mt-5 rounded-lg border border-darkborderc bg-darkbg/40 p-3">
+                            <div class="mb-3 text-sm font-semibold text-textcolor">
+                                {language.contextBreakdown}
+                            </div>
+                            <div class="flex flex-col gap-3">
+                                {#each $alertGenerationInfoStore.genInfo.inputTokenBreakdown as part}
+                                    {@const percentage = getRequestContextPercentage(part.tokens, $alertGenerationInfoStore.genInfo.inputTokens)}
+                                    <div>
+                                        <div class="mb-1 flex items-center justify-between gap-4 text-sm">
+                                            <span class="flex min-w-0 items-center gap-2 text-textcolor2">
+                                                <span
+                                                    class="h-2.5 w-2.5 shrink-0 rounded-full"
+                                                    style={`background: ${requestContextColors[part.name] ?? requestContextColors.other}`}
+                                                ></span>
+                                                <span class="truncate">{getRequestContextLabel(part.name)}</span>
+                                            </span>
+                                            <span class="shrink-0 tabular-nums text-textcolor">
+                                                {part.tokens} {language.tokens}
+                                                <span class="ml-1 text-xs text-textcolor2">({percentage.toFixed(1)}%)</span>
+                                            </span>
+                                        </div>
+                                        <div class="h-1.5 overflow-hidden rounded-full bg-textcolor/10">
+                                            <div
+                                                class="h-full rounded-full"
+                                                style={`width: ${percentage}%; background: ${requestContextColors[part.name] ?? requestContextColors.other}`}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                {/each}
+                            </div>
+                        </div>
+                    {/if}
                     <span class="text-textcolor2 text-sm">{language.tokenWarning}</span>
                 {/if}
                 {#if generationInfoMenuIndex === 1}
