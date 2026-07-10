@@ -511,7 +511,7 @@
                                         <div class="h-1.5 overflow-hidden rounded-full bg-textcolor/10">
                                             <div
                                                 class="h-full rounded-full"
-                                                style={`width: ${percentage}%; background: ${requestContextColors[part.name] ?? requestContextColors.other}`}
+                                                style={`width: ${percentage}%; min-width: 2px; background: ${requestContextColors[part.name] ?? requestContextColors.other}`}
                                             ></div>
                                         </div>
                                     </div>
