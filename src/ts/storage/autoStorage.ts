@@ -129,7 +129,8 @@ export class AutoStorage{
                 return
             }
             else if(window.navigator?.storage?.getDirectory &&
-                    FileSystemFileHandle?.prototype?.createWritable &&
+                    typeof FileSystemFileHandle !== 'undefined' &&
+                    FileSystemFileHandle.prototype?.createWritable &&
                     localStorage.getItem('opfs_flag!') === "able"){
                 console.log("using opfs storage")
 

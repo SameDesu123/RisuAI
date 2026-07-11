@@ -17,7 +17,8 @@ import type { OnnxModelFiles } from "./process/transformers"
 import { CharXImporter, CharXSkippableChecker, CharXWriter } from "./process/processzip"
 import { exportModuleLegacy, readModule, type RisuModule } from "./process/modules"
 import { readFile } from "@tauri-apps/plugin-fs"
-import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
+import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
+import { basename } from '@tauri-apps/api/path';
 import { AccountStorage } from "./storage/accountStorage"
 
 
@@ -553,17 +554,33 @@ export async function characterURLImport() {
     }
     
     if(isTauri){
-        await onOpenUrl((urls) => {
-            for(const url of urls){
-                const splited = url.split('/')
-                const id = splited[splited.length - 1]
-                const type = splited[splited.length - 2]
-                switch(type){
-                    case 'realm':{
+        const handleDeepLinks = async (urls: string[]) => {
+            for(const rawUrl of urls){
+                try {
+                    const url = new URL(rawUrl)
+                    if(url.protocol === 'content:' || url.protocol === 'file:'){
+                        const name = await basename(rawUrl)
+                        await importFile(name, await readFile(rawUrl))
+                        continue
+                    }
+                    const pathParts = url.pathname.split('/').filter(Boolean)
+                    const type = url.hostname || pathParts.shift()
+                    const id = pathParts.at(-1)
+                    if(type === 'realm' && id){
                         downloadRisuHub(id)
                     }
+                } catch (error) {
+                    console.warn('Ignoring invalid deep link:', rawUrl, error)
                 }
             }
+        }
+
+        const currentUrls = await getCurrent()
+        if(currentUrls?.length){
+            await handleDeepLinks(currentUrls)
+        }
+        await onOpenUrl((urls) => {
+            void handleDeepLinks(urls)
         })
     }
 

@@ -3753,6 +3753,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tiktoken-rs",
  "tokio",
+ "tokio-util",
  "url",
  "uuid",
  "zip 0.6.6",
@@ -5323,6 +5324,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "pin-project-lite",
  "tokio",
 ]

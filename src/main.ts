@@ -6,6 +6,7 @@ import { loadData } from "./ts/bootstrap";
 import { initHotkey } from "./ts/hotkey";
 import { preLoadCheck } from "./preload";
 import { mount } from "svelte";
+import { initAndroidRuntime } from "./ts/androidRuntime";
 
 window.addEventListener('vite:preloadError', (event) => {
     console.error("Chunk load error detected:", event);
@@ -16,6 +17,9 @@ preLoadCheck()
 let app = mount(App, {
     target: document.getElementById("app"),
 });
+initAndroidRuntime().catch((error) => {
+    console.error('Failed to initialize Android runtime:', error)
+})
 loadData()
 initHotkey()
 document.getElementById('preloading').remove()

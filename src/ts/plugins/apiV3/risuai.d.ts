@@ -1887,6 +1887,8 @@ interface RisuaiPluginAPI {
         apiVersion: string;
         platform: string;
         saveMethod: string;
+        os: string;
+        mobile: boolean;
     }>
 
     /**

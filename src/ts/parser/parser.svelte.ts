@@ -3,7 +3,7 @@ import markdownit from 'markdown-it'
 import { appVer, getCurrentCharacter, getDatabase, type Database, type character, type customscript, type groupChat, type triggerscript } from '../storage/database.svelte';
 import { DBState, selIdState } from '../stores.svelte';
 import { aiWatermarkingLawApplies, getFileSrc } from '../globalApi.svelte';
-import { isTauri, isNodeServer } from "src/ts/platform"
+import { isTauri, isNodeServer, isMobile } from "src/ts/platform"
 import { getChatVar, setChatVar, getGlobalChatVar } from './chatVar.svelte';
 import { processScriptFull } from '../process/scripts';
 import { get } from 'svelte/store';
@@ -1011,7 +1011,7 @@ function initMatcher(){
         },
         isTauri: isTauri,
         isNodeServer: isNodeServer,
-        isMobile: false,
+        isMobile: isMobile,
         appVer: appVer,
     })
     matcherInitialized = true

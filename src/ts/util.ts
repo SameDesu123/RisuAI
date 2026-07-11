@@ -7,7 +7,8 @@ import { readFile } from "@tauri-apps/plugin-fs"
 import { basename } from "@tauri-apps/api/path"
 import { createBlankChar, getCharImage } from "./characters"
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { isIOS, isTauri } from "src/ts/platform"
+import { invoke } from "@tauri-apps/api/core"
+import { isIOS, isTauri, isTauriAndroid } from "src/ts/platform"
 import type { Attachment } from "svelte/attachments"
 import { mount, unmount, type Snippet } from "svelte"
 import PopupList from "src/lib/UI/PopupList.svelte"
@@ -47,9 +48,12 @@ export function checkNullish(data:any){
 
 const domSelect = true
 export async function selectSingleFile(ext:string[]){
-    if(domSelect){
+    if(domSelect && !isTauriAndroid){
         const v = await selectFileByDom(ext, 'single')
-        const file = v[0]
+        const file = v?.[0]
+        if (!file) {
+            return null
+        }
         return {name: file.name,data:await readFileAsUint8Array(file)}
     }
 
@@ -166,6 +170,13 @@ export function getUserIconProtrait(){
 export function selectFileByDom(allowedExtensions:string[], multiple:'multiple'|'single' = 'single') {
     return new Promise<null|File[]>((resolve) => {
         const fileInput = document.createElement('input');
+        let settled = false
+        const finish = (files: File[]) => {
+            if (settled) return
+            settled = true
+            fileInput.remove()
+            resolve(files)
+        }
         fileInput.type = 'file';
         fileInput.multiple = multiple === 'multiple';
         const acceptAll = (getDatabase().allowAllExtentionFiles || isIOS() || allowedExtensions[0] === '*')
@@ -181,7 +192,7 @@ export function selectFileByDom(allowedExtensions:string[], multiple:'multiple'|
     
         fileInput.addEventListener('change', (event) => {
             if (fileInput.files.length === 0) {
-                resolve([]);
+                finish([]);
                 return;
             }
     
@@ -190,9 +201,9 @@ export function selectFileByDom(allowedExtensions:string[], multiple:'multiple'|
                 return !allowedExtensions || allowedExtensions.includes(fileExtension);
             })) 
     
-            fileInput.remove()
-            resolve(files);
+            finish(files);
         });
+        fileInput.addEventListener('cancel', () => finish([]), { once: true });
     
         document.body.appendChild(fileInput);
         fileInput.click();
@@ -220,12 +231,22 @@ function readFileAsUint8Array(file: File) {
 
 export async function changeFullscreen(){
     const db = getDatabase()
-    const isFull = await appWindow.isFullscreen()
-    if(db.fullScreen && (!isFull)){
-        await appWindow.setFullscreen(true)
-    }
-    if((!db.fullScreen) && (isFull)){
-        await appWindow.setFullscreen(false)
+    try {
+        if(isTauriAndroid){
+            await invoke('set_android_fullscreen', { enabled: !!db.fullScreen })
+            return
+        }
+        if(isTauri && appWindow){
+            const isFull = await appWindow.isFullscreen()
+            if(db.fullScreen && (!isFull)){
+                await appWindow.setFullscreen(true)
+            }
+            if((!db.fullScreen) && (isFull)){
+                await appWindow.setFullscreen(false)
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to change fullscreen mode:', error)
     }
 }
 

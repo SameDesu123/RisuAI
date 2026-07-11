@@ -5,7 +5,8 @@ import {
     exists,
     mkdir,
     readDir,
-    remove
+    remove,
+    rename
 } from "@tauri-apps/plugin-fs"
 import { changeFullscreen, checkNullish, sleep } from "./util"
 import { convertFileSrc, invoke } from "@tauri-apps/api/core"
@@ -41,7 +42,7 @@ import { fetch as TauriHTTPFetch } from '@tauri-apps/plugin-http';
 import { moduleUpdate } from "./process/modules";
 import type { AccountStorage } from "./storage/accountStorage";
 import { getColdStorageItem, makeColdData } from "./process/coldstorage.svelte";
-import { isTauri, isNodeServer } from "./platform";
+import { isTauri, isNodeServer, isTauriAndroid } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
@@ -80,6 +81,21 @@ export async function downloadFile(name: string, dat: Uint8Array | ArrayBuffer |
     }
 
     if (isTauri) {
+        if (isTauriAndroid) {
+            const extension = name.includes('.') ? name.split('.').pop() : '*'
+            const filePath = await save({
+                defaultPath: name,
+                filters: [{
+                    name,
+                    extensions: [extension]
+                }]
+            })
+            if (!filePath) {
+                return
+            }
+            await writeFile(filePath, data)
+            return
+        }
         await writeFile(name, data, { baseDir: BaseDirectory.Download })
     }
     else {
@@ -281,6 +297,18 @@ export let saving = $state({
     state: false
 })
 
+type DbFlushWaiter = {
+    generation: number
+    resolve: () => void
+}
+
+let requestDbFlush: ((forceFull: boolean) => Promise<void>) | null = null
+
+export async function flushDbNow(options: { forceFull?: boolean } = {}) {
+    if (!requestDbFlush) return
+    await requestDbFlush(options.forceFull ?? true)
+}
+
 /**
  * Saves the current state of the database.
  * 
@@ -291,6 +319,9 @@ export let requiresFullEncoderReload = $state({
 })
 export async function saveDb() {
     let changed = false
+    let flushGeneration = 0
+    const flushWaiters: DbFlushWaiter[] = []
+    let wakeSaveLoop: (() => void) | null = null
     syncDrive()
     let gotChannel = false
     const sessionID = v4()
@@ -326,6 +357,38 @@ export async function saveDb() {
     await encoder.init(getDatabase(), {
         compression: forageStorage.isAccount
     })
+
+    const wakeSave = () => {
+        wakeSaveLoop?.()
+        wakeSaveLoop = null
+    }
+
+    requestDbFlush = (forceFull: boolean) => {
+        if (forceFull) {
+            requiresFullEncoderReload.state = true
+        }
+        changed = true
+        flushGeneration += 1
+        wakeSave()
+        return new Promise<void>((resolve) => {
+            flushWaiters.push({
+                generation: flushGeneration,
+                resolve,
+            })
+        })
+    }
+
+    const flushForLifecycle = () => {
+        void flushDbNow({ forceFull: true }).catch((error) => {
+            console.error('Failed to flush database during app lifecycle transition:', error)
+        })
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            flushForLifecycle()
+        }
+    })
+    window.addEventListener('pagehide', flushForLifecycle)
 
     $effect.root(() => {
 
@@ -408,12 +471,23 @@ export async function saveDb() {
     await sleep(1000)
     while (true) {
         if (!changed) {
-            await sleep(500)
+            await new Promise<void>((resolve) => {
+                const onWake = () => {
+                    clearTimeout(timeout)
+                    if (wakeSaveLoop === onWake) {
+                        wakeSaveLoop = null
+                    }
+                    resolve()
+                }
+                const timeout = setTimeout(onWake, 500)
+                wakeSaveLoop = onWake
+            })
             continue
         }
 
         saving.state = true
         changed = false
+        const savingGeneration = flushGeneration
         try {
 
             if (requiresFullEncoderReload.state) {
@@ -452,7 +526,16 @@ export async function saveDb() {
             }
             const dbData = new Uint8Array(encoded)
             if (isTauri) {
-                await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
+                if (isTauriAndroid) {
+                    const tempPath = 'database/database.tmp'
+                    await writeFile(tempPath, dbData, { baseDir: BaseDirectory.AppData });
+                    await rename(tempPath, 'database/database.bin', {
+                        oldPathBaseDir: BaseDirectory.AppData,
+                        newPathBaseDir: BaseDirectory.AppData,
+                    })
+                } else {
+                    await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
+                }
                 await writeFile(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData, { baseDir: BaseDirectory.AppData });
             }
             else {
@@ -470,8 +553,16 @@ export async function saveDb() {
             }
             savetrys = 0
             await saveDbKei()
+            for (let index = flushWaiters.length - 1; index >= 0; index--) {
+                if (flushWaiters[index].generation <= savingGeneration) {
+                    flushWaiters[index].resolve()
+                    flushWaiters.splice(index, 1)
+                }
+            }
             await sleep(500)
         } catch (error) {
+            changed = true
+            wakeSave()
             savetrys += 1
             if (savetrys > 4) {
                 alertError(error)
@@ -1810,11 +1901,25 @@ export async function fetchNative(url: string, arg: {
         let fetchId = fetchIndex.toString().padStart(5, '0')
         nativeFetchData[fetchId] = []
         let resolved = false
+        let aborted = false
 
         let error = ''
         while (!streamedFetchListening) {
             await sleep(100)
         }
+        const abortNativeFetch = () => {
+            aborted = true
+            resolved = true
+            error = 'aborted'
+            void invoke('cancel_streamed_fetch', { id: fetchId }).catch((cancelError) => {
+                console.warn('Failed to cancel native streamed fetch:', cancelError)
+            })
+        }
+        const cleanupNativeFetch = () => {
+            requestSignal?.removeEventListener('abort', abortNativeFetch)
+            delete nativeFetchData[fetchId]
+        }
+        requestSignal?.addEventListener('abort', abortNativeFetch, { once: true })
         if (isTauri) {
             invoke('streamed_fetch', {
                 id: fetchId,
@@ -1859,24 +1964,36 @@ export async function fetchNative(url: string, arg: {
 
         const tauriReadableStream = new ReadableStream<Uint8Array>({
             async start(controller) {
-                while (!resolved || nativeFetchData[fetchId].length > 0) {
-                    if (nativeFetchData[fetchId].length > 0) {
-                        const data = nativeFetchData[fetchId].shift()
-                        if (data.type === 'chunk') {
-                            const chunk = Buffer.from(data.body, 'base64')
-                            controller.enqueue(chunk as unknown as Uint8Array)
+                try {
+                    while (!resolved || nativeFetchData[fetchId]?.length > 0) {
+                        if (nativeFetchData[fetchId]?.length > 0) {
+                            const data = nativeFetchData[fetchId].shift()
+                            if (data.type === 'chunk') {
+                                const chunk = Buffer.from(data.body, 'base64')
+                                controller.enqueue(chunk as unknown as Uint8Array)
+                            }
+                            if (data.type === 'headers') {
+                                resHeaders = data.body
+                                status = data.status
+                            }
+                            if (data.type === 'end') {
+                                resolved = true
+                            }
                         }
-                        if (data.type === 'headers') {
-                            resHeaders = data.body
-                            status = data.status
-                        }
-                        if (data.type === 'end') {
-                            resolved = true
-                        }
+                        await sleep(10)
                     }
-                    await sleep(10)
+                    if (aborted) {
+                        controller.error(new DOMException('The request was aborted', 'AbortError'))
+                    } else {
+                        controller.close()
+                    }
+                } finally {
+                    cleanupNativeFetch()
                 }
-                controller.close()
+            },
+            cancel() {
+                abortNativeFetch()
+                cleanupNativeFetch()
             }
         })
 
@@ -1894,6 +2011,7 @@ export async function fetchNative(url: string, arg: {
         }
 
         if (error !== '') {
+            cleanupNativeFetch()
             throw new Error(error)
         }
 

@@ -4,7 +4,8 @@ import {
     readFile,
     mkdir,
     remove,
-    readDir
+    readDir,
+    exists
 } from "@tauri-apps/plugin-fs"
 import { forageStorage, requiresFullEncoderReload } from "../globalApi.svelte"
 import { isTauri, isNodeServer } from "src/ts/platform"
@@ -196,6 +197,11 @@ export async function listColdStorageItems():Promise<{items:string[]}> {
     }
 
     else if(isTauri){
+        if(!(await exists('./coldstorage', { baseDir: BaseDirectory.AppData }))){
+            return {
+                items: []
+            }
+        }
         const entries = await readDir('./coldstorage', { baseDir: BaseDirectory.AppData })
         const keys = entries.filter(e => e.name.endsWith('.json')).map(e => e.name.slice(0, -5))
         return {
