@@ -26,7 +26,7 @@ const EXTERNAL_HUB_URL = 'https://sv.risuai.xyz';
 const NIGHTLY_HUB_URL = 'https://nightly.sv.risuai.xyz'
 export const hubURL = isNodeServer
     ? '/hub-proxy'
-    : (window.location.hostname === 'nightly.risuai.xyz' || localStorage.getItem('hub') === 'nightly')
+    : (window.location.hostname === 'nightly.risuai.xyz' || window.localStorage?.getItem('hub') === 'nightly')
     ? NIGHTLY_HUB_URL 
     : EXTERNAL_HUB_URL;
 
