@@ -112,6 +112,11 @@ jobs:
       - name: Check frontend
         run: pnpm check
 
+      - name: Run unit tests
+        run: pnpm test
+        env:
+          NODE_OPTIONS: --no-experimental-webstorage
+
       - name: Initialize generated Android project
         run: pnpm tauri android init --ci --skip-targets-install
 
@@ -199,11 +204,16 @@ jobs:
       - name: Setup Android emulator SDK
         uses: android-actions/setup-android@v4.0.1
         with:
+          cmdline-tools-version: 14742923
           packages: >-
             platform-tools
             emulator
             platforms;android-35
             system-images;android-35;google_apis;x86_64
+
+      - name: Select current Android command-line tools
+        shell: bash
+        run: echo "$ANDROID_HOME/cmdline-tools/20.0/bin" >> "$GITHUB_PATH"
 
       - name: Enable KVM access
         shell: bash
@@ -211,6 +221,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+          adb start-server
 
       - name: Install, launch, and restart RisuAI
         uses: ReactiveCircus/android-emulator-runner@v2.38.0
@@ -220,8 +231,14 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           script: |
-            set -euo pipefail
+            set -eu
+            collect_diagnostics() {
+              adb exec-out screencap -p > android-smoke.png 2>/dev/null || true
+              adb logcat -d -v threadtime > android-logcat.txt 2>/dev/null || true
+            }
+            trap collect_diagnostics EXIT
             apk="$(find android-artifacts -type f -name '*debug*.apk' -print -quit)"
             test -n "$apk"
             adb install -r "$apk"
@@ -242,11 +259,11 @@ jobs:
             sleep 5
             adb shell run-as co.aiclient.risu test -s "$database_path"
             adb shell am start -W -a android.intent.action.VIEW -d 'risuailocal://noop/smoke' -p co.aiclient.risu
-            adb exec-out screencap -p > android-smoke.png
-            adb logcat -d -v threadtime > android-logcat.txt
+            collect_diagnostics
             if grep -Eq 'Process: co\.aiclient\.risu|ANR in co\.aiclient\.risu' android-logcat.txt; then
               exit 1
             fi
+            trap - EXIT
 
       - name: Upload emulator diagnostics
         if: always()
