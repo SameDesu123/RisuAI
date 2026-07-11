@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import { svelte, vitePreprocess } from "@sveltejs/vite-plugin-svelte";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 import wasm from "vite-plugin-wasm";
 import strip from '@rollup/plugin-strip';
 import tailwindcss from '@tailwindcss/vite'
@@ -8,14 +8,15 @@ export default defineConfig(({command, mode}) => {
   return {
     plugins: [
       svelte({
-        preprocess: vitePreprocess(),
         onwarn: (warning, handler) => {
           // disable a11y warnings
           if (warning.code.startsWith("a11y-")) return;
           handler(warning);
         },
       }),
-      tailwindcss(),
+      // Vite performs the final CSS minification. Skipping Tailwind's extra
+      // optimizer also avoids duplicate work during production builds.
+      tailwindcss({ optimize: false }),
       wasm(),
       command === 'build' ? strip({
         include: '**/*.(mjs|js|svelte|ts)'
@@ -39,6 +40,9 @@ export default defineConfig(({command, mode}) => {
       target:'baseline-widely-available',
       // don't minify for debug builds
       minify: process.env.TAURI_ENV_DEBUG === 'true' ? false : 'oxc',
+      // Lightning CSS currently reports valid Custom Highlight selectors as
+      // unknown. esbuild preserves and minifies those selectors correctly.
+      cssMinify: 'esbuild',
       // produce sourcemaps for debug builds
       sourcemap: process.env.TAURI_ENV_DEBUG === 'true',
       chunkSizeWarningLimit: 2000,
