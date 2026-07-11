@@ -74,17 +74,6 @@
     let allExpanded = $state(false)
     let copiedKey: string | null = $state(null)
 
-    const requestContextColors:Record<string, string> = {
-        prompt: 'var(--risu-theme-textcolor)',
-        character: 'var(--risu-theme-selected)',
-        lorebook: 'var(--risu-theme-draculared)',
-        module: 'color-mix(in srgb, var(--risu-theme-textcolor2) 70%, var(--risu-theme-selected))',
-        previousMessages: 'var(--risu-theme-textcolor2)',
-        currentMessage: 'color-mix(in srgb, var(--risu-theme-textcolor) 55%, var(--risu-theme-selected))',
-        longTermMemory: 'color-mix(in srgb, var(--risu-theme-draculared) 55%, var(--risu-theme-selected))',
-        other: 'var(--risu-theme-borderc)',
-    }
-
     function getRequestContextLabel(name:string){
         switch(name){
             case 'prompt': return language.prompt
@@ -487,20 +476,20 @@
                         <span class="text-gray-400 justify-self-end">{$alertGenerationInfoStore.genInfo.maxContext ?? '?'} {language.tokens}</span>
                     </div>
                     {#if $alertGenerationInfoStore.genInfo.inputTokenBreakdown?.length}
-                        <div class="mt-5 rounded-lg border border-darkborderc bg-darkbg/40 p-3">
+                        <div
+                            class="request-context-breakdown mt-5 rounded-lg border border-darkborderc bg-darkbg/40 p-3"
+                            data-color-scheme={$ColorSchemeTypeStore}
+                        >
                             <div class="mb-3 text-sm font-semibold text-textcolor">
                                 {language.contextBreakdown}
                             </div>
                             <div class="flex flex-col gap-3">
                                 {#each $alertGenerationInfoStore.genInfo.inputTokenBreakdown as part}
                                     {@const percentage = getRequestContextPercentage(part.tokens, $alertGenerationInfoStore.genInfo.inputTokens)}
-                                    <div>
+                                    <div class={`request-context-part request-context-part-${part.name}`}>
                                         <div class="mb-1 flex items-center justify-between gap-4 text-sm">
-                                            <span class="flex min-w-0 items-center gap-2 text-textcolor2">
-                                                <span
-                                                    class="h-2.5 w-2.5 shrink-0 rounded-full"
-                                                    style={`background: ${requestContextColors[part.name] ?? requestContextColors.other}`}
-                                                ></span>
+                                            <span class="request-context-label flex min-w-0 items-center gap-2">
+                                                <span class="request-context-marker h-2.5 w-2.5 shrink-0 rounded-full"></span>
                                                 <span class="truncate">{getRequestContextLabel(part.name)}</span>
                                             </span>
                                             <span class="shrink-0 tabular-nums text-textcolor">
@@ -510,8 +499,8 @@
                                         </div>
                                         <div class="h-1.5 overflow-hidden rounded-full bg-textcolor/10">
                                             <div
-                                                class="h-full rounded-full"
-                                                style={`width: ${percentage}%; min-width: 2px; background: ${requestContextColors[part.name] ?? requestContextColors.other}`}
+                                                class="request-context-bar h-full rounded-full"
+                                                style={`width: ${percentage}%; min-width: 2px`}
                                             ></div>
                                         </div>
                                     </div>
@@ -1110,6 +1099,69 @@
 {/if}
 
 <style>
+    .request-context-breakdown {
+        --request-context-prompt: hsl(190 28% 62%);
+        --request-context-character: hsl(42 35% 62%);
+        --request-context-lorebook: hsl(348 30% 65%);
+        --request-context-module: hsl(270 25% 66%);
+        --request-context-previous-messages: hsl(212 30% 63%);
+        --request-context-current-message: hsl(153 24% 60%);
+        --request-context-long-term-memory: hsl(22 32% 62%);
+        --request-context-other: hsl(215 12% 65%);
+    }
+
+    .request-context-breakdown[data-color-scheme='light'] {
+        --request-context-prompt: hsl(190 38% 38%);
+        --request-context-character: hsl(42 40% 38%);
+        --request-context-lorebook: hsl(348 38% 42%);
+        --request-context-module: hsl(270 32% 42%);
+        --request-context-previous-messages: hsl(212 40% 40%);
+        --request-context-current-message: hsl(153 35% 35%);
+        --request-context-long-term-memory: hsl(22 40% 40%);
+        --request-context-other: hsl(215 15% 40%);
+    }
+
+    .request-context-part {
+        --request-context-color: var(--request-context-other);
+    }
+
+    .request-context-part-prompt {
+        --request-context-color: var(--request-context-prompt);
+    }
+
+    .request-context-part-character {
+        --request-context-color: var(--request-context-character);
+    }
+
+    .request-context-part-lorebook {
+        --request-context-color: var(--request-context-lorebook);
+    }
+
+    .request-context-part-module {
+        --request-context-color: var(--request-context-module);
+    }
+
+    .request-context-part-previousMessages {
+        --request-context-color: var(--request-context-previous-messages);
+    }
+
+    .request-context-part-currentMessage {
+        --request-context-color: var(--request-context-current-message);
+    }
+
+    .request-context-part-longTermMemory {
+        --request-context-color: var(--request-context-long-term-memory);
+    }
+
+    .request-context-label {
+        color: var(--risu-theme-textcolor2);
+    }
+
+    .request-context-marker,
+    .request-context-bar {
+        background-color: var(--request-context-color);
+    }
+
     .plugin-confirm-content .plugin-name {
         font-size: 1.25rem;
         font-weight: bold;
