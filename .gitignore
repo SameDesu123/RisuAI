@@ -48,5 +48,7 @@ dist.zip
 /server/node/ssl/certificate
 
 
-# Due to Cargo.lock makes the project build fail, we ignore it
+# Keep library lockfiles ignored, but track the Tauri application lockfile so
+# Android and desktop CI resolve the same Rust dependency graph.
 Cargo.lock
+!src-tauri/Cargo.lock
