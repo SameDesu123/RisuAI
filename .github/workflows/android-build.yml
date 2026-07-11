@@ -13,6 +13,7 @@ on:
       - production
       - 'feat/android-*'
     paths:
+      - '.github/actions/setup-android-build/**'
       - '.github/scripts/configure-android.mjs'
       - '.github/workflows/android-build.yml'
       - 'package.json'
@@ -26,6 +27,7 @@ on:
     branches:
       - main
     paths:
+      - '.github/actions/setup-android-build/**'
       - '.github/scripts/configure-android.mjs'
       - '.github/workflows/android-build.yml'
       - 'package.json'
@@ -50,10 +52,10 @@ env:
   ANDROID_BUILD_TOOLS_VERSION: '36.0.0'
 
 jobs:
-  build-android:
-    name: Build Android artifacts
+  validate:
+    name: Validate frontend
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -70,44 +72,6 @@ jobs:
           cache: true
           cache_dependency_path: pnpm-lock.yaml
 
-      - name: Setup Java
-        uses: actions/setup-java@v5.5.0
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Setup Gradle cache
-        uses: gradle/actions/setup-gradle@v6.2.0
-
-      - name: Setup Android SDK and NDK
-        uses: android-actions/setup-android@v4.0.1
-        with:
-          packages: >-
-            platform-tools
-            platforms;android-36
-            build-tools;36.0.0
-            ndk;28.2.13676358
-
-      - name: Select Android NDK
-        shell: bash
-        run: |
-          echo "NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
-
-      - name: Setup Rust Android targets
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.93.0
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2.9.1
-        with:
-          workspaces: src-tauri -> target
-          prefix-key: v1-rust-registry-only
-          key: android
-          cache-targets: false
-
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
@@ -119,11 +83,22 @@ jobs:
         env:
           NODE_OPTIONS: --no-experimental-webstorage
 
-      - name: Initialize generated Android project
-        run: pnpm tauri android init --ci --skip-targets-install
+  build-debug:
+    name: Build debug APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      SCCACHE_GHA_ENABLED: 'true'
+      RUSTC_WRAPPER: sccache
 
-      - name: Configure Android permissions and SDK checks
-        run: node .github/scripts/configure-android.mjs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.0
+
+      - name: Setup Android build
+        uses: ./.github/actions/setup-android-build
+        with:
+          rust-targets: aarch64-linux-android,x86_64-linux-android
 
       - name: Build installable debug APK
         run: pnpm tauri android build --debug --apk --target aarch64 x86_64 --ci
@@ -156,21 +131,28 @@ jobs:
           compression-level: 0
           retention-days: 30
 
-      - name: Reclaim debug build space
-        shell: bash
-        run: |
-          rm -rf \
-            src-tauri/target/aarch64-linux-android/debug \
-            src-tauri/target/x86_64-linux-android/debug \
-            src-tauri/target/debug
-          df -h /
+  build-release:
+    name: Build unsigned release APK and AAB
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_release)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      SCCACHE_GHA_ENABLED: 'true'
+      RUSTC_WRAPPER: sccache
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.0
+
+      - name: Setup Android build
+        uses: ./.github/actions/setup-android-build
+        with:
+          rust-targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
       - name: Build unsigned release APK and AAB
-        if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_release)
         run: pnpm tauri android build --apk --aab --ci
 
       - name: Verify unsigned release artifacts
-        if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_release)
         shell: bash
         run: |
           release_apk="$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*release*.apk' -print -quit)"
@@ -183,8 +165,12 @@ jobs:
           unzip -t "$release_aab" >/dev/null
           "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" -c -P 16 -v 4 "$release_apk"
 
+      - name: Read application version
+        id: app-version
+        shell: bash
+        run: echo "value=$(jq -r '.version' version.json)" >> "$GITHUB_OUTPUT"
+
       - name: Upload unsigned release APK and AAB
-        if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_release)
         uses: actions/upload-artifact@v7.0.1
         with:
           name: RisuAI-Android-unsigned-v${{ steps.app-version.outputs.value }}
@@ -197,7 +183,7 @@ jobs:
 
   android-smoke:
     name: Android emulator smoke test
-    needs: build-android
+    needs: build-debug
     runs-on: ubuntu-24.04
     timeout-minutes: 45
 
