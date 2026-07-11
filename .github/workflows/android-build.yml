@@ -1,0 +1,260 @@
+name: Android Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_release:
+        description: Build unsigned release APK and AAB artifacts
+        required: true
+        default: true
+        type: boolean
+  push:
+    branches:
+      - production
+      - 'feat/android-*'
+    paths:
+      - '.github/scripts/configure-android.mjs'
+      - '.github/workflows/android-build.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'index.html'
+      - 'vite.config.*'
+      - 'version.json'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/scripts/configure-android.mjs'
+      - '.github/workflows/android-build.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'index.html'
+      - 'vite.config.*'
+      - 'version.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+  VITE_RISU_LEGAL_CONFIGURED: 'TRUE'
+  ANDROID_NDK_VERSION: '28.2.13676358'
+  ANDROID_BUILD_TOOLS_VERSION: '36.0.0'
+
+jobs:
+  build-android:
+    name: Build Android artifacts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.9
+        with:
+          cache: true
+          cache_dependency_path: pnpm-lock.yaml
+
+      - name: Setup Java
+        uses: actions/setup-java@v5.5.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v6.2.0
+
+      - name: Setup Android SDK and NDK
+        uses: android-actions/setup-android@v4.0.1
+        with:
+          packages: >-
+            platform-tools
+            platforms;android-36
+            build-tools;36.0.0
+            ndk;28.2.13676358
+
+      - name: Select Android NDK
+        shell: bash
+        run: |
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Setup Rust Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.93.0
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2.9.1
+        with:
+          workspaces: src-tauri -> target
+          key: android
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check frontend
+        run: pnpm check
+
+      - name: Initialize generated Android project
+        run: pnpm tauri android init --ci --skip-targets-install
+
+      - name: Configure Android permissions and SDK checks
+        run: node .github/scripts/configure-android.mjs
+
+      - name: Build installable debug APK
+        run: pnpm tauri android build --debug --apk --target aarch64 x86_64 --ci
+
+      - name: Verify debug APK
+        shell: bash
+        run: |
+          debug_apk="$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*debug*.apk' -print -quit)"
+          test -n "$debug_apk"
+          test -s "$debug_apk"
+          unzip -t "$debug_apk" >/dev/null
+          "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION/aapt" dump badging "$debug_apk" | tee android-debug-badging.txt
+          grep -Eq "targetSdkVersion:'(3[5-9]|[4-9][0-9])'" android-debug-badging.txt
+          "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION/apksigner" verify --verbose "$debug_apk"
+          "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" -c -P 16 -v 4 "$debug_apk"
+
+      - name: Read application version
+        id: app-version
+        shell: bash
+        run: echo "value=$(jq -r '.version' version.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: RisuAI-Android-debug-v${{ steps.app-version.outputs.value }}
+          path: |
+            src-tauri/gen/android/app/build/outputs/apk/**/*debug*.apk
+            android-debug-badging.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Build unsigned release APK and AAB
+        if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_release)
+        run: pnpm tauri android build --apk --aab --ci
+
+      - name: Verify unsigned release artifacts
+        if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_release)
+        shell: bash
+        run: |
+          release_apk="$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*release*.apk' -print -quit)"
+          release_aab="$(find src-tauri/gen/android/app/build/outputs/bundle -type f -name '*.aab' -print -quit)"
+          test -n "$release_apk"
+          test -n "$release_aab"
+          test -s "$release_apk"
+          test -s "$release_aab"
+          unzip -t "$release_apk" >/dev/null
+          unzip -t "$release_aab" >/dev/null
+          "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" -c -P 16 -v 4 "$release_apk"
+
+      - name: Upload unsigned release APK and AAB
+        if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_release)
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: RisuAI-Android-unsigned-v${{ steps.app-version.outputs.value }}
+          path: |
+            src-tauri/gen/android/app/build/outputs/apk/**/*release*.apk
+            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  android-smoke:
+    name: Android emulator smoke test
+    needs: build-android
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.0
+
+      - name: Download debug APK
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: RisuAI-Android-debug-*
+          path: android-artifacts
+          merge-multiple: true
+
+      - name: Setup Android emulator SDK
+        uses: android-actions/setup-android@v4.0.1
+        with:
+          packages: >-
+            platform-tools
+            emulator
+            platforms;android-35
+            system-images;android-35;google_apis;x86_64
+
+      - name: Enable KVM access
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install, launch, and restart RisuAI
+        uses: ReactiveCircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            apk="$(find android-artifacts -type f -name '*debug*.apk' -print -quit)"
+            test -n "$apk"
+            adb install -r "$apk"
+            adb logcat -c
+            adb shell monkey -p co.aiclient.risu -c android.intent.category.LAUNCHER 1
+            for attempt in $(seq 1 30); do
+              pid="$(adb shell pidof co.aiclient.risu | tr -d '\r')"
+              if [ -n "$pid" ]; then break; fi
+              sleep 1
+            done
+            test -n "${pid:-}"
+            sleep 10
+            database_path="$(adb shell run-as co.aiclient.risu find . -name database.bin -type f | tr -d '\r' | head -n 1)"
+            test -n "$database_path"
+            adb shell run-as co.aiclient.risu test -s "$database_path"
+            adb shell am force-stop co.aiclient.risu
+            adb shell monkey -p co.aiclient.risu -c android.intent.category.LAUNCHER 1
+            sleep 5
+            adb shell run-as co.aiclient.risu test -s "$database_path"
+            adb shell am start -W -a android.intent.action.VIEW -d 'risuailocal://noop/smoke' -p co.aiclient.risu
+            adb exec-out screencap -p > android-smoke.png
+            adb logcat -d -v threadtime > android-logcat.txt
+            if grep -Eq 'Process: co\.aiclient\.risu|ANR in co\.aiclient\.risu' android-logcat.txt; then
+              exit 1
+            fi
+
+      - name: Upload emulator diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: RisuAI-Android-emulator-diagnostics
+          path: |
+            android-smoke.png
+            android-logcat.txt
+          if-no-files-found: warn
+          retention-days: 14
