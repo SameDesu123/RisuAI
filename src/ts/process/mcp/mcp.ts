@@ -6,7 +6,7 @@ import { alertError, alertInput, alertNormal } from "src/ts/alert";
 import { v4 } from "uuid";
 import type { MCPClientLike } from "./internalmcp";
 import localforage from "localforage";
-import { isTauri } from "src/ts/platform"
+import { isTauri, isTauriAndroid } from "src/ts/platform"
 import { sleep } from "src/ts/util";
 import { registeredCustomPluginMCPs } from "./pluginmcp";
 
@@ -100,8 +100,8 @@ export async function initializeMCPs(additionalMCPs?:string[]) {
                         const args: string[] = Array.isArray(MCPData.args) ? MCPData.args : [MCPData.args];
                         const env: Record<string, string> = MCPData.env || {};
 
-                        if(!isTauri){
-                            throw new Error('stdio MCPs are only supported in Local Version');
+                        if(!isTauri || isTauriAndroid){
+                            throw new Error('stdio MCPs are only supported in the desktop local version');
                         }
 
                         const { Command } = await import('@tauri-apps/plugin-shell');

@@ -4,10 +4,14 @@ import { exists, readTextFile } from "@tauri-apps/plugin-fs";
 import { alertClear, alertWait } from "src/ts/alert";
 import { getDatabase } from "src/ts/storage/database.svelte";
 import { sleep } from "src/ts/util";
+import { isTauriAndroid } from "src/ts/platform";
 
 let initPython = false
 
 async function installPython(){
+    if(isTauriAndroid){
+        throw new Error('Local GGUF models are not supported on Android. Use a remote API or LAN model server instead.')
+    }
     if(initPython){
         return
     }
@@ -86,6 +90,9 @@ async function getLocalKey(retry = true) {
 }
 
 export async function tokenizeGGUFModel(prompt:string):Promise<number[]> {
+    if(isTauriAndroid){
+        throw new Error('Local GGUF models are not supported on Android. Use a remote API or LAN model server instead.')
+    }
     const key = await getLocalKey()
     const db = getDatabase()
     const modelPath = db.aiModel.replace('local_', '')

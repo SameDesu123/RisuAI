@@ -4,7 +4,6 @@
     import { type character, type Message, type groupChat } from "../../ts/storage/database.svelte";
 	import { DBState } from 'src/ts/stores.svelte';
     import { selectedCharID } from "../../ts/stores.svelte";
-    import { isTauri } from 'src/ts/platform';
     import { translate } from "src/ts/translator/translator";
     import { CopyIcon, LanguagesIcon, RefreshCcwIcon } from "@lucide/svelte";
     import { alertConfirm } from "src/ts/alert";
@@ -93,7 +92,7 @@
         }
 
         const requestId = suggestionRequestId + 1
-        const requestController = isTauri ? undefined : new AbortController()
+        const requestController = new AbortController()
         suggestionRequestId = requestId
         abortController = requestController
         progress = true
@@ -231,4 +230,3 @@
         100% { transform: rotate(360deg); }
     }
 </style>
-

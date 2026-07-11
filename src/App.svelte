@@ -48,7 +48,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<main class="flex bg-bg w-full h-full max-w-100vw text-textcolor" ondragover={(e) => {
+<main class="risu-app-shell flex bg-bg w-full h-full max-w-100vw text-textcolor" ondragover={(e) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'link'
 }} ondrop={async (e) => {

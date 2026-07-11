@@ -42,9 +42,9 @@ import {
     setUsingSw,
     checkCharOrder
 } from "./globalApi.svelte";
-import { isTauri } from "./platform";
+import { isTauri, isTauriAndroid } from "./platform";
 import { registerModelDynamic } from "./model/modellist";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
@@ -58,7 +58,15 @@ export async function loadData() {
         try {
             if (isTauri) {
                 LoadingStatusState.text = "Checking Files..."
-                appWindow.maximize()
+                if (isTauriAndroid) {
+                    try {
+                        await invoke('set_android_webview_debugging', { enabled: true })
+                    } catch (error) {
+                        console.warn("Failed to configure Android WebView debugging:", error)
+                    }
+                } else {
+                    await appWindow.maximize()
+                }
                 if (!await exists('', { baseDir: BaseDirectory.AppData })) {
                     await mkdir('', { baseDir: BaseDirectory.AppData })
                 }
@@ -114,8 +122,10 @@ export async function loadData() {
                         throw "Your save file is corrupted"
                     }
                 }
-                LoadingStatusState.text = "Checking Update..."
-                await checkRisuUpdate()
+                if (!isTauriAndroid) {
+                    LoadingStatusState.text = "Checking Update..."
+                    await checkRisuUpdate()
+                }
                 await changeFullscreen()
 
             }
@@ -243,7 +253,7 @@ export async function loadData() {
             if (db.botSettingAtStart) {
                 botMakerMode.set(true)
             }
-            if ((db.betaMobileGUI && window.innerWidth <= 800) || import.meta.env.VITE_RISU_LITE === 'TRUE') {
+            if (isTauriAndroid || (db.betaMobileGUI && window.innerWidth <= 800) || import.meta.env.VITE_RISU_LITE === 'TRUE') {
                 initMobileGesture()
                 MobileGUI.set(true)
             }
@@ -307,6 +317,10 @@ function updateErrorHandling() {
 function updateHeightMode() {
     const db = getDatabase()
     const root = document.querySelector(':root') as HTMLElement;
+    if (isTauriAndroid) {
+        root.style.setProperty('--risu-height-size', '100dvh');
+        return
+    }
     switch (db.heightMode) {
         case 'auto':
             root.style.setProperty('--risu-height-size', '100%');
@@ -541,7 +555,9 @@ async function cleanChunks(options:{
             await mkdir('remotes', { baseDir: BaseDirectory.AppData })
         }
 
-        const remotes = await readDir('remotes', { baseDir: BaseDirectory.AppData })
+        const remotes = await exists('remotes', { baseDir: BaseDirectory.AppData })
+            ? await readDir('remotes', { baseDir: BaseDirectory.AppData })
+            : []
 
         const remoteUncleanables = new Set<string>(
             db.characters.map((v) => v.chaId)

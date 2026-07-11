@@ -3,7 +3,7 @@ import { Buffer as BufferPolyfill } from 'buffer'
 import { polyfill as dragPolyfill} from "mobile-drag-drop"
 import {scrollBehaviourDragImageTranslateOverride} from 'mobile-drag-drop/scroll-behaviour'
 import rfdc from 'rfdc'
-import { isIOS } from "./platform";
+import { isIOS, isTauriAndroid } from "./platform";
 /**
  * Polyfill for structuredClone.
  * Falls back to rfdc (Really Fast Deep Clone) if structuredClone throws an error.
@@ -25,7 +25,7 @@ try {
     const supports  = ('draggable' in testDom) || ('ondragstart' in testDom && 'ondrop' in testDom);
     testDom.remove()
     
-    if((!supports) || isIOS()){
+    if((!supports) || isIOS() || isTauriAndroid){
       globalThis.polyfilledDragDrop = true
       dragPolyfill({
         // use this to make use of the scroll behaviour

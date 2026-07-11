@@ -375,6 +375,9 @@ export function initMobileGesture(){
     document.addEventListener('touchend', (ev) => {
         for(const touch of ev.changedTouches){
             const d = pressingPointers.get(touch.identifier)
+            if(!d){
+                continue
+            }
             const moveX = touch.clientX - d.x
             const moveY = touch.clientY - d.y
             pressingPointers.delete(touch.identifier)
