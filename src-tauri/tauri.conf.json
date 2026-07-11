@@ -42,6 +42,12 @@
       }
     },
     "deep-link": {
+      "mobile": [
+        {
+          "scheme": ["risuailocal"],
+          "appLink": false
+        }
+      ],
       "desktop": {
         "schemes": ["risuailocal"]
       }
