@@ -32,7 +32,14 @@ manifest = manifest.replace(/<activity\b([^>]*)>/, (activity, attributes) => {
 })
 
 if (!manifest.includes('risuailocal')) {
-    throw new Error('The generated Android manifest is missing the risuailocal deep-link scheme')
+    const deepLinkIntent = `
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="risuailocal" />
+            </intent-filter>`
+    manifest = manifest.replace('</activity>', `${deepLinkIntent}\n        </activity>`)
 }
 
 writeFileSync(manifestPath, manifest)
