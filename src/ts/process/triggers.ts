@@ -13,7 +13,7 @@ import { HypaProcesser } from "./memory/hypamemory";
 import { requestChatData } from "./request/request";
 import { generateAIImage } from "./stableDiff";
 import { writeInlayImage } from "./files/inlays";
-import { getLuaEngineKey, runScripted } from "./scriptings";
+import { getLuaEngineKey, getLuaRuntimeContextSignature, runScripted } from "./scriptings";
 import { calcString } from "./infunctions";
 
 
@@ -1089,6 +1089,10 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
     const db = getDatabase()
     const defaultVariables = parseKeyValue(char.defaultVariables).concat(parseKeyValue(db.templateDefaultVariables))
     let chat = arg.displayMode ? arg.chat : safeStructuredClone(arg.chat ?? char.chats[char.chatPage])
+    const luaContextSignature = getLuaRuntimeContextSignature(char, chat)
+    const targetCharacter = db.characters.find((entry) => entry.chaId === char.chaId)
+    const targetChat = targetCharacter?.chats.find((entry) => chat.id && entry.id === chat.id)
+        ?? targetCharacter?.chats[char.chatPage]
     
     const previousTriggerId = get(CurrentTriggerIdStore)
     const shouldSetTriggerId = !arg.displayMode && mode !== 'display'
@@ -1211,15 +1215,11 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
             return
         }
         
-        const selectedCharId = get(selectedCharID)
-        const currentCharacter = getCurrentCharacter()
-        const db = getDatabase()
         varChanged = true
         chat.scriptstate ??= {}
         chat.scriptstate['$' + key] = value
-        currentChat.scriptstate = chat.scriptstate
-        currentCharacter.chats[currentCharacter.chatPage].scriptstate = chat.scriptstate
-        db.characters[selectedCharId].chats[currentCharacter.chatPage].scriptstate = chat.scriptstate
+        if(currentChat?.id === chat.id || (!currentChat?.id && currentChat === targetChat)) currentChat.scriptstate = chat.scriptstate
+        if(targetChat) targetChat.scriptstate = chat.scriptstate
     }
     
     
@@ -1556,6 +1556,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                         getVar: getVar,
                         char: char,
                         chat: chat,
+                        contextSignature: luaContextSignature,
                         engineKey: getLuaEngineKey(char, chat, triggerEntry.source, triggerEntry.index),
                     })
 

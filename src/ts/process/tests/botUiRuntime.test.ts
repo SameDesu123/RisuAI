@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { buildLuaEngineKey } from '../luaEngineIdentity'
+import { buildLuaEngineContextPrefix, buildLuaEngineKey, buildLuaRuntimeContextSignature } from '../luaEngineIdentity'
 import { indexBotUiAssets } from '../botUiAssets'
+import { leaseResource, releaseResource, retireResource } from '../deferredDisposal'
+import { createContextualChatVarAccessors } from '../contextualChatVars'
 import { expandBotUiCbs, sanitizeBotUiCss, sanitizeBotUiHtml, tokenizeBotUiActions } from '../botUiSecurity'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -76,5 +78,51 @@ describe('Lua engine identity', () => {
 
         expect(lifecycle).toBe(action)
         expect(otherModule).not.toBe(action)
+    })
+
+    test('builds a context prefix that only matches one character and chat', () => {
+        const prefix = buildLuaEngineContextPrefix({ characterId: 'char-a', chatId: 'chat-a' })
+        const sameContext = buildLuaEngineKey({ characterId: 'char-a', chatId: 'chat-a', source: 'character', triggerIndex: 0 })
+        const otherChat = buildLuaEngineKey({ characterId: 'char-a', chatId: 'chat-b', source: 'character', triggerIndex: 0 })
+
+        expect(sameContext.startsWith(prefix)).toBe(true)
+        expect(otherChat.startsWith(prefix)).toBe(false)
+    })
+
+    test('changes the runtime signature when active modules change', () => {
+        const prefix = buildLuaEngineContextPrefix({ characterId: 'char-a', chatId: 'chat-a' })
+        expect(buildLuaRuntimeContextSignature(prefix, ['module-a']))
+            .not.toBe(buildLuaRuntimeContextSignature(prefix, ['module-b']))
+    })
+})
+
+describe('Lua engine retirement', () => {
+    test('waits for every active call and disposes exactly once', () => {
+        const state = { leases: 0 }
+        const dispose = vi.fn()
+        expect(leaseResource(state)).toBe(true)
+        expect(leaseResource(state)).toBe(true)
+
+        retireResource(state, dispose)
+        expect(dispose).not.toHaveBeenCalled()
+        expect(leaseResource(state)).toBe(false)
+
+        releaseResource(state, dispose)
+        expect(dispose).not.toHaveBeenCalled()
+        releaseResource(state, dispose)
+        releaseResource(state, dispose)
+        expect(dispose).toHaveBeenCalledTimes(1)
+    })
+
+    test('keeps deferred ChatVar writes on the chat that started the call', () => {
+        const originalChat = { scriptstate: { $gold: 10 } }
+        const newSelectedChat = { scriptstate: { $gold: 999 } }
+        const vars = createContextualChatVarAccessors(originalChat, () => [['default', 'value']])
+
+        vars.setVar('gold', '20')
+
+        expect(vars.getVar('gold')).toBe('20')
+        expect(vars.getVar('default')).toBe('value')
+        expect(newSelectedChat.scriptstate.$gold).toBe(999)
     })
 })

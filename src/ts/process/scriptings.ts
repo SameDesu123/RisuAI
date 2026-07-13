@@ -1,10 +1,10 @@
 import { asBuffer } from 'src/ts/util';
-import { getChatVar, getGlobalChatVar, setChatVar } from "../parser/chatVar.svelte";
+import { getGlobalChatVar } from "../parser/chatVar.svelte";
 import { hasher, type simpleCharacterArgument, risuChatParser } from "../parser/parser.svelte";
 import { LuaEngine, LuaFactory } from "wasmoon";
-import { getCurrentCharacter, getCurrentChat, getDatabase, setDatabase, type Chat, type character, type groupChat, type triggerscript } from "../storage/database.svelte";
+import { getCurrentCharacter, getCurrentChat, getDatabase, type Chat, type character, type groupChat, type loreBook, type triggerscript } from "../storage/database.svelte";
 import { get } from "svelte/store";
-import { DBState, ReloadChatPointer, ReloadGUIPointer, selectedCharID } from "../stores.svelte";
+import { ReloadChatPointer, ReloadGUIPointer } from "../stores.svelte";
 import { alertSelect, alertError, alertInput, alertNormal, alertConfirm } from "../alert";
 import { HypaProcesser } from "./memory/hypamemory";
 import { generateAIImage } from "./stableDiff";
@@ -12,14 +12,16 @@ import { writeInlayImage, getInlayAsset } from "./files/inlays";
 import type { OpenAIChat, MultiModal } from "./index.svelte";
 import { requestChatData, type StreamResponseChunk } from "./request/request";
 import { v4 } from "uuid";
-import { getModuleLorebooks, getModuleTriggerEntries } from "./modules";
+import { getModuleLorebooks, getModuleTriggerEntries, getModules } from "./modules";
 import { Mutex } from "../mutex";
 import { tokenize } from "../tokenizer";
 import { fetchNative, readImage } from "../globalApi.svelte";
 import { loadLoreBookV3Prompt } from './lorebook.svelte';
-import { getPersonaPrompt, getUserName, getUserIcon } from '../util';
-import { buildLuaEngineKey } from './luaEngineIdentity';
+import { getPersonaPrompt, getUserName, getUserIcon, parseKeyValue } from '../util';
+import { buildLuaEngineContextPrefix, buildLuaEngineKey, buildLuaRuntimeContextSignature } from './luaEngineIdentity';
 import { botUiInvalidation } from './botUiSignals';
+import { leaseResource, releaseResource, retireResource, type DeferredDisposalState } from './deferredDisposal';
+import { createContextualChatVarAccessors } from './contextualChatVars';
 let luaFactory:LuaFactory
 let ScriptingSafeIds = new Set<string>()
 let ScriptingEditDisplayIds = new Set<string>()
@@ -27,13 +29,18 @@ let ScriptingLowLevelIds = new Set<string>()
 let lastRequestResetTime = 0
 let lastRequestsCount = 0
 
-interface BasicScriptingEngineState {
+interface BasicScriptingEngineState extends DeferredDisposalState {
     code?: string;
     mutex: Mutex;
     chat?: Chat;
     setVar?: (key:string, value:string) => void,
     getVar?: (key:string) => string,
     stateChanged?: boolean,
+    char?: character|groupChat|simpleCharacterArgument,
+    moduleLorebooks?: loreBook[],
+    personaName?: string,
+    personaPrompt?: string,
+    personaIcon?: string,
 }
 
 interface LuaScriptingEngineState extends BasicScriptingEngineState {
@@ -50,7 +57,18 @@ type ScriptingEngineState = LuaScriptingEngineState | PythonScriptingEngineState
 
 let ScriptingEngines = new Map<string, ScriptingEngineState>()
 let luaFactoryPromise: Promise<void> | null = null;
-let pendingEngineCreations = new Map<string, Promise<ScriptingEngineState>>();
+
+function getContextualChatVarAccessors(char: character|groupChat|simpleCharacterArgument, chat: Chat) {
+    const resolveCharacter = () => {
+        const stored = getDatabase().characters.find((entry) => entry.chaId === char.chaId)
+        return stored?.type === 'character' ? stored : (char.type === 'character' ? char : undefined)
+    }
+    return createContextualChatVarAccessors(chat, () => {
+        const storedCharacter = resolveCharacter()
+        return parseKeyValue(storedCharacter?.defaultVariables ?? '')
+            .concat(parseKeyValue(getDatabase().templateDefaultVariables))
+    })
+}
 
 export async function runScripted(code:string, arg:{
     char?:character|groupChat|simpleCharacterArgument,
@@ -63,33 +81,51 @@ export async function runScripted(code:string, arg:{
     mode?: string,
     type?: 'lua'|'py',
     engineKey?: string,
+    contextSignature?: string,
     throwErrors?: boolean,
 }){
     const type: 'lua'|'py' = arg.type ?? 'lua'
     const char = arg.char ?? getCurrentCharacter()
     const data = arg.data ?? ''
-    const setVar = arg.setVar ?? setChatVar
-    const getVar = arg.getVar ?? getChatVar
     const meta = arg.meta ?? {}
     const mode = arg.mode ?? 'manual'
     const engineKey = arg.engineKey ?? mode
 
     let chat = arg.chat ?? getCurrentChat()
+    const contextPrefix = char && chat ? getLuaEngineContextPrefix(char, chat) : ''
+    const contextSignature = arg.contextSignature ?? (char && chat ? getLuaRuntimeContextSignature(char, chat) : '')
+    const contextualVars = getContextualChatVarAccessors(char, chat)
+    const setVar = arg.setVar ?? contextualVars.setVar
+    const getVar = arg.getVar ?? contextualVars.getVar
+    const moduleLorebooks = getModuleLorebooks()
+    const personaName = getUserName()
+    const personaPrompt = getPersonaPrompt()
+    const personaIcon = getUserIcon()
     let stopSending = false
     let lowLevelAccess = arg.lowLevelAccess ?? false
 
-    if(type === 'lua'){
-        await ensureLuaFactory()
-    }
-    let ScriptingEngineState = await getOrCreateEngineState(engineKey, type);
-    
-    return await ScriptingEngineState.mutex.runExclusive(async () => {
+    const ScriptingEngineState = leaseEngineState(engineKey, type)
+
+    try {
+        if(type === 'lua'){
+            await ensureLuaFactory()
+        }
+        return await ScriptingEngineState.mutex.runExclusive(async () => {
         ScriptingEngineState.chat = chat
+        ScriptingEngineState.char = char
+        ScriptingEngineState.moduleLorebooks = moduleLorebooks
+        ScriptingEngineState.personaName = personaName
+        ScriptingEngineState.personaPrompt = personaPrompt
+        ScriptingEngineState.personaIcon = personaIcon
         ScriptingEngineState.setVar = setVar
         ScriptingEngineState.getVar = getVar
         ScriptingEngineState.stateChanged = false
         if (code !== ScriptingEngineState.code) {
             let declareAPI:(name: string, func:Function) => void
+            const getBoundCharacter = () => {
+                const bound = getDatabase().characters.find((entry) => entry.chaId === ScriptingEngineState.char?.chaId)
+                return bound ?? (ScriptingEngineState.char?.type === 'simple' ? undefined : ScriptingEngineState.char)
+            }
 
             if(ScriptingEngineState.type === 'lua'){
                 console.log('Creating new Lua engine:', engineKey)
@@ -251,7 +287,7 @@ export async function runScripted(code:string, arg:{
             })
 
             declareAPI('cbs', (value) => {
-                return risuChatParser(value, { chara: getCurrentCharacter() })
+                return risuChatParser(value, { chara: getBoundCharacter() })
             })
             
             declareAPI('setFullChatMain', (id:string, value:string) => {
@@ -372,7 +408,9 @@ export async function runScripted(code:string, arg:{
                 if(!ScriptingLowLevelIds.has(id)){
                     return
                 }
-                const gen = await generateAIImage(value, char as character, negValue, 'inlay')
+                const bound = getBoundCharacter()
+                if(bound?.type !== 'character') return 'Error: Character is unavailable'
+                const gen = await generateAIImage(value, bound, negValue, 'inlay')
                 if(!gen){
                     return 'Error: Image generation failed'
                 }
@@ -384,14 +422,7 @@ export async function runScripted(code:string, arg:{
 
             declareAPI('getCharacterImageMain', async (id:string) => {
                 try {
-                    const db = getDatabase()
-                    const selectedChar = get(selectedCharID)
-
-                    if (selectedChar < 0 || selectedChar >= db.characters.length) {
-                        return ''
-                    }
-
-                    const character = db.characters[selectedChar]
+                    const character = getBoundCharacter()
                     
                     if (!character || character.type === 'group' || !character.image) {
                         return ''
@@ -418,7 +449,7 @@ export async function runScripted(code:string, arg:{
 
             declareAPI('getPersonaImageMain', async (id:string) => {
                 try {
-                    const icon = getUserIcon()
+                    const icon = ScriptingEngineState.personaIcon
 
                     if(!icon) {
                         return ''
@@ -628,29 +659,26 @@ export async function runScripted(code:string, arg:{
             })
             
             declareAPI('getName', (id:string) => {
-                const db = getDatabase()
-                const selectedChar = get(selectedCharID)
-                const char = db.characters[selectedChar]
-                return char.name
+                return getBoundCharacter()?.name ?? ''
             })
 
             declareAPI('setName', (id:string, name:string) => {
                 if(!ScriptingSafeIds.has(id)){
                     return
                 }
-                const selectedChar = get(selectedCharID)
                 if(typeof name !== 'string'){
                     throw('Invalid data type')
                 }
-                DBState.db.characters[selectedChar].name = name
+                const bound = getBoundCharacter()
+                if(bound) bound.name = name
             })
 
             declareAPI('getDescription', (id:string) => {
                 if(!ScriptingSafeIds.has(id)){
                     return
                 }
-                const selectedChar = get(selectedCharID)
-                const char = DBState.db.characters[selectedChar]
+                const char = getBoundCharacter()
+                if(!char) return ''
                 if(char.type === 'group'){
                     throw('Character is a group')
                 }
@@ -661,8 +689,8 @@ export async function runScripted(code:string, arg:{
                 if(!ScriptingSafeIds.has(id)){
                     return
                 }
-                const selectedChar = get(selectedCharID)
-                const char = DBState.db.characters[selectedChar]
+                const char = getBoundCharacter()
+                if(!char) return
                 if(typeof data !== 'string'){
                     throw('Invalid data type')
                 }
@@ -670,40 +698,34 @@ export async function runScripted(code:string, arg:{
                     throw('Character is a group')
                 }
                 char.desc = desc
-                DBState.db.characters[selectedChar] = char
             })
 
             declareAPI('getCharacterFirstMessage', (id:string) => {
-                const selectedChar = get(selectedCharID)
-                const char = DBState.db.characters[selectedChar]
-                return char.firstMessage
+                return getBoundCharacter()?.firstMessage ?? ''
             })
 
             declareAPI('setCharacterFirstMessage', (id:string, data:string) => {
                 if(!ScriptingSafeIds.has(id)){
                     return
                 }
-                const db = getDatabase()
-                const selectedChar = get(selectedCharID)
-                const char = db.characters[selectedChar]
+                const char = getBoundCharacter()
+                if(!char) return false
                 if(typeof data !== 'string'){
                     return false
                 }
                 char.firstMessage = data
-                DBState.db.characters[selectedChar] = char
                 return true
             })
 
             declareAPI('getPersonaName', (id:string) => {
-                return getUserName()
+                return ScriptingEngineState.personaName ?? ''
             })
 
             declareAPI('getPersonaDescription', (id:string) => {
-                const db = getDatabase()
-                const selectedChar = get(selectedCharID)
-                const char = db.characters[selectedChar]
+                const char = getBoundCharacter()
+                if(!char) return ''
 
-                return risuChatParser(getPersonaPrompt(), { chara: char })
+                return risuChatParser(ScriptingEngineState.personaPrompt ?? '', { chara: getBoundCharacter() })
             })
 
             declareAPI('getAuthorsNote', (id:string) => {
@@ -714,29 +736,25 @@ export async function runScripted(code:string, arg:{
                 if(!ScriptingSafeIds.has(id)){
                     return
                 }
-                const db = getDatabase()
-                const selectedChar = get(selectedCharID)
-                const char = db.characters[selectedChar]
-                return char.backgroundHTML
+                return getBoundCharacter()?.backgroundHTML ?? ''
             })
 
             declareAPI('setBackgroundEmbedding', (id:string, data:string) => {
                 if(!ScriptingSafeIds.has(id)){
                     return
                 }
-                const db = getDatabase()
-                const selectedChar = get(selectedCharID)
                 if(typeof data !== 'string'){
                     return false
                 }
-                DBState.db.characters[selectedChar].backgroundHTML = data
+                const bound = getBoundCharacter()
+                if(bound) bound.backgroundHTML = data
                 return true
             })
 
             // Lore books
             declareAPI('getLoreBooksMain', (id:string, search:string) => {
-                const db = getDatabase()
-                const selectedChar = db.characters[get(selectedCharID)]
+                const selectedChar = getBoundCharacter()
+                if(!selectedChar) return JSON.stringify([])
                 if (selectedChar.type !== 'character') {
                     return
                 }
@@ -744,7 +762,7 @@ export async function runScripted(code:string, arg:{
                 const loreSources = [
                     selectedChar.chats[selectedChar.chatPage]?.localLore ?? [],
                     selectedChar.globalLore,
-                    getModuleLorebooks()
+                    ScriptingEngineState.moduleLorebooks ?? []
                 ]
 
                 const found = []
@@ -772,7 +790,8 @@ export async function runScripted(code:string, arg:{
                     return
                 }
 
-                if (char.type !== 'character') {
+                const boundCharacter = getBoundCharacter()
+                if (boundCharacter?.type !== 'character') {
                     return
                 }
 
@@ -784,7 +803,8 @@ export async function runScripted(code:string, arg:{
                     secondKey = '',
                 } = options
 
-                const currentChat = char.chats[char.chatPage]
+                const currentChat = ScriptingEngineState.chat
+                if(!currentChat) return
 
                 const newLocalLoreBooks = currentChat.localLore.filter((book) => book.comment !== name)
                 newLocalLoreBooks.push({
@@ -807,14 +827,17 @@ export async function runScripted(code:string, arg:{
                 }
 
                 const db = getDatabase()
+                const selectedChar = getBoundCharacter()
 
-                const selectedChar = db.characters[get(selectedCharID)]
-
-                if (selectedChar.type !== 'character') {
+                if (selectedChar?.type !== 'character') {
                     return
                 }
 
-                const fullLoreBooks = (await loadLoreBookV3Prompt()).actives
+                const fullLoreBooks = (await loadLoreBookV3Prompt({
+                    character: selectedChar,
+                    chat: ScriptingEngineState.chat,
+                    moduleLorebook: ScriptingEngineState.moduleLorebooks,
+                })).actives
                 const maxContext = db.maxContext - reserve
                 if (maxContext < 0) {
                     return JSON.stringify([])
@@ -961,8 +984,7 @@ export async function runScripted(code:string, arg:{
                     return ''
                 }
 
-                const db = getDatabase()
-                const selchar = db.characters[get(selectedCharID)]
+                const selchar = getBoundCharacter()
 
                 let pointer = chat.message.length - 1
                 while (pointer >= 0) {
@@ -973,7 +995,7 @@ export async function runScripted(code:string, arg:{
                     pointer--
                 }
 
-                return selchar.firstMessage
+                return selchar?.firstMessage ?? ''
             })
 
             declareAPI('getUserLastMessage', (id: string) => {
@@ -1000,8 +1022,7 @@ export async function runScripted(code:string, arg:{
                     return ''
                 }
 
-                const db = getDatabase()
-                const selchar = db.characters[get(selectedCharID)]
+                const selchar = getBoundCharacter()
 
                 let pointer = chat.message.length - 1
                 while (pointer >= 0) {
@@ -1012,7 +1033,7 @@ export async function runScripted(code:string, arg:{
                     pointer--
                 }
 
-                return selchar.firstMessage
+                return selchar?.firstMessage ?? ''
             })
 
             declareAPI('getUserLastMessage', (id: string) => {
@@ -1156,7 +1177,11 @@ export async function runScripted(code:string, arg:{
         return {
             stopSending, chat, res
         }
-    })
+        })
+    } finally {
+        releaseEngineState(ScriptingEngineState)
+        if(contextPrefix && engineKey.startsWith(contextPrefix)) retireContextAfterNavigation(contextPrefix, contextSignature)
+    }
 }
 
 async function makeLuaFactory(){
@@ -1199,35 +1224,32 @@ async function ensureLuaFactory() {
     }
 }
 
-async function getOrCreateEngineState(
+function leaseEngineState(
     engineKey: string,
     type: 'lua'|'py'
-): Promise<ScriptingEngineState> {
+): ScriptingEngineState {
     let engineState = ScriptingEngines.get(engineKey);
-    if (engineState) {
+    if (engineState && leaseResource(engineState)) {
         return engineState;
     }
-    
-    let pendingCreation = pendingEngineCreations.get(engineKey);
-    if (pendingCreation) {
-        return pendingCreation;
+
+    engineState = {
+        mutex: new Mutex(),
+        type,
+        leases: 0,
     }
-    
-    const creationPromise = (() => {
-        const engineState: ScriptingEngineState = {
-            mutex: new Mutex(),
-            type: type,
-        };
-        ScriptingEngines.set(engineKey, engineState);
+    leaseResource(engineState)
+    ScriptingEngines.set(engineKey, engineState)
+    return engineState
+}
 
-        pendingEngineCreations.delete(engineKey);
+function closeEngineState(state: ScriptingEngineState): void {
+    if(state.type === 'lua') state.engine?.global.close()
+    else state.pyodide?.close()
+}
 
-        return Promise.resolve(engineState);
-    })();
-    
-    pendingEngineCreations.set(engineKey, creationPromise);
-    
-    return creationPromise;
+function releaseEngineState(state: ScriptingEngineState): void {
+    releaseResource(state, () => closeEngineState(state))
 }
 
 function getChatIdentity(char: character|groupChat|simpleCharacterArgument, chat: Chat): string {
@@ -1253,14 +1275,44 @@ export function getLuaEngineKey(
     })
 }
 
-export function disposeLuaEngines(prefix?: string): void {
+export function getLuaEngineContextPrefix(
+    char: character|groupChat|simpleCharacterArgument,
+    chat: Chat,
+): string {
+    return buildLuaEngineContextPrefix({
+        characterId: char.chaId,
+        chatId: chat?.id,
+        chatPage: Number(getChatIdentity(char, chat)),
+    })
+}
+
+export function getLuaRuntimeContextSignature(
+    char: character|groupChat|simpleCharacterArgument,
+    chat: Chat,
+): string {
+    return buildLuaRuntimeContextSignature(
+        getLuaEngineContextPrefix(char, chat),
+        getModules().map((module) => module.id),
+    )
+}
+
+export function retireLuaEngines(prefix?: string): void {
     for(const [key, state] of ScriptingEngines){
         if(state.type !== 'lua' || (prefix && !key.startsWith(prefix))){
             continue
         }
-        state.engine?.global.close()
-        ScriptingEngines.delete(key)
-        pendingEngineCreations.delete(key)
+        if(ScriptingEngines.get(key) === state) ScriptingEngines.delete(key)
+        retireResource(state, () => closeEngineState(state))
+    }
+}
+
+export const disposeLuaEngines = retireLuaEngines
+
+function retireContextAfterNavigation(contextPrefix: string, contextSignature: string): void {
+    const currentCharacter = getCurrentCharacter()
+    const currentChat = getCurrentChat()
+    if(!currentCharacter || !currentChat || getLuaRuntimeContextSignature(currentCharacter, currentChat) !== contextSignature){
+        retireLuaEngines(contextPrefix)
     }
 }
 
@@ -1436,6 +1488,7 @@ export async function runLuaEditTrigger<T extends string|OpenAIChat[]>(char:char
         let data = content
 
         const chat = getCurrentChat()
+        const contextSignature = getLuaRuntimeContextSignature(char, chat)
         const triggers = char.type === 'group'
             ? getModuleTriggerEntries().map((entry) => ({ ...entry, source: `module:${entry.moduleId}` }))
             : char.triggerscript.map((trigger, index) => ({
@@ -1454,6 +1507,7 @@ export async function runLuaEditTrigger<T extends string|OpenAIChat[]>(char:char
                     data,
                     meta,
                     chat,
+                    contextSignature,
                     engineKey: getLuaEngineKey(char, chat, entry.source, entry.index),
                 })
                 data = runResult.res ?? data
@@ -1469,8 +1523,9 @@ export async function runLuaEditTrigger<T extends string|OpenAIChat[]>(char:char
 
 export async function runLuaButtonTrigger(char:character|groupChat|simpleCharacterArgument, data:string):Promise<any>{
     let runResult
+    const chat = getCurrentChat()
+    const contextSignature = getLuaRuntimeContextSignature(char, chat)
     try {
-        const chat = getCurrentChat()
         const entries = char.type === 'group'
             ? getModuleTriggerEntries().map((entry) => ({ ...entry, source: `module:${entry.moduleId}` }))
             : char.triggerscript.map((trigger, index) => ({
@@ -1488,6 +1543,7 @@ export async function runLuaButtonTrigger(char:character|groupChat|simpleCharact
                     lowLevelAccess: trigger.lowLevelAccess,
                     mode: 'onButtonClick',
                     data: data,
+                    contextSignature,
                     engineKey: getLuaEngineKey(char, chat, entry.source, entry.index),
                 })
             }
@@ -1503,6 +1559,7 @@ export async function runLuaActionTrigger(
     action: string,
 ): Promise<any> {
     const chat = getCurrentChat()
+    const contextSignature = getLuaRuntimeContextSignature(char, chat)
     const entries = char.type === 'group'
         ? getModuleTriggerEntries().map((entry) => ({ ...entry, source: `module:${entry.moduleId}` }))
         : char.triggerscript.map((trigger, index) => ({
@@ -1524,6 +1581,7 @@ export async function runLuaActionTrigger(
                 chat,
                 lowLevelAccess: entry.trigger.lowLevelAccess,
                 mode: action,
+                contextSignature,
                 engineKey: getLuaEngineKey(char, chat, entry.source, entry.index),
                 throwErrors: true,
             })

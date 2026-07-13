@@ -1,7 +1,7 @@
 import { get } from "svelte/store";
 import { getChatVar, setChatVar } from '../parser/chatVar.svelte';
 import {selectedCharID} from '../stores.svelte'
-import { type Message, type loreBook } from "../storage/database.svelte";
+import { type Chat, type character, type groupChat, type Message, type loreBook } from "../storage/database.svelte";
 import { DBState } from '../stores.svelte';
 import { tokenize } from "../tokenizer";
 import { findCharacterbyId, pickHashRand, selectSingleFile } from "../util";
@@ -71,15 +71,20 @@ export function addLorebookFolder(type:number) {
     }
 }
 
-export async function loadLoreBookV3Prompt(){
+export async function loadLoreBookV3Prompt(context: {
+    character?: character|groupChat
+    chat?: Chat
+    moduleLorebook?: loreBook[]
+} = {}){
     const selectedID = get(selectedCharID)
-    const char = DBState.db.characters[selectedID]
+    const char = context.character ?? DBState.db.characters[selectedID]
     const page = char.chatPage
     const characterLore = char.globalLore ?? []
-    const chatLore = char.chats[page].localLore ?? []
-    const moduleLorebook = getModuleLorebooks()
+    const activeChat = context.chat ?? char.chats[page]
+    const chatLore = activeChat.localLore ?? []
+    const moduleLorebook = context.moduleLorebook ?? getModuleLorebooks()
     const fullLore = safeStructuredClone(characterLore.concat(chatLore).concat(moduleLorebook))
-    const currentChat = char.chats[page].message
+    const currentChat = activeChat.message
     const loreDepth = char.loreSettings?.scanDepth ?? DBState.db.loreBookDepth
     const loreToken = char.loreSettings?.tokenBudget ?? DBState.db.loreBookToken
     const fullWordMatchingSetting = char.loreSettings?.fullWordMatching ?? false

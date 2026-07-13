@@ -4,8 +4,7 @@
     import { get } from 'svelte/store'
     import { language } from 'src/lang'
     import { compileBotUi, botUiFrameSource, botUiInvalidation, botUiPanelOpen, type CompiledBotUi } from 'src/ts/process/botUiRuntime'
-    import { getModules } from 'src/ts/process/modules'
-    import { disposeLuaEngines, runLuaActionTrigger } from 'src/ts/process/scriptings'
+    import { getLuaEngineContextPrefix, getLuaRuntimeContextSignature, retireLuaEngines, runLuaActionTrigger } from 'src/ts/process/scriptings'
     import { DBState, selectedCharID } from 'src/ts/stores.svelte'
 
     let iframe: HTMLIFrameElement = $state()
@@ -15,6 +14,7 @@
     let revision = 0
     let ready = false
     let lastContext = ''
+    let lastEngineContext = ''
     let openedContext = ''
     let unsubscribe: (() => void)|undefined
 
@@ -113,13 +113,17 @@
     $effect(() => {
         const isOpen = $botUiPanelOpen
         const context = char?.type === 'character'
-            ? `${char.chaId}:${char.chatPage}:${char.chats[char.chatPage]?.id ?? char.chatPage}:${getModules().map((module) => module.id).join(',')}`
+            ? getLuaRuntimeContextSignature(char, char.chats[char.chatPage])
+            : ''
+        const engineContext = char?.type === 'character'
+            ? getLuaEngineContextPrefix(char, char.chats[char.chatPage])
             : ''
         if(lastContext && context !== lastContext){
             closePanel()
-            disposeLuaEngines()
+            if(lastEngineContext) retireLuaEngines(lastEngineContext)
         }
         lastContext = context
+        lastEngineContext = engineContext
 
         if(isOpen && config?.html?.trim()){
             if(openedContext !== context){
