@@ -46,8 +46,6 @@ import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
 import {
-    decodeDatabaseBlockManifest,
-    isDatabaseBlockManifest,
     type DatabaseBlockManifest,
     type DatabaseBlockStorageAdapter,
 } from "./storage/databaseBlockFormat";
@@ -55,11 +53,11 @@ import {
     hasDatabaseBlockChatStubs,
     hydrateDatabaseBlockChat,
     hydrateDatabaseBlockDatabase,
-    loadDatabaseBlockDatabase,
 } from "./storage/databaseBlockReader";
 import {
     createAutoDatabaseBlockStorage,
     createTauriDatabaseBlockStorage,
+    decodeStoredDatabaseBytes,
     readDatabaseBlockManifest,
     saveDatabaseBlockDatabase,
 } from "./storage/databaseBlockStorage";
@@ -91,13 +89,7 @@ export async function getHydratedDatabaseSnapshot(options: {
 }
 
 export async function decodeDatabaseStorageBytes(data: Uint8Array) {
-    if (isDatabaseBlockManifest(data)) {
-        return await loadDatabaseBlockDatabase(
-            decodeDatabaseBlockManifest(data),
-            getDatabaseBlockStorage(),
-        )
-    }
-    return await decodeRisuSave(data)
+    return await decodeStoredDatabaseBytes(data, getDatabaseBlockStorage(), decodeRisuSave)
 }
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null

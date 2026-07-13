@@ -11,12 +11,14 @@ import {
 
 class MemoryBlockStorage implements DatabaseBlockStorageAdapter {
     values = new Map<string, Uint8Array>();
+    writes: string[] = [];
 
     async getItem(key: string) {
         return this.values.get(key) ?? null;
     }
 
     async setItem(key: string, value: Uint8Array) {
+        this.writes.push(key);
         this.values.set(key, value);
     }
 }
@@ -53,6 +55,7 @@ describe("databaseBlockFormat", () => {
 
         expect(first.key).toBe(second.key);
         expect(storage.values.size).toBe(1);
+        expect(storage.writes).toHaveLength(1);
         expect(await readDatabaseBlock(storage, first)).toEqual({ value: 1 });
     });
 

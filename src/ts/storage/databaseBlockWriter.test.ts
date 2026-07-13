@@ -5,12 +5,14 @@ import { createDatabaseBlockManifest, type DatabaseBlockStoredCharacter } from "
 
 class MemoryBlockStorage implements DatabaseBlockStorageAdapter {
     values = new Map<string, Uint8Array>();
+    writes: string[] = [];
 
     async getItem(key: string) {
         return this.values.get(key) ?? null;
     }
 
     async setItem(key: string, value: Uint8Array) {
+        this.writes.push(key);
         this.values.set(key, value);
     }
 }
@@ -97,6 +99,7 @@ describe("databaseBlockWriter", () => {
         const first = await createDatabaseBlockManifest(db, storage);
 
         db.characters[0].name = "Renamed";
+        storage.writes = [];
         const second = await createDatabaseBlockManifest(db, storage, first, {
             character: ["char-1"],
         });
@@ -105,6 +108,8 @@ describe("databaseBlockWriter", () => {
         expect(second.characters.chatRefs["char-1"].refs["chat-1"].hash)
             .toBe(first.characters.chatRefs["char-1"].refs["chat-1"].hash);
         expect(second.components.botPresets.hash).toBe(first.components.botPresets.hash);
+        expect(storage.writes).toHaveLength(1);
+        expect(storage.writes[0]).toContain("/meta-");
     });
 
     it("keeps blocks referenced by an older manifest readable", async () => {

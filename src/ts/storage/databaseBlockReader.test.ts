@@ -11,8 +11,10 @@ import { createDatabaseBlockManifest } from "./databaseBlockWriter";
 
 class MemoryBlockStorage implements DatabaseBlockStorageAdapter {
     values = new Map<string, Uint8Array>();
+    reads: string[] = [];
 
     async getItem(key: string) {
+        this.reads.push(key);
         return this.values.get(key) ?? null;
     }
 
@@ -74,13 +76,16 @@ describe("databaseBlockReader", () => {
     it("loads character metadata without decoding chat bodies", async () => {
         const storage = new MemoryBlockStorage();
         const manifest = await createDatabaseBlockManifest(createDatabase(), storage);
+        storage.reads = [];
         const loaded = await loadDatabaseBlockDatabase(manifest, storage);
 
         expect(loaded.characters[0].name).toBe("Character");
         expect(isDatabaseBlockChatStub(loaded.characters[0].chats[0])).toBe(true);
         expect(loaded.characters[0].chats[0].message).toEqual([]);
+        expect(storage.reads.some((key) => key.includes("/chats/"))).toBe(false);
 
         await hydrateDatabaseBlockChat(loaded, storage, 0, 0);
+        expect(storage.reads.some((key) => key.includes("/chats/"))).toBe(true);
         expect(isDatabaseBlockChatStub(loaded.characters[0].chats[0])).toBe(false);
         expect(loaded.characters[0].chats[0].message[0].data).toBe("hello");
     });

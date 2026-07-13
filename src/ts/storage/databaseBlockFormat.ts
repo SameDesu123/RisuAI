@@ -11,6 +11,7 @@ export const databaseBlockNamespace = "database/blocks/v2";
 export type DatabaseBlockStorageAdapter = {
     getItem(key: string): Promise<Uint8Array | ArrayBuffer | null>;
     setItem(key: string, value: Uint8Array): Promise<unknown>;
+    setItemAtomic?: (key: string, value: Uint8Array) => Promise<unknown>;
     keys?: () => Promise<string[]>;
     removeItem?: (key: string) => Promise<unknown>;
 };
@@ -138,7 +139,15 @@ export async function writeDatabaseBlock<T>(
     const key = baseKey.endsWith(".bin")
         ? `${baseKey.slice(0, -4)}-${hash.slice(0, 16)}.bin`
         : `${baseKey}-${hash.slice(0, 16)}`;
-    await storage.setItem(key, encoded);
+    const existing = toUint8Array(await storage.getItem(key));
+    if (!existing || await sha256Hex(existing) !== hash) {
+        if (storage.setItemAtomic) {
+            await storage.setItemAtomic(key, encoded);
+        }
+        else {
+            await storage.setItem(key, encoded);
+        }
+    }
     return {
         key,
         hash,

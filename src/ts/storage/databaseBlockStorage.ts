@@ -1,4 +1,4 @@
-import { BaseDirectory, exists, mkdir, readFile, writeFile } from "@tauri-apps/plugin-fs";
+import { BaseDirectory, exists, mkdir, readFile, remove, rename, writeFile } from "@tauri-apps/plugin-fs";
 import type { Database } from "./database.svelte";
 import {
     decodeDatabaseBlockManifest,
@@ -11,6 +11,7 @@ import {
     createDatabaseBlockManifest,
     type DatabaseBlockSaveChangeSet,
 } from "./databaseBlockWriter";
+import { loadDatabaseBlockDatabase } from "./databaseBlockReader";
 
 const databaseManifestKey = "database/database.bin";
 
@@ -38,6 +39,25 @@ export function createTauriDatabaseBlockStorage(): DatabaseBlockStorageAdapter {
             }
             await writeFile(key, value, { baseDir: BaseDirectory.AppData });
         },
+        async setItemAtomic(key: string, value: Uint8Array) {
+            const directory = parentDir(key);
+            if (directory) {
+                await mkdir(directory, { recursive: true, baseDir: BaseDirectory.AppData });
+            }
+            const temporaryKey = `${key}.tmp-${crypto.randomUUID()}`;
+            try {
+                await writeFile(temporaryKey, value, { baseDir: BaseDirectory.AppData });
+                await rename(temporaryKey, key, {
+                    oldPathBaseDir: BaseDirectory.AppData,
+                    newPathBaseDir: BaseDirectory.AppData,
+                });
+            } catch (error) {
+                if (await exists(temporaryKey, { baseDir: BaseDirectory.AppData })) {
+                    await remove(temporaryKey, { baseDir: BaseDirectory.AppData });
+                }
+                throw error;
+            }
+        },
     };
 }
 
@@ -47,6 +67,20 @@ export async function readDatabaseBlockManifest(storage: DatabaseBlockStorageAda
         return null;
     }
     return decodeDatabaseBlockManifest(data!);
+}
+
+export async function decodeStoredDatabaseBytes(
+    data: Uint8Array,
+    storage: DatabaseBlockStorageAdapter,
+    decodeLegacy: (data: Uint8Array) => Promise<Database>,
+) {
+    if (!isDatabaseBlockManifest(data)) {
+        return await decodeLegacy(data);
+    }
+    return await loadDatabaseBlockDatabase(
+        decodeDatabaseBlockManifest(data),
+        storage,
+    );
 }
 
 export async function saveDatabaseBlockDatabase(
@@ -63,6 +97,11 @@ export async function saveDatabaseBlockDatabase(
 
     // Payload blocks are immutable and are written by createDatabaseBlockManifest first.
     // Publishing the manifest last keeps the previously committed generation readable.
-    await storage.setItem(databaseManifestKey, encoded);
+    if (storage.setItemAtomic) {
+        await storage.setItemAtomic(databaseManifestKey, encoded);
+    }
+    else {
+        await storage.setItem(databaseManifestKey, encoded);
+    }
     return { encoded, manifest };
 }
