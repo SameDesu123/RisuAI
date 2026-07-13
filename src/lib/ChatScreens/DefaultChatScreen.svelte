@@ -1,7 +1,7 @@
 <script lang="ts">
 
     import Suggestion from './Suggestion.svelte';
-    import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, LanguagesIcon, Laugh, MenuIcon, MicOffIcon, PackageIcon, Plus, RefreshCcwIcon, ReplyIcon, Send, StepForwardIcon, XIcon, BrainIcon, ArrowDown, SparkleIcon } from "@lucide/svelte";
+    import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, LanguagesIcon, Laugh, MenuIcon, MicOffIcon, PackageIcon, Plus, RefreshCcwIcon, ReplyIcon, Send, StepForwardIcon, XIcon, BrainIcon, ArrowDown, SparkleIcon, Braces } from "@lucide/svelte";
     import { selectedCharID, PlaygroundStore, createSimpleCharacter, hypaV3ModalOpen, ScrollToMessageStore, additionalChatMenu, additionalFloatingActionButtons, easyPanelStore, chatPanelStore } from "../../ts/stores.svelte";
     import { tick } from 'svelte';
     import Chat from "./Chat.svelte";
@@ -32,6 +32,8 @@
     import Button from '../UI/GUI/Button.svelte';
     import PluginDefinedIcon from '../Others/PluginDefinedIcon.svelte';
     import { getAdditionalChatLoadPages, getInitialChatLoadPages } from 'src/ts/chatLoadPages';
+    import BotUiPanel from '../Others/BotUiPanel.svelte';
+    import { botUiPanelOpen } from 'src/ts/process/botUiRuntime';
 
     const loadPlaygroundMenu = () => import('../Playground/PlaygroundMenu.svelte').then(m => m.default);
     
@@ -674,6 +676,16 @@
                     </button>
                 {/if}
                 {#if DBState.db.characters[$selectedCharID]?.chaId !== '§playground'}
+                    {#if currentCharacter.type === 'character' && currentCharacter.botUi?.html?.trim()}
+                        <button
+                            onclick={() => botUiPanelOpen.update((open) => !open)}
+                            class="peer-focus:border-textcolor flex border-y border-darkborderc justify-center items-center text-textcolor p-3 hover:bg-blue-500 hover:text-white transition-colors"
+                            style:height={inputHeight}
+                            aria-label="Bot UI"
+                        >
+                            <Braces />
+                        </button>
+                    {/if}
                     <button
                             onclick={(e) => {
                             openMenu = !openMenu
@@ -1060,6 +1072,8 @@
         {/each}
     </div>
 {/if}
+
+<BotUiPanel />
 <style>
 
     .chat-process-stage-1{

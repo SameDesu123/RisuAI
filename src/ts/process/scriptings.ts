@@ -31,6 +31,7 @@ interface BasicScriptingEngineState {
     chat?: Chat;
     setVar?: (key:string, value:string) => void,
     getVar?: (key:string) => string,
+    onStateChanged?: () => void,
 }
 
 interface LuaScriptingEngineState extends BasicScriptingEngineState {
@@ -84,6 +85,7 @@ export async function runScripted(code:string, arg:{
         ScriptingEngineState.chat = chat
         ScriptingEngineState.setVar = setVar
         ScriptingEngineState.getVar = getVar
+        ScriptingEngineState.onStateChanged = arg.onStateChanged
         if (code !== ScriptingEngineState.code) {
             let declareAPI:(name: string, func:Function) => void
 
@@ -113,7 +115,7 @@ export async function runScripted(code:string, arg:{
                     return
                 }
                 ScriptingEngineState.setVar(key, value)
-                arg.onStateChanged?.()
+                ScriptingEngineState.onStateChanged?.()
             })
             declareAPI('getGlobalVar', (id:string, key:string) => {
                 return getGlobalChatVar(key)
@@ -1226,10 +1228,8 @@ function getChatIdentity(char: character|groupChat|simpleCharacterArgument, chat
     if(chat?.id){
         return chat.id
     }
-    if(char.type !== 'simple'){
-        return String(char.chats?.indexOf(chat) ?? char.chatPage ?? 0)
-    }
-    return 'current'
+    if(char.type !== 'simple') return String(char.chatPage ?? 0)
+    return String(getCurrentCharacter()?.chatPage ?? 0)
 }
 
 export function getLuaEngineKey(
