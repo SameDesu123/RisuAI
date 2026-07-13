@@ -3,7 +3,7 @@ import { checkNullish, decryptBuffer, encryptBuffer, selectSingleFile } from '..
 import { changeLanguage, language } from '../../lang';
 import type { RisuPlugin } from '../plugins/plugins.svelte';
 import type {triggerscript as triggerscriptMain} from '../process/triggers';
-import { downloadFile, saveAsset as saveImageGlobal } from '../globalApi.svelte';
+import { downloadFile, requestCharacterSave, requestChatSave, saveAsset as saveImageGlobal } from '../globalApi.svelte';
 import { defaultAutoSuggestPrompt, defaultJailbreak, defaultMainPrompt } from './defaultPrompts';
 import { alertNormal } from '../alert';
 import type { NAISettings } from '../process/models/nai';
@@ -740,7 +740,14 @@ export function setCurrentCharacter(char:character|groupChat){
     if(!DBState.db.characters){
         DBState.db.characters = []
     }
-    DBState.db.characters[get(selectedCharID)] = char
+    const index = get(selectedCharID)
+    const previousCharacterId = DBState.db.characters[index]?.chaId
+    DBState.db.characters[index] = char
+    requestCharacterSave(previousCharacterId)
+    requestCharacterSave(char?.chaId)
+    for(const chat of char?.chats ?? []){
+        requestChatSave(char?.chaId ?? previousCharacterId, chat?.id)
+    }
 }
 
 export function getCharacterByIndex(index:number,options:getDatabaseOptions = {}):character|groupChat{
@@ -756,7 +763,13 @@ export function setCharacterByIndex(index:number,char:character|groupChat){
     if(!DBState.db.characters){
         DBState.db.characters = []
     }
+    const previousCharacterId = DBState.db.characters[index]?.chaId
     DBState.db.characters[index] = char
+    requestCharacterSave(previousCharacterId)
+    requestCharacterSave(char?.chaId)
+    for(const chat of char?.chats ?? []){
+        requestChatSave(char?.chaId ?? previousCharacterId, chat?.id)
+    }
 }
 
 export function getCurrentChat(){
@@ -766,8 +779,13 @@ export function getCurrentChat(){
 
 export function setCurrentChat(chat:Chat){
     const char = getCurrentCharacter()
+    const previousChatId = char.chats[char.chatPage]?.id
     char.chats[char.chatPage] = chat
-    setCurrentCharacter(char)
+    DBState.db.characters[get(selectedCharID)] = char
+    if(chat?.id && chat.id !== previousChatId){
+        requestCharacterSave(char?.chaId)
+    }
+    requestChatSave(char?.chaId, chat?.id ?? previousChatId)
 }
 
 export interface DynamicOutput {
