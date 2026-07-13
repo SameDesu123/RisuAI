@@ -237,6 +237,8 @@ export const languageEnglish = {
         automaticCachePoint: "Automatically creates cache point after the chat ends, if the caching point doesn't exist.",
         experimentalChatCompressionDesc:
             "Compresses the unused chat data and saves in seperate file. This greatly reduces the size of the chat data, and greatly improves the performance, however its experimental and can be unstable, causing issues in backup feature and more.",
+        databaseBlockStorageDesc:
+            "Stores database sections, characters, and chats as separate local files while database.bin keeps only a small manifest. This avoids full-database encoding on local saves. It is experimental, and account sync continues to use the classic single-file format.",
         promptInfoInsideChatDesc:
             "When enabled, this stores prompt preset information in the chat metadata. The stored data includes the preset name, active toggles, and the prompt text. This may slightly increase processing time and storage usage.",
         autoAdjustSchema: "When enabled, it will automatically adjust the JSON schema for Dynamic Output.",
@@ -1622,6 +1624,7 @@ export const languageEnglish = {
         cancel: "Cancel",
     },
     enableRemoteSaving: "Enable Remote Saving",
+    databaseBlockStorage: "Local Database Block Storage",
     blockquoteStyling: "Blockquote Styling",
     dynamicModelRegistry: "Dynamic Model Registry",
     confirmInstallPluginViaPlugin: "You are trying to install a plugin via another plugin. This can be dangerous if the source plugin is not trustworthy. Do you want to continue?",

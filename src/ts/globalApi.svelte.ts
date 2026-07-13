@@ -387,7 +387,8 @@ export async function saveDb() {
 
     let encoder: RisuSaveEncoder | null = null
     let blockManifest: DatabaseBlockManifest | null | undefined
-    if (getDatabase().databaseBlockStorage && !forageStorage.isAccount) {
+    let blockModeActive = !!getDatabase().databaseBlockStorage && !forageStorage.isAccount
+    if (blockModeActive) {
         try {
             blockManifest = await readDatabaseBlockManifest(getDatabaseBlockStorage())
         } catch (error) {
@@ -591,8 +592,10 @@ export async function saveDb() {
 
             if (db.databaseBlockStorage && !forageStorage.isAccount) {
                 const blockStorage = getDatabaseBlockStorage()
-                const result = await saveDatabaseBlockDatabase(db, blockStorage, toSave, blockManifest)
+                const previousManifest = blockModeActive ? blockManifest : null
+                const result = await saveDatabaseBlockDatabase(db, blockStorage, toSave, previousManifest)
                 blockManifest = result.manifest
+                blockModeActive = true
                 dirtyTracker.ack(saveSnapshot)
                 changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
                 await blockStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, result.encoded)
@@ -635,6 +638,8 @@ export async function saveDb() {
             const dbData = new Uint8Array(encoded)
             if (isTauri) {
                 await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
+                blockModeActive = false
+                blockManifest = null
                 dirtyTracker.ack(saveSnapshot)
                 changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
                 await writeFile(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData, { baseDir: BaseDirectory.AppData });
@@ -642,6 +647,8 @@ export async function saveDb() {
             else {
 
                 await forageStorage.setItem('database/database.bin', dbData)
+                blockModeActive = false
+                blockManifest = null
                 dirtyTracker.ack(saveSnapshot)
                 changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
                 if (!forageStorage.isAccount) {
