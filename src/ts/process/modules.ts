@@ -473,6 +473,17 @@ export function getModuleTriggers() {
     return triggers
 }
 
+export function getModuleTriggerEntries() {
+    return getModules().flatMap((module) => (module?.trigger ?? []).map((trigger, index) => ({
+        trigger: {
+            ...trigger,
+            lowLevelAccess: module.lowLevelAccess,
+        } satisfies triggerscript,
+        moduleId: module.id,
+        index,
+    })))
+}
+
 export function getModuleRegexScripts() {
     const modules = getModules()
     let customscripts: customscript[] = []

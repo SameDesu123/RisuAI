@@ -12,7 +12,7 @@ import { writeInlayImage, getInlayAsset } from "./files/inlays";
 import type { OpenAIChat, MultiModal } from "./index.svelte";
 import { requestChatData, type StreamResponseChunk } from "./request/request";
 import { v4 } from "uuid";
-import { getModuleLorebooks, getModuleTriggers } from "./modules";
+import { getModuleLorebooks, getModuleTriggerEntries } from "./modules";
 import { Mutex } from "../mutex";
 import { tokenize } from "../tokenizer";
 import { fetchNative, readImage } from "../globalApi.svelte";
@@ -58,7 +58,9 @@ export async function runScripted(code:string, arg:{
     lowLevelAccess?: boolean,
     meta?: object,
     mode?: string,
-    type?: 'lua'|'py'
+    type?: 'lua'|'py',
+    engineKey?: string,
+    onStateChanged?: () => void,
 }){
     const type: 'lua'|'py' = arg.type ?? 'lua'
     const char = arg.char ?? getCurrentCharacter()
@@ -67,6 +69,7 @@ export async function runScripted(code:string, arg:{
     const getVar = arg.getVar ?? getChatVar
     const meta = arg.meta ?? {}
     const mode = arg.mode ?? 'manual'
+    const engineKey = arg.engineKey ?? mode
 
     let chat = arg.chat ?? getCurrentChat()
     let stopSending = false
@@ -75,7 +78,7 @@ export async function runScripted(code:string, arg:{
     if(type === 'lua'){
         await ensureLuaFactory()
     }
-    let ScriptingEngineState = await getOrCreateEngineState(mode, type);
+    let ScriptingEngineState = await getOrCreateEngineState(engineKey, type);
     
     return await ScriptingEngineState.mutex.runExclusive(async () => {
         ScriptingEngineState.chat = chat
@@ -85,7 +88,7 @@ export async function runScripted(code:string, arg:{
             let declareAPI:(name: string, func:Function) => void
 
             if(ScriptingEngineState.type === 'lua'){
-                console.log('Creating new Lua engine for mode:', mode)
+                console.log('Creating new Lua engine:', engineKey)
                 ScriptingEngineState.engine?.global.close()
                 ScriptingEngineState.code = code
                 ScriptingEngineState.engine = await luaFactory.createEngine({injectObjects: true})
@@ -110,6 +113,7 @@ export async function runScripted(code:string, arg:{
                     return
                 }
                 ScriptingEngineState.setVar(key, value)
+                arg.onStateChanged?.()
             })
             declareAPI('getGlobalVar', (id:string, key:string) => {
                 return getGlobalChatVar(key)
@@ -1044,9 +1048,9 @@ export async function runScripted(code:string, arg:{
             }
         }
         let res:any
-        if(ScriptingEngineState.type === 'lua'){
-            const luaEngine = ScriptingEngineState.engine
-            try {
+        try {
+            if(ScriptingEngineState.type === 'lua'){
+                const luaEngine = ScriptingEngineState.engine
                 switch(mode){
                     case 'input':{
                         const func = luaEngine.global.get('onInput')
@@ -1098,12 +1102,9 @@ export async function runScripted(code:string, arg:{
                 if(res === false){
                     stopSending = true
                 }
-            } catch (error) {
-                console.error(error)
             }
-        }
-        if(ScriptingEngineState.type === 'py'){
-            switch(mode){
+            if(ScriptingEngineState.type === 'py'){
+                switch(mode){
                 case 'input':{
                     res = await ScriptingEngineState.pyodide?.python(`onInput('${accessKey}')`)
                     break
@@ -1132,10 +1133,16 @@ export async function runScripted(code:string, arg:{
                     res = await ScriptingEngineState.pyodide?.python(`${mode}('${accessKey}')`)
                     break
                 }
+                }
             }
+        } catch (error) {
+            console.error(error)
+            throw error
+        } finally {
+            ScriptingSafeIds.delete(accessKey)
+            ScriptingEditDisplayIds.delete(accessKey)
+            ScriptingLowLevelIds.delete(accessKey)
         }
-        ScriptingSafeIds.delete(accessKey)
-        ScriptingLowLevelIds.delete(accessKey)
         chat = ScriptingEngineState.chat
 
         return {
@@ -1185,15 +1192,15 @@ async function ensureLuaFactory() {
 }
 
 async function getOrCreateEngineState(
-    mode: string, 
+    engineKey: string,
     type: 'lua'|'py'
 ): Promise<ScriptingEngineState> {
-    let engineState = ScriptingEngines.get(mode);
+    let engineState = ScriptingEngines.get(engineKey);
     if (engineState) {
         return engineState;
     }
     
-    let pendingCreation = pendingEngineCreations.get(mode);
+    let pendingCreation = pendingEngineCreations.get(engineKey);
     if (pendingCreation) {
         return pendingCreation;
     }
@@ -1203,16 +1210,46 @@ async function getOrCreateEngineState(
             mutex: new Mutex(),
             type: type,
         };
-        ScriptingEngines.set(mode, engineState);
+        ScriptingEngines.set(engineKey, engineState);
 
-        pendingEngineCreations.delete(mode);
+        pendingEngineCreations.delete(engineKey);
 
         return Promise.resolve(engineState);
     })();
     
-    pendingEngineCreations.set(mode, creationPromise);
+    pendingEngineCreations.set(engineKey, creationPromise);
     
     return creationPromise;
+}
+
+function getChatIdentity(char: character|groupChat|simpleCharacterArgument, chat: Chat): string {
+    if(chat?.id){
+        return chat.id
+    }
+    if(char.type !== 'simple'){
+        return String(char.chats?.indexOf(chat) ?? char.chatPage ?? 0)
+    }
+    return 'current'
+}
+
+export function getLuaEngineKey(
+    char: character|groupChat|simpleCharacterArgument,
+    chat: Chat,
+    source: string,
+    triggerIndex: number,
+): string {
+    return ['lua', char.chaId ?? 'group', getChatIdentity(char, chat), source, triggerIndex].join(':')
+}
+
+export function disposeLuaEngines(prefix?: string): void {
+    for(const [key, state] of ScriptingEngines){
+        if(state.type !== 'lua' || (prefix && !key.startsWith(prefix))){
+            continue
+        }
+        state.engine?.global.close()
+        ScriptingEngines.delete(key)
+        pendingEngineCreations.delete(key)
+    }
 }
 
 function luaCodeWrapper(code:string){
@@ -1386,12 +1423,17 @@ export async function runLuaEditTrigger<T extends string|OpenAIChat[]>(char:char
     try {
         let data = content
 
-        const triggers = char.type === 'group' ? (getModuleTriggers()) : (char.triggerscript.map((v) => {
-            v.lowLevelAccess = false
-            return v
-        }).concat(getModuleTriggers()))
+        const chat = getCurrentChat()
+        const triggers = char.type === 'group'
+            ? getModuleTriggerEntries().map((entry) => ({ ...entry, source: `module:${entry.moduleId}` }))
+            : char.triggerscript.map((trigger, index) => ({
+                trigger: { ...trigger, lowLevelAccess: false },
+                source: 'character',
+                index,
+            })).concat(getModuleTriggerEntries().map((entry) => ({ ...entry, source: `module:${entry.moduleId}` })))
     
-        for(let trigger of triggers){
+        for(const entry of triggers){
+            const trigger = entry.trigger
             if(trigger?.effect?.[0]?.type === 'triggerlua'){
                 const runResult = await runScripted(trigger.effect[0].code, {
                     char: char,
@@ -1399,6 +1441,8 @@ export async function runLuaEditTrigger<T extends string|OpenAIChat[]>(char:char
                     mode: mode,
                     data,
                     meta,
+                    chat,
+                    engineKey: getLuaEngineKey(char, chat, entry.source, entry.index),
                 })
                 data = runResult.res ?? data
             }
@@ -1414,18 +1458,25 @@ export async function runLuaEditTrigger<T extends string|OpenAIChat[]>(char:char
 export async function runLuaButtonTrigger(char:character|groupChat|simpleCharacterArgument, data:string):Promise<any>{
     let runResult
     try {
-        const triggers = char.type === 'group' ? getModuleTriggers() : char.triggerscript.map<triggerscript>((v) => ({
-            ...v,
-            lowLevelAccess: char.type !== 'simple' ? char.lowLevelAccess ?? false : false
-        })).concat(getModuleTriggers())
+        const chat = getCurrentChat()
+        const entries = char.type === 'group'
+            ? getModuleTriggerEntries().map((entry) => ({ ...entry, source: `module:${entry.moduleId}` }))
+            : char.triggerscript.map((trigger, index) => ({
+                trigger: { ...trigger, lowLevelAccess: char.type !== 'simple' ? char.lowLevelAccess ?? false : false },
+                source: 'character',
+                index,
+            })).concat(getModuleTriggerEntries().map((entry) => ({ ...entry, source: `module:${entry.moduleId}` })))
 
-        for(let trigger of triggers){
+        for(const entry of entries){
+            const trigger = entry.trigger
             if(trigger?.effect?.[0]?.type === 'triggerlua'){
                 runResult = await runScripted(trigger.effect[0].code, {
                     char: char,
+                    chat,
                     lowLevelAccess: trigger.lowLevelAccess,
                     mode: 'onButtonClick',
-                    data: data
+                    data: data,
+                    engineKey: getLuaEngineKey(char, chat, entry.source, entry.index),
                 })
             }
         }
@@ -1433,6 +1484,38 @@ export async function runLuaButtonTrigger(char:character|groupChat|simpleCharact
         throw(error)
     }
     return runResult   
+}
+
+export async function runLuaActionTrigger(
+    char: character|groupChat|simpleCharacterArgument,
+    action: string,
+    onStateChanged?: () => void,
+): Promise<any> {
+    const chat = getCurrentChat()
+    const entries = char.type === 'group'
+        ? getModuleTriggerEntries().map((entry) => ({ ...entry, source: `module:${entry.moduleId}` }))
+        : char.triggerscript.map((trigger, index) => ({
+            trigger: { ...trigger, lowLevelAccess: char.type !== 'simple' ? char.lowLevelAccess ?? false : false },
+            source: 'character',
+            index,
+        })).concat(getModuleTriggerEntries().map((entry) => ({ ...entry, source: `module:${entry.moduleId}` })))
+
+    let lastResult
+    for(const entry of entries){
+        const effect = entry.trigger?.effect?.[0]
+        if(effect?.type !== 'triggerlua'){
+            continue
+        }
+        lastResult = await runScripted(effect.code, {
+            char,
+            chat,
+            lowLevelAccess: entry.trigger.lowLevelAccess,
+            mode: action,
+            engineKey: getLuaEngineKey(char, chat, entry.source, entry.index),
+            onStateChanged,
+        })
+    }
+    return lastResult
 }
 
 class PyodideContext{

@@ -2,7 +2,7 @@ import { parseChatML } from "../parser/chatML";
 import { risuChatParser } from "../parser/parser.svelte";
 import { getCurrentCharacter, getCurrentChat, getDatabase, setCurrentCharacter, setDatabase, type Chat, type character } from "../storage/database.svelte";
 import { tokenize } from "../tokenizer";
-import { getModuleTriggers } from "./modules";
+import { getModuleTriggerEntries } from "./modules";
 import { get } from "svelte/store";
 import { ReloadChatPointer, ReloadGUIPointer, selectedCharID, CurrentTriggerIdStore, DBState } from "../stores.svelte";
 import { processMultiCommand } from "./command";
@@ -13,7 +13,7 @@ import { HypaProcesser } from "./memory/hypamemory";
 import { requestChatData } from "./request/request";
 import { generateAIImage } from "./stableDiff";
 import { writeInlayImage } from "./files/inlays";
-import { runScripted } from "./scriptings";
+import { getLuaEngineKey, runScripted } from "./scriptings";
 import { calcString } from "./infunctions";
 
 
@@ -1078,10 +1078,14 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
         historyend: '',
         promptend: ''
     }
-    const triggers = char.triggerscript.map((v) => {
-        v.lowLevelAccess = CharacterlowLevelAccess
-        return v
-    }).concat(getModuleTriggers())
+    const triggerEntries = char.triggerscript.map((trigger, index) => ({
+        trigger: { ...trigger, lowLevelAccess: CharacterlowLevelAccess },
+        source: 'character',
+        index,
+    })).concat(getModuleTriggerEntries().map((entry) => ({
+        ...entry,
+        source: `module:${entry.moduleId}`,
+    })))
     const db = getDatabase()
     const defaultVariables = parseKeyValue(char.defaultVariables).concat(parseKeyValue(db.templateDefaultVariables))
     let chat = arg.displayMode ? arg.chat : safeStructuredClone(arg.chat ?? char.chats[char.chatPage])
@@ -1092,7 +1096,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
         CurrentTriggerIdStore.set(arg.triggerId || null)
     }
     
-    if((!triggers) || (triggers.length === 0)){
+    if(triggerEntries.length === 0){
         if (shouldSetTriggerId) {
             CurrentTriggerIdStore.set(previousTriggerId)
         }
@@ -1219,7 +1223,8 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
     }
     
     
-    for(const trigger of triggers){
+    for(const triggerEntry of triggerEntries){
+        const trigger = triggerEntry.trigger
         let tempVars:Record<string, number> = {}
 
         if(trigger.effect[0]?.type === 'triggercode' || trigger.effect[0]?.type === 'triggerlua'){
@@ -1551,6 +1556,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                         getVar: getVar,
                         char: char,
                         chat: chat,
+                        engineKey: getLuaEngineKey(char, chat, triggerEntry.source, triggerEntry.index),
                     })
 
                     if(triggerCodeResult.stopSending){
