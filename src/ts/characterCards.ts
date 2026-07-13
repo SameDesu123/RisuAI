@@ -1,6 +1,6 @@
 import { writable, type Writable } from "svelte/store"
 import { alertCardExport, alertConfirm, alertError, alertInput, alertMd, alertNormal, alertStore, alertTOS, alertWait } from "./alert"
-import { defaultSdDataFunc, type character, setDatabase, type customscript, type loreSettings, type loreBook, type triggerscript, importPreset, type groupChat, setCurrentCharacter, getCurrentCharacter, getDatabase, setDatabaseLite, appVer } from "./storage/database.svelte"
+import { defaultSdDataFunc, type character, setDatabase, type customscript, type loreSettings, type loreBook, type triggerscript, importPreset, type groupChat, setCurrentCharacter, getCurrentCharacter, getDatabase, setDatabaseLite, appVer, normalizeBotUiConfig } from "./storage/database.svelte"
 import { checkNullish, decryptBuffer, isKnownUri, selectFileByDom, sleep } from "./util"
 import { language } from "src/lang"
 import { v4 as uuidv4, v4 } from 'uuid';
@@ -991,6 +991,7 @@ async function importCharacterCardSpec<T extends boolean = false>(card:Character
         additionalAssets: extAssets,
         replaceGlobalNote: data.post_history_instructions ?? '',
         backgroundHTML: data?.extensions?.risuai?.backgroundHTML,
+        botUi: normalizeBotUiConfig(data?.extensions?.risuai?.botUi),
         license: data?.extensions?.risuai?.license,
         triggerscript: data?.extensions?.risuai?.triggerscript ?? [],
         private: data?.extensions?.risuai?.private ?? false,
@@ -1213,6 +1214,7 @@ function createBaseV2(char:character) {
                     sdData: char.sdData,
                     // additionalAssets: char.additionalAssets,
                     backgroundHTML: char.backgroundHTML,
+                    botUi: char.botUi,
                     license: char.license,
                     triggerscript: char.triggerscript,
                     additionalText: char.additionalText,
@@ -1635,6 +1637,7 @@ export function createBaseV3(char:character){
                     utilityBot: char.utilityBot,
                     sdData: char.sdData,
                     backgroundHTML: char.backgroundHTML,
+                    botUi: char.botUi,
                     license: char.license,
                     triggerscript: char.triggerscript,
                     additionalText: char.additionalText,
@@ -1926,6 +1929,7 @@ type CharacterCardV2Risu = {
                 sdData?:[string,string][],
                 additionalAssets?:[string,string,string][],
                 backgroundHTML?:string,
+                botUi?:import('./storage/database.svelte').BotUiConfigV1,
                 license?:string,
                 triggerscript?:triggerscript[]
                 private?:boolean

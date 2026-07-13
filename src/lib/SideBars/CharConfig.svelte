@@ -714,6 +714,61 @@
         <span class="text-textcolor mt-4">{language.triggerScript} <Help key="triggerScript"/></span>
         <TriggerList bind:value={(DBState.db.characters[$selectedCharID] as character).triggerscript} lowLevelAble={DBState.db.characters[$selectedCharID].lowLevelAccess} />
 
+        <div class="mt-5 border border-darkborderc rounded-md p-3">
+            <div class="flex items-center">
+                <Check
+                    check={Boolean((DBState.db.characters[$selectedCharID] as character).botUi)}
+                    name={language.botUiEnabled}
+                    onChange={(enabled) => {
+                        const char = DBState.db.characters[$selectedCharID] as character
+                        char.botUi = enabled ? (char.botUi ?? {
+                            version: 1,
+                            html: '',
+                            css: '',
+                            openAction: '',
+                            layout: { width: 480, height: 640, anchor: 'bottom-right', offsetX: 16, offsetY: 16 },
+                        }) : undefined
+                    }}
+                />
+            </div>
+            <p class="text-sm text-textcolor2 mt-2">{language.botUiHelp}</p>
+
+            {#if (DBState.db.characters[$selectedCharID] as character).botUi}
+                <span class="block text-textcolor mt-4">{language.botUiHtml}</span>
+                <TextAreaInput highlight margin="both" autocomplete="off" bind:value={(DBState.db.characters[$selectedCharID] as character).botUi.html}></TextAreaInput>
+
+                <span class="block text-textcolor mt-4">{language.botUiCss}</span>
+                <TextAreaInput highlight margin="both" autocomplete="off" bind:value={(DBState.db.characters[$selectedCharID] as character).botUi.css}></TextAreaInput>
+
+                <span class="block text-textcolor mt-4">{language.botUiOpenAction}</span>
+                <TextInput marginBottom bind:value={(DBState.db.characters[$selectedCharID] as character).botUi.openAction} placeholder="initSetup" />
+
+                {@const layout = (DBState.db.characters[$selectedCharID] as character).botUi.layout}
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    <label class="text-sm text-textcolor2">{language.botUiWidth}
+                        <NumberInput fullwidth min={280} bind:value={layout.width} />
+                    </label>
+                    <label class="text-sm text-textcolor2">{language.botUiHeight}
+                        <NumberInput fullwidth min={240} bind:value={layout.height} />
+                    </label>
+                    <label class="text-sm text-textcolor2">{language.botUiOffsetX}
+                        <NumberInput fullwidth bind:value={layout.offsetX} />
+                    </label>
+                    <label class="text-sm text-textcolor2">{language.botUiOffsetY}
+                        <NumberInput fullwidth bind:value={layout.offsetY} />
+                    </label>
+                </div>
+                <span class="block text-sm text-textcolor2 mt-2">{language.botUiAnchor}</span>
+                <SelectInput className="w-full mt-1" bind:value={layout.anchor}>
+                    <OptionInput value="top-left">{language.botUiTopLeft}</OptionInput>
+                    <OptionInput value="top-right">{language.botUiTopRight}</OptionInput>
+                    <OptionInput value="bottom-left">{language.botUiBottomLeft}</OptionInput>
+                    <OptionInput value="bottom-right">{language.botUiBottomRight}</OptionInput>
+                    <OptionInput value="center">{language.botUiCenter}</OptionInput>
+                </SelectInput>
+            {/if}
+        </div>
+
 
         {#if DBState.db.characters[$selectedCharID].virtualscript || DBState.db.showUnrecommended}
             <span class="text-textcolor mt-4">{language.charjs} <Help key="charjs" unrecommended/></span>
