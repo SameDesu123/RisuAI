@@ -1,4 +1,4 @@
-import { BaseDirectory, exists, mkdir, readFile, remove, rename, writeFile } from "@tauri-apps/plugin-fs";
+import { BaseDirectory, exists, mkdir, readDir, readFile, remove, rename, writeFile } from "@tauri-apps/plugin-fs";
 import type { Database } from "./database.svelte";
 import {
     decodeDatabaseBlockManifest,
@@ -25,6 +25,23 @@ export function createAutoDatabaseBlockStorage(storage: DatabaseBlockStorageAdap
 }
 
 export function createTauriDatabaseBlockStorage(): DatabaseBlockStorageAdapter {
+    async function listFiles(directory: string): Promise<string[]> {
+        if (!await exists(directory, { baseDir: BaseDirectory.AppData })) {
+            return [];
+        }
+        const files: string[] = [];
+        for (const entry of await readDir(directory, { baseDir: BaseDirectory.AppData })) {
+            const key = `${directory}/${entry.name}`;
+            if (entry.isDirectory) {
+                files.push(...await listFiles(key));
+            }
+            else {
+                files.push(key);
+            }
+        }
+        return files;
+    }
+
     return {
         async getItem(key: string) {
             if (!await exists(key, { baseDir: BaseDirectory.AppData })) {
@@ -56,6 +73,14 @@ export function createTauriDatabaseBlockStorage(): DatabaseBlockStorageAdapter {
                     await remove(temporaryKey, { baseDir: BaseDirectory.AppData });
                 }
                 throw error;
+            }
+        },
+        async keys() {
+            return await listFiles("database/blocks/v2");
+        },
+        async removeItem(key: string) {
+            if (await exists(key, { baseDir: BaseDirectory.AppData })) {
+                await remove(key, { baseDir: BaseDirectory.AppData });
             }
         },
     };

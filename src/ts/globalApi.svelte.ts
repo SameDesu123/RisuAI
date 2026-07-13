@@ -66,6 +66,7 @@ import {
     saveDatabaseBlockDatabase,
 } from "./storage/databaseBlockStorage";
 import { SaveDirtyTracker, type SaveDirtyFlag } from "./storage/saveDirtyTracker";
+import { cleanupDatabaseBlockGenerations } from "./storage/databaseBlockCleanup";
 
 export const forageStorage = new AutoStorage()
 const hydratedDatabaseBlockChats = new WeakSet<object>()
@@ -169,6 +170,33 @@ export async function getHydratedDatabaseSnapshot(options: {
 
 export async function decodeDatabaseStorageBytes(data: Uint8Array) {
     return await decodeStoredDatabaseBytes(data, getDatabaseBlockStorage(), decodeRisuSave)
+}
+
+let lastDatabaseBlockCleanup = 0
+async function cleanRetainedDatabaseBlocks(
+    storage: DatabaseBlockStorageAdapter,
+    current: DatabaseBlockManifest,
+    backups: number[],
+) {
+    if (Date.now() - lastDatabaseBlockCleanup < 1000 * 60 * 60 * 24) {
+        return
+    }
+    try {
+        const manifests = [current]
+        for (const backup of backups) {
+            const backupData = isTauri
+                ? await readFile(`database/dbbackup-${backup}.bin`, { baseDir: BaseDirectory.AppData })
+                : await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
+            const bytes = new Uint8Array(backupData)
+            if (isDatabaseBlockManifest(bytes)) {
+                manifests.push(decodeDatabaseBlockManifest(bytes))
+            }
+        }
+        await cleanupDatabaseBlockGenerations(storage, manifests)
+        lastDatabaseBlockCleanup = Date.now()
+    } catch (error) {
+        console.error("Skipped database block cleanup because retained manifests could not be verified", error)
+    }
 }
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
@@ -675,7 +703,8 @@ export async function saveDb() {
                 dirtyTracker.ack(saveSnapshot)
                 changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
                 await blockStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, result.encoded)
-                await getDbBackups()
+                const backups = await getDbBackups()
+                await cleanRetainedDatabaseBlocks(blockStorage, result.manifest, backups)
                 encoder = null
                 savetrys = 0
                 await saveDbKei(() => getHydratedDatabaseSnapshot())

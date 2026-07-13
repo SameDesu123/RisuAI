@@ -5,6 +5,7 @@ import type { DatabaseBlockStorageAdapter } from "./databaseBlockFormat";
 const fsMocks = vi.hoisted(() => ({
     exists: vi.fn(),
     mkdir: vi.fn(),
+    readDir: vi.fn(),
     readFile: vi.fn(),
     remove: vi.fn(),
     rename: vi.fn(),
