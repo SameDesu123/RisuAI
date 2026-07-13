@@ -678,7 +678,7 @@
                 {#if DBState.db.characters[$selectedCharID]?.chaId !== '§playground'}
                     {#if currentCharacter.type === 'character' && currentCharacter.botUi?.html?.trim()}
                         <button
-                            onclick={() => botUiPanelOpen.update((open) => !open)}
+                            onclick={() => botUiPanelOpen.set(true)}
                             class="peer-focus:border-textcolor flex border-y border-darkborderc justify-center items-center text-textcolor p-3 hover:bg-blue-500 hover:text-white transition-colors"
                             style:height={inputHeight}
                             aria-label="Bot UI"

@@ -53,6 +53,11 @@
         charaNote: ''
     }
 
+    function ensureBotUiLayout(char: character) {
+        char.botUi.layout ??= { width: 480, height: 640, anchor: 'bottom-right', offsetX: 16, offsetY: 16 }
+        return char.botUi.layout
+    }
+
     async function loadTokenize(
         desc: string | null,
         firstMsg: string | null,
@@ -743,7 +748,7 @@
                 <span class="block text-textcolor mt-4">{language.botUiOpenAction}</span>
                 <TextInput marginBottom bind:value={(DBState.db.characters[$selectedCharID] as character).botUi.openAction} placeholder="initSetup" />
 
-                {@const layout = (DBState.db.characters[$selectedCharID] as character).botUi.layout}
+                {@const layout = ensureBotUiLayout(DBState.db.characters[$selectedCharID] as character)}
                 <div class="grid grid-cols-2 gap-2 mt-2">
                     <label class="text-sm text-textcolor2">{language.botUiWidth}
                         <NumberInput fullwidth min={280} bind:value={layout.width} />

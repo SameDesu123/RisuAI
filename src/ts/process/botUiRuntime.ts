@@ -1,12 +1,11 @@
-import DOMPurify from 'dompurify'
-import { writable } from 'svelte/store'
 import { readImage } from '../globalApi.svelte'
 import { risuChatParser } from '../parser/parser.svelte'
 import type { character } from '../storage/database.svelte'
 import { getModuleAssets } from './modules'
-
-export const botUiPanelOpen = writable(false)
-export const botUiInvalidation = writable(0)
+import { expandBotUiCbs, sanitizeBotUiCss, sanitizeBotUiHtml, tokenizeBotUiActions } from './botUiSecurity'
+import { indexBotUiAssets } from './botUiAssets'
+export { botUiInvalidation, botUiPanelOpen } from './botUiSignals'
+export { sanitizeBotUiCss, sanitizeBotUiHtml } from './botUiSecurity'
 
 export interface CompiledBotUi {
     html: string
@@ -16,7 +15,6 @@ export interface CompiledBotUi {
 }
 
 const assetMacro = /\{\{(raw|path|image|img|video|audio|asset)::([^{}]+?)\}\}/gi
-const forbiddenUrl = /^(?:https?:|\/\/|javascript:|vbscript:)/i
 
 function mimeFromExtension(extension: string): string {
     const ext = extension.toLowerCase().replace(/^\./, '')
@@ -37,51 +35,8 @@ function mediaTag(kind: string, url: string, extension: string): string {
     return `<img src="${url}" alt="" />`
 }
 
-export function sanitizeBotUiCss(input: string): string {
-    return input
-        .replace(/@import\s+(?:url\([^)]*\)|[^;]+);?/gi, '')
-        .replace(/url\(\s*(['"]?)(.*?)\1\s*\)/gi, (_full, _quote, url: string) => {
-            const value = url.trim()
-            return /^(?:blob:|data:)/i.test(value) ? `url("${value.replaceAll('"', '%22')}")` : 'url("")'
-        })
-}
-
-export function sanitizeBotUiHtml(input: string): string {
-    const clean = DOMPurify.sanitize(input, {
-        FORBID_TAGS: ['script', 'iframe', 'frame', 'frameset', 'object', 'embed', 'form', 'base', 'link', 'meta'],
-        FORBID_ATTR: ['srcdoc', 'formaction', 'action', 'target'],
-        ADD_ATTR: ['data-risu-action'],
-    })
-    const doc = new DOMParser().parseFromString(clean, 'text/html')
-    for(const style of doc.body.querySelectorAll('style')){
-        style.textContent = sanitizeBotUiCss(style.textContent ?? '')
-    }
-    for(const element of doc.body.querySelectorAll('*')){
-        for(const attribute of [...element.attributes]){
-            const name = attribute.name.toLowerCase()
-            const value = attribute.value.trim()
-            if(name.startsWith('on')){
-                element.removeAttribute(attribute.name)
-                continue
-            }
-            if(['href', 'src', 'poster', 'xlink:href'].includes(name) && (forbiddenUrl.test(value) || (!/^(?:blob:|data:|#)/i.test(value) && value !== ''))){
-                element.removeAttribute(attribute.name)
-            }
-            if(name === 'style'){
-                element.setAttribute('style', sanitizeBotUiCss(value))
-            }
-        }
-    }
-    return doc.body.innerHTML
-}
-
 async function resolveAssets(input: string, char: character, objectUrls: string[]): Promise<string> {
-    const assets = [...(char.additionalAssets ?? []), ...getModuleAssets()]
-    const byName = new Map<string, [string, string, string]>()
-    for(const asset of assets){
-        const name = asset[0].toLocaleLowerCase()
-        if(!byName.has(name)) byName.set(name, asset)
-    }
+    const byName = indexBotUiAssets(char.additionalAssets ?? [], getModuleAssets())
     const cache = new Map<string, string>()
     const matches = [...input.matchAll(assetMacro)]
     let output = input
@@ -109,35 +64,8 @@ async function resolveAssets(input: string, char: character, objectUrls: string[
     return output
 }
 
-function tokenizeActions(input: string): { html: string, actions: Map<string, string> } {
-    const doc = new DOMParser().parseFromString(input, 'text/html')
-    const actions = new Map<string, string>()
-    let counter = 0
-    for(const element of doc.body.querySelectorAll('[risu-trigger], [risu-btn]')){
-        const action = element.getAttribute('risu-trigger') ?? element.getAttribute('risu-btn')
-        element.removeAttribute('risu-trigger')
-        element.removeAttribute('risu-btn')
-        if(!action) continue
-        const token = `action-${counter++}-${crypto.randomUUID()}`
-        actions.set(token, action)
-        element.setAttribute('data-risu-action', token)
-        if(element instanceof HTMLButtonElement) element.type = 'button'
-    }
-    return { html: doc.body.innerHTML, actions }
-}
-
 function compileCbs(input: string, char: character): string {
-    let current = input
-    for(let pass = 0; pass < 4; pass++){
-        const next = risuChatParser(current, { chara: char, visualize: true })
-        if(next === current) return next
-        current = next
-    }
-    const next = risuChatParser(current, { chara: char, visualize: true })
-    if(next !== current){
-        throw new Error('Bot UI CBS expansion exceeded four passes')
-    }
-    return current
+    return expandBotUiCbs(input, (value) => risuChatParser(value, { chara: char, visualize: true }))
 }
 
 export async function compileBotUi(char: character): Promise<CompiledBotUi> {
@@ -149,7 +77,7 @@ export async function compileBotUi(char: character): Promise<CompiledBotUi> {
         const expandedCss = compileCbs(config.css ?? '', char)
         const withAssetsHtml = await resolveAssets(expandedHtml, char, objectUrls)
         const withAssetsCss = await resolveAssets(expandedCss, char, objectUrls)
-        const tokenized = tokenizeActions(withAssetsHtml)
+        const tokenized = tokenizeBotUiActions(withAssetsHtml)
         return {
             html: sanitizeBotUiHtml(tokenized.html),
             css: sanitizeBotUiCss(withAssetsCss),
@@ -171,6 +99,10 @@ export const botUiFrameSource = `<!doctype html>
   let revision = 0;
   addEventListener('message', (event) => {
     const data = event.data;
+    if (data && data.type === 'risu-bot-ui-busy') {
+      root.querySelectorAll('[data-risu-action]').forEach((element) => { element.disabled = Boolean(data.busy); });
+      return;
+    }
     if (!data || data.type !== 'risu-bot-ui-render' || data.revision < revision) return;
     revision = data.revision;
     style.textContent = data.css || '';

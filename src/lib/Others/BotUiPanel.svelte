@@ -29,10 +29,12 @@
         const y = layout.offsetY ?? 16
         const anchor = layout.anchor ?? 'bottom-right'
         let position = ''
-        if(anchor === 'top-left') position = `left:${x}px;top:${y}px;`
-        if(anchor === 'top-right') position = `right:${x}px;top:${y}px;`
-        if(anchor === 'bottom-left') position = `left:${x}px;bottom:${y}px;`
-        if(anchor === 'bottom-right') position = `right:${x}px;bottom:${y}px;`
+        const safeX = `clamp(0px,${Math.max(0, x)}px,calc(100vw - 296px))`
+        const safeY = `clamp(0px,${Math.max(0, y)}px,calc(100vh - 256px))`
+        if(anchor === 'top-left') position = `left:${safeX};top:${safeY};`
+        if(anchor === 'top-right') position = `right:${safeX};top:${safeY};`
+        if(anchor === 'bottom-left') position = `left:${safeX};bottom:${safeY};`
+        if(anchor === 'bottom-right') position = `right:${safeX};bottom:${safeY};`
         if(anchor === 'center') position = 'left:50%;top:50%;transform:translate(-50%,-50%);'
         return `${position}width:min(${width}px,calc(100vw - 32px));height:min(${height}px,calc(100vh - 32px));`
     })
@@ -70,15 +72,16 @@
     async function runAction(action: string) {
         if(busy || char?.type !== 'character') return
         busy = true
-        let changed = false
+        iframe?.contentWindow?.postMessage({ type: 'risu-bot-ui-busy', busy: true }, '*')
+        const invalidationBefore = get(botUiInvalidation)
         try {
-            await runLuaActionTrigger(char, action, () => { changed = true })
-            if(changed) botUiInvalidation.update((value) => value + 1)
-            await renderPanel()
+            await runLuaActionTrigger(char, action)
+            if(get(botUiInvalidation) === invalidationBefore) await renderPanel()
         } catch(cause) {
             error = cause instanceof Error ? cause.message : String(cause)
         } finally {
             busy = false
+            iframe?.contentWindow?.postMessage({ type: 'risu-bot-ui-busy', busy: false }, '*')
         }
     }
 

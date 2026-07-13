@@ -18,6 +18,8 @@ import { tokenize } from "../tokenizer";
 import { fetchNative, readImage } from "../globalApi.svelte";
 import { loadLoreBookV3Prompt } from './lorebook.svelte';
 import { getPersonaPrompt, getUserName, getUserIcon } from '../util';
+import { buildLuaEngineKey } from './luaEngineIdentity';
+import { botUiInvalidation } from './botUiSignals';
 let luaFactory:LuaFactory
 let ScriptingSafeIds = new Set<string>()
 let ScriptingEditDisplayIds = new Set<string>()
@@ -31,7 +33,7 @@ interface BasicScriptingEngineState {
     chat?: Chat;
     setVar?: (key:string, value:string) => void,
     getVar?: (key:string) => string,
-    onStateChanged?: () => void,
+    stateChanged?: boolean,
 }
 
 interface LuaScriptingEngineState extends BasicScriptingEngineState {
@@ -61,7 +63,7 @@ export async function runScripted(code:string, arg:{
     mode?: string,
     type?: 'lua'|'py',
     engineKey?: string,
-    onStateChanged?: () => void,
+    throwErrors?: boolean,
 }){
     const type: 'lua'|'py' = arg.type ?? 'lua'
     const char = arg.char ?? getCurrentCharacter()
@@ -85,7 +87,7 @@ export async function runScripted(code:string, arg:{
         ScriptingEngineState.chat = chat
         ScriptingEngineState.setVar = setVar
         ScriptingEngineState.getVar = getVar
-        ScriptingEngineState.onStateChanged = arg.onStateChanged
+        ScriptingEngineState.stateChanged = false
         if (code !== ScriptingEngineState.code) {
             let declareAPI:(name: string, func:Function) => void
 
@@ -115,7 +117,7 @@ export async function runScripted(code:string, arg:{
                     return
                 }
                 ScriptingEngineState.setVar(key, value)
-                ScriptingEngineState.onStateChanged?.()
+                ScriptingEngineState.stateChanged = true
             })
             declareAPI('getGlobalVar', (id:string, key:string) => {
                 return getGlobalChatVar(key)
@@ -1139,11 +1141,15 @@ export async function runScripted(code:string, arg:{
             }
         } catch (error) {
             console.error(error)
-            throw error
+            if(arg.throwErrors) throw error
         } finally {
             ScriptingSafeIds.delete(accessKey)
             ScriptingEditDisplayIds.delete(accessKey)
             ScriptingLowLevelIds.delete(accessKey)
+            if(ScriptingEngineState.stateChanged){
+                ScriptingEngineState.stateChanged = false
+                botUiInvalidation.update((value) => value + 1)
+            }
         }
         chat = ScriptingEngineState.chat
 
@@ -1238,7 +1244,13 @@ export function getLuaEngineKey(
     source: string,
     triggerIndex: number,
 ): string {
-    return ['lua', char.chaId ?? 'group', getChatIdentity(char, chat), source, triggerIndex].join(':')
+    return buildLuaEngineKey({
+        characterId: char.chaId,
+        chatId: chat?.id,
+        chatPage: Number(getChatIdentity(char, chat)),
+        source,
+        triggerIndex,
+    })
 }
 
 export function disposeLuaEngines(prefix?: string): void {
@@ -1489,7 +1501,6 @@ export async function runLuaButtonTrigger(char:character|groupChat|simpleCharact
 export async function runLuaActionTrigger(
     char: character|groupChat|simpleCharacterArgument,
     action: string,
-    onStateChanged?: () => void,
 ): Promise<any> {
     const chat = getCurrentChat()
     const entries = char.type === 'group'
@@ -1501,20 +1512,26 @@ export async function runLuaActionTrigger(
         })).concat(getModuleTriggerEntries().map((entry) => ({ ...entry, source: `module:${entry.moduleId}` })))
 
     let lastResult
+    let firstError: unknown
     for(const entry of entries){
         const effect = entry.trigger?.effect?.[0]
         if(effect?.type !== 'triggerlua'){
             continue
         }
-        lastResult = await runScripted(effect.code, {
-            char,
-            chat,
-            lowLevelAccess: entry.trigger.lowLevelAccess,
-            mode: action,
-            engineKey: getLuaEngineKey(char, chat, entry.source, entry.index),
-            onStateChanged,
-        })
+        try {
+            lastResult = await runScripted(effect.code, {
+                char,
+                chat,
+                lowLevelAccess: entry.trigger.lowLevelAccess,
+                mode: action,
+                engineKey: getLuaEngineKey(char, chat, entry.source, entry.index),
+                throwErrors: true,
+            })
+        } catch(error) {
+            firstError ??= error
+        }
     }
+    if(firstError) throw firstError
     return lastResult
 }
 
