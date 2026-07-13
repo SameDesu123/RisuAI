@@ -81,6 +81,11 @@ export function getDatabaseBlockStorage(): DatabaseBlockStorageAdapter {
 
 export async function preLoadDatabaseBlockChat(characterIndex: number, chatIndex: number) {
     const storage = getDatabaseBlockStorage()
+    const requestedCharacter = DBState.db.characters?.[characterIndex]
+    const requestedChat = requestedCharacter?.chats?.[chatIndex]
+    if (!requestedCharacter || !requestedChat) {
+        return null
+    }
     const beforeCommit = (chat: Chat) => hydratedDatabaseBlockChats.add(chat)
     try {
         return await hydrateDatabaseBlockChat(
@@ -91,8 +96,14 @@ export async function preLoadDatabaseBlockChat(characterIndex: number, chatIndex
             beforeCommit,
         )
     } catch (primaryError) {
-        const characterId = DBState.db.characters?.[characterIndex]?.chaId
-        const chatId = DBState.db.characters?.[characterIndex]?.chats?.[chatIndex]?.id
+        if (
+            DBState.db.characters.indexOf(requestedCharacter) === -1
+            || requestedCharacter.chats.indexOf(requestedChat) === -1
+        ) {
+            throw primaryError
+        }
+        const characterId = requestedCharacter.chaId
+        const chatId = requestedChat.id
         if (!characterId || !chatId) {
             throw primaryError
         }
@@ -108,11 +119,16 @@ export async function preLoadDatabaseBlockChat(characterIndex: number, chatIndex
                     if (!ref) {
                         continue
                     }
+                    const recoveryCharacterIndex = DBState.db.characters.indexOf(requestedCharacter)
+                    const recoveryChatIndex = requestedCharacter.chats.indexOf(requestedChat)
+                    if (recoveryCharacterIndex === -1 || recoveryChatIndex === -1) {
+                        throw primaryError
+                    }
                     const recovered = await hydrateDatabaseBlockChatFromRef(
                         DBState.db,
                         storage,
-                        characterIndex,
-                        chatIndex,
+                        recoveryCharacterIndex,
+                        recoveryChatIndex,
                         ref,
                         beforeCommit,
                     )
@@ -127,10 +143,15 @@ export async function preLoadDatabaseBlockChat(characterIndex: number, chatIndex
                 const recoveredCharacter = legacy.characters?.find((char) => char.chaId === characterId)
                 const recoveredChat = recoveredCharacter?.chats?.find((chat) => chat.id === chatId)
                 if (recoveredChat) {
+                    const recoveryCharacterIndex = DBState.db.characters.indexOf(requestedCharacter)
+                    const recoveryChatIndex = requestedCharacter.chats.indexOf(requestedChat)
+                    if (recoveryCharacterIndex === -1 || recoveryChatIndex === -1) {
+                        throw primaryError
+                    }
                     const recovered = commitDatabaseBlockChat(
                         DBState.db,
-                        characterIndex,
-                        chatIndex,
+                        recoveryCharacterIndex,
+                        recoveryChatIndex,
                         recoveredChat,
                         beforeCommit,
                     )
@@ -151,10 +172,19 @@ export async function preLoadDatabaseBlockCharacter(characterIndex: number) {
     if (!character) {
         return null
     }
-    for (let chatIndex = 0; chatIndex < character.chats.length; chatIndex++) {
-        await preLoadDatabaseBlockChat(characterIndex, chatIndex)
+    const chats = [...character.chats]
+    for (const chat of chats) {
+        const currentCharacterIndex = DBState.db.characters.indexOf(character)
+        const currentChatIndex = character.chats.indexOf(chat)
+        if (currentCharacterIndex === -1 || currentChatIndex === -1) {
+            return null
+        }
+        const hydrated = await preLoadDatabaseBlockChat(currentCharacterIndex, currentChatIndex)
+        if (!hydrated) {
+            return null
+        }
     }
-    return DBState.db.characters[characterIndex]
+    return DBState.db.characters.includes(character) ? character : null
 }
 
 export async function getHydratedDatabaseSnapshot(options: {

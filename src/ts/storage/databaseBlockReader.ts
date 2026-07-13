@@ -169,8 +169,24 @@ export async function hydrateDatabaseBlockChatFromRef(
     ref: DatabaseBlockRef,
     beforeCommit?: (chat: Chat) => void,
 ) {
+    const character = db.characters?.[characterIndex];
+    const chat = character?.chats?.[chatIndex];
+    if (!character || !chat) {
+        return null;
+    }
     const hydrated = await readDatabaseBlock<Chat>(storage, ref);
-    return commitDatabaseBlockChat(db, characterIndex, chatIndex, hydrated, beforeCommit);
+    const currentCharacterIndex = db.characters.indexOf(character);
+    const currentChatIndex = character.chats.indexOf(chat);
+    if (currentCharacterIndex === -1 || currentChatIndex === -1) {
+        return null;
+    }
+    return commitDatabaseBlockChat(
+        db,
+        currentCharacterIndex,
+        currentChatIndex,
+        hydrated,
+        beforeCommit,
+    );
 }
 
 export async function hydrateDatabaseBlockDatabase(

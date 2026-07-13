@@ -35,7 +35,9 @@ import {
 } from "src/ts/process/ttsHooks";
 import {
     readHydratedPluginCharacter,
+    readHydratedPluginChat,
     replaceHydratedPluginCharacter,
+    replaceHydratedPluginChat,
 } from "../pluginDatabaseBlockCompatibility";
 
 /*
@@ -632,8 +634,7 @@ const authorizationHeaders = [
 const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
 
     const oldApis = getV2PluginAPIs();
-    const getCurrentPluginCharacter = async () => {
-        const index = get(selectedCharID)
+    const getPluginCharacterFromIndex = async (index: number) => {
         return await readHydratedPluginCharacter(
             DBState.db,
             index,
@@ -641,13 +642,41 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             (character) => $state.snapshot(character),
         )
     }
-    const setCurrentPluginCharacter = async (character: any) => {
-        const index = get(selectedCharID)
+    const setPluginCharacterToIndex = async (index: number, character: any) => {
         const replaced = await replaceHydratedPluginCharacter(
             DBState.db,
             index,
             character,
             preLoadDatabaseBlockCharacter,
+            requestCharacterSave,
+            requestChatSave,
+        )
+        if (replaced) {
+            requiresFullEncoderReload.state = true
+        }
+    }
+    const getCurrentPluginCharacter = async () => {
+        return await getPluginCharacterFromIndex(get(selectedCharID))
+    }
+    const setCurrentPluginCharacter = async (character: any) => {
+        await setPluginCharacterToIndex(get(selectedCharID), character)
+    }
+    const getPluginChatFromIndex = async (characterIndex: number, chatIndex: number) => {
+        return await readHydratedPluginChat(
+            DBState.db,
+            characterIndex,
+            chatIndex,
+            preLoadDatabaseBlockChat,
+            (chat) => $state.snapshot(chat),
+        )
+    }
+    const setPluginChatToIndex = async (characterIndex: number, chatIndex: number, chat: any) => {
+        const replaced = await replaceHydratedPluginChat(
+            DBState.db,
+            characterIndex,
+            chatIndex,
+            chat,
+            preLoadDatabaseBlockChat,
             requestCharacterSave,
             requestChatSave,
         )
@@ -856,69 +885,10 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                 }
             }
         },
-        getCharacterFromIndex: async (index:number) => {
-            const db = DBState.db
-            const charIds = Object.keys(db.characters);
-            const charId = charIds[index];
-            if(charId){
-                await preLoadDatabaseBlockCharacter(Number(charId))
-                return $state.snapshot(DBState.db.characters[charId]);
-            }
-            return null;
-        },
-        setCharacterToIndex: async (index:number, char:any) => {
-            const db = DBState.db
-            const charIds = Object.keys(db.characters);
-            const charId = charIds[index];
-            if(charId){
-                await preLoadDatabaseBlockCharacter(Number(charId))
-                const previousCharacterId = DBState.db.characters[charId]?.chaId
-                for(const chat of char?.chats ?? []){
-                    delete chat.databaseBlockStorage
-                }
-                DBState.db.characters[charId] = char
-                requestCharacterSave(previousCharacterId)
-                requestCharacterSave(char?.chaId)
-                for(const chat of char?.chats ?? []){
-                    requestChatSave(char?.chaId ?? previousCharacterId, chat?.id)
-                }
-                requiresFullEncoderReload.state = true
-            }
-        },
-        getChatFromIndex: async (characterIndex:number, chatIndex:number) => {
-            const db = DBState.db
-            const charIds = Object.keys(db.characters);
-            const charId = charIds[characterIndex];
-            if(charId){
-                await preLoadDatabaseBlockChat(Number(charId), chatIndex)
-                const chats = DBState.db.characters[charId].chats;
-                if(chats && chats[chatIndex]){
-                    return $state.snapshot(chats[chatIndex]);
-                }
-            }
-            return null;
-        },
-        setChatToIndex: async (characterIndex:number, chatIndex:number, chat:any) => {
-            const db = DBState.db
-            const charIds = Object.keys(db.characters);
-            const charId = charIds[characterIndex];
-            if(charId){
-                await preLoadDatabaseBlockChat(Number(charId), chatIndex)
-                const character = DBState.db.characters[charId];
-                const chats = db.characters[charId].chats;
-                if(chats && chats[chatIndex]){
-                    const previousChatId = chats[chatIndex]?.id
-                    delete chat.databaseBlockStorage
-                    DBState.db.characters[charId].chats[chatIndex] = chat
-                    const nextChatId = chat?.id ?? previousChatId
-                    if(chat?.id && chat.id !== previousChatId){
-                        requestCharacterSave(character?.chaId)
-                    }
-                    requestChatSave(character?.chaId, nextChatId)
-                    requiresFullEncoderReload.state = true
-                }
-            }
-        },
+        getCharacterFromIndex: getPluginCharacterFromIndex,
+        setCharacterToIndex: setPluginCharacterToIndex,
+        getChatFromIndex: getPluginChatFromIndex,
+        setChatToIndex: setPluginChatToIndex,
         getCurrentCharacterIndex: () => {
             return get(selectedCharID)
         },

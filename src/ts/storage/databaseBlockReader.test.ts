@@ -13,9 +13,11 @@ import { createDatabaseBlockManifest } from "./databaseBlockWriter";
 class MemoryBlockStorage implements DatabaseBlockStorageAdapter {
     values = new Map<string, Uint8Array>();
     reads: string[] = [];
+    beforeRead?: (key: string) => Promise<void>;
 
     async getItem(key: string) {
         this.reads.push(key);
+        await this.beforeRead?.(key);
         return this.values.get(key) ?? null;
     }
 
@@ -162,6 +164,44 @@ describe("databaseBlockReader", () => {
 
         expect(loaded.characters[0].chats[0].folderId).toBeNull();
         expect(loaded.characters[0].chats[0].message[0].data).toBe("hello");
+    });
+
+    it("commits hydration to the original character after its index changes", async () => {
+        const storage = new MemoryBlockStorage();
+        const db = createDatabase();
+        const second = structuredClone(db.characters[0]);
+        second.chaId = "char-2";
+        second.name = "Character 2";
+        second.chats[0].id = "chat-2";
+        db.characters.push(second);
+        const manifest = await createDatabaseBlockManifest(db, storage);
+        const loaded = await loadDatabaseBlockDatabase(manifest, storage);
+        const chatRef = manifest.characters.chatRefs["char-1"].refs["chat-1"];
+        let releaseRead!: () => void;
+        let markReadStarted!: () => void;
+        const readStarted = new Promise<void>((resolve) => {
+            markReadStarted = resolve;
+        });
+        const readGate = new Promise<void>((resolve) => {
+            releaseRead = resolve;
+        });
+        storage.beforeRead = async (key) => {
+            if (key === chatRef.key) {
+                markReadStarted();
+                await readGate;
+            }
+        };
+
+        const hydration = hydrateDatabaseBlockChat(loaded, storage, 0, 0);
+        await readStarted;
+        loaded.characters.reverse();
+        releaseRead();
+        await hydration;
+
+        expect(loaded.characters[0].chaId).toBe("char-2");
+        expect(loaded.characters[0].chats[0].message).toEqual([]);
+        expect(loaded.characters[1].chaId).toBe("char-1");
+        expect(loaded.characters[1].chats[0].message[0].data).toBe("hello");
     });
 
     it("fails strictly when a required component reference is missing", async () => {
