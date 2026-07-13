@@ -529,6 +529,7 @@ export const getV2PluginAPIs = () => {
             const charid = get(selectedCharID)
             db.characters[charid] = char
             setDatabaseLite(db)
+            requiresFullEncoderReload.state = true
         },
         addProvider: (name: string, func: (arg: PluginV2ProviderArgument, abortSignal?: AbortSignal) => Promise<{ success: boolean, content: string }>, options?: PluginV2ProviderOptions) => {
             let provs = get(customProviderStore)
@@ -689,6 +690,9 @@ export const getV2PluginAPIs = () => {
                 set(target, prop, value) {
                     if (typeof prop === 'string' && allowedDbKeys.includes(prop)) {
                         (target as any)[prop] = value;
+                        if(prop === 'characters'){
+                            requiresFullEncoderReload.state = true
+                        }
                         return true;
                     }
                     else{

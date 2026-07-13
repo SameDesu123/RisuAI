@@ -52,19 +52,23 @@ function createChatStub(
 }
 
 function mergeChatMetadata(hydrated: Chat, stub: Chat): Chat {
+    const metadata = <Key extends keyof Chat>(key: Key) => {
+        return Object.prototype.hasOwnProperty.call(stub, key) ? stub[key] : hydrated[key];
+    };
+
     return {
         ...hydrated,
-        id: stub.id ?? hydrated.id,
-        name: stub.name ?? hydrated.name,
-        note: stub.note ?? hydrated.note,
-        folderId: stub.folderId ?? hydrated.folderId,
-        lastDate: stub.lastDate ?? hydrated.lastDate,
-        bindedPersona: stub.bindedPersona ?? hydrated.bindedPersona,
-        fmIndex: stub.fmIndex ?? hydrated.fmIndex,
-        bookmarks: stub.bookmarks ?? hydrated.bookmarks,
-        bookmarkNames: stub.bookmarkNames ?? hydrated.bookmarkNames,
-        modules: stub.modules ?? hydrated.modules,
-        suggestMessages: stub.suggestMessages ?? hydrated.suggestMessages,
+        id: metadata("id"),
+        name: metadata("name"),
+        note: metadata("note"),
+        folderId: metadata("folderId"),
+        lastDate: metadata("lastDate"),
+        bindedPersona: metadata("bindedPersona"),
+        fmIndex: metadata("fmIndex"),
+        bookmarks: metadata("bookmarks"),
+        bookmarkNames: metadata("bookmarkNames"),
+        modules: metadata("modules"),
+        suggestMessages: metadata("suggestMessages"),
     };
 }
 

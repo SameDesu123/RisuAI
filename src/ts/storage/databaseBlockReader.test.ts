@@ -150,6 +150,20 @@ describe("databaseBlockReader", () => {
         expect(loaded.characters[0].chats[0].message[0].data).toBe("hello");
     });
 
+    it("preserves explicitly cleared chat metadata while hydrating", async () => {
+        const storage = new MemoryBlockStorage();
+        const db = createDatabase();
+        db.characters[0].chats[0].folderId = "folder-1";
+        const manifest = await createDatabaseBlockManifest(db, storage);
+        const loaded = await loadDatabaseBlockDatabase(manifest, storage);
+
+        loaded.characters[0].chats[0].folderId = null;
+        await hydrateDatabaseBlockChat(loaded, storage, 0, 0);
+
+        expect(loaded.characters[0].chats[0].folderId).toBeNull();
+        expect(loaded.characters[0].chats[0].message[0].data).toBe("hello");
+    });
+
     it("fails strictly when a required component reference is missing", async () => {
         const storage = new MemoryBlockStorage();
         const manifest = await createDatabaseBlockManifest(createDatabase(), storage);
