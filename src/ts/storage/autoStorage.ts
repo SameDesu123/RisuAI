@@ -73,9 +73,7 @@ export class AutoStorage{
             }
 
             let replaced:{[key:string]:string} = {}
-            const sourceDb = db.databaseBlockStorage
-                ? await getHydratedDatabaseSnapshot({ databaseBlockStorage: false })
-                : db
+            const sourceDb = await getHydratedDatabaseSnapshot({ databaseBlockStorage: false })
             
             for(const key of keys){
                 if(key === 'database/database.bin' || key.startsWith('database/blocks/')){

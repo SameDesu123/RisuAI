@@ -41,7 +41,8 @@ import {
     getBasename,
     setUsingSw,
     checkCharOrder,
-    decodeDatabaseStorageBytes
+    decodeDatabaseStorageBytes,
+    requiresFullEncoderReload
 } from "./globalApi.svelte";
 import { isTauri } from "./platform";
 import { registerModelDynamic } from "./model/modellist";
@@ -105,6 +106,7 @@ export async function loadData() {
                                 setDatabase(
                                     await decodeDatabaseStorageBytes(backupData)
                                 )
+                                requiresFullEncoderReload.state = true
                                 backupLoaded = true
                             } catch (error) {
                                 console.error(error)
@@ -145,7 +147,9 @@ export async function loadData() {
                             setDatabase(
                                 await decodeDatabaseStorageBytes(backupData)
                             )
+                            requiresFullEncoderReload.state = true
                             backupLoaded = true
+                            break
                         } catch (error) { }
                     }
                     if (!backupLoaded) {
@@ -176,7 +180,9 @@ export async function loadData() {
                                 setDatabase(
                                     await decodeDatabaseStorageBytes(backupData)
                                 )
+                                requiresFullEncoderReload.state = true
                                 backupLoaded = true
+                                break
                             } catch (error) { }
                         }
                         if (!backupLoaded) {

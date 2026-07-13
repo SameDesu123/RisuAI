@@ -11,7 +11,7 @@ export class OpfsStorage{
         })
         const stream = await handle.createWritable()
         await stream.write(asBuffer(value))
-        stream.close()
+        await stream.close()
     }
     async getItem(key:string):Promise<Buffer> {
         try {
