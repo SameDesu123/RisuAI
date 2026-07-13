@@ -563,7 +563,10 @@ export async function saveDb() {
                 continue
             }
             const saveSnapshot = dirtyTracker.snapshot()
-            const toSave = saveSnapshot.toSave
+            const toSave = {
+                ...saveSnapshot.toSave,
+                root: saveSnapshot.rootVersion !== undefined,
+            }
             if (gotChannel) {
                 //Data is saved in other tab
                 changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state

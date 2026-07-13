@@ -24,11 +24,17 @@ class MemoryBlockStorage implements DatabaseBlockStorageAdapter {
 }
 
 function createManifest(): DatabaseBlockManifest {
+    const root = {
+        key: "database/blocks/v2/root-deadbeef.bin",
+        hash: "deadbeef",
+        byteLength: 1,
+        updatedAt: 1,
+    };
     return {
         kind: "risu-database-block-manifest",
         version: 2,
         updatedAt: 1,
-        root: { language: "en" },
+        root,
         components: {},
         characters: {
             order: [],

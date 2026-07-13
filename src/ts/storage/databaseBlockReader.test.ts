@@ -128,4 +128,13 @@ describe("databaseBlockReader", () => {
         await expect(hydrateDatabaseBlockChat(loaded, storage, 0, 0))
             .rejects.toThrow("Missing database block");
     });
+
+    it("fails strictly when a required component reference is missing", async () => {
+        const storage = new MemoryBlockStorage();
+        const manifest = await createDatabaseBlockManifest(createDatabase(), storage);
+        delete manifest.components.plugins;
+
+        await expect(loadDatabaseBlockDatabase(manifest, storage))
+            .rejects.toThrow("Missing database component reference: plugins");
+    });
 });

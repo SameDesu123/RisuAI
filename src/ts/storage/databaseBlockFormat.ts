@@ -31,7 +31,7 @@ export type DatabaseBlockManifest = {
     kind: "risu-database-block-manifest";
     version: 2;
     updatedAt: number;
-    root: Record<string, unknown>;
+    root: DatabaseBlockRef;
     components: Record<string, DatabaseBlockRef>;
     characters: {
         order: string[];

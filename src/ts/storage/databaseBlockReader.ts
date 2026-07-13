@@ -80,13 +80,14 @@ export async function loadDatabaseBlockDatabase(
     manifest: DatabaseBlockManifest,
     storage: DatabaseBlockStorageAdapter,
 ): Promise<Database> {
-    const db = cloneJson(manifest.root) as unknown as Database;
+    const db = await readDatabaseBlock<Database>(storage, manifest.root);
 
     for (const [key, fallback] of Object.entries(componentDefaults)) {
         const ref = manifest.components[key];
-        (db as unknown as Record<string, unknown>)[key] = ref
-            ? await readDatabaseBlock(storage, ref)
-            : cloneJson(fallback);
+        if (!ref) {
+            throw new Error(`Missing database component reference: ${key}`);
+        }
+        (db as unknown as Record<string, unknown>)[key] = await readDatabaseBlock(storage, ref);
     }
 
     db.characters = [];

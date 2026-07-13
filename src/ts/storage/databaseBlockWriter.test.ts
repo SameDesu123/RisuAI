@@ -76,8 +76,9 @@ describe("databaseBlockWriter", () => {
         const db = createDatabase();
         const manifest = await createDatabaseBlockManifest(db, storage);
 
-        expect(manifest.root.characters).toBeUndefined();
-        expect(manifest.root.databaseBlockStorage).toBe(true);
+        const root = await readDatabaseBlock<any>(storage, manifest.root);
+        expect(root.characters).toBeUndefined();
+        expect(root.databaseBlockStorage).toBe(true);
         expect(Object.keys(manifest.components)).toHaveLength(5);
         expect(manifest.characters.order).toEqual(["char-1"]);
 
@@ -125,5 +126,17 @@ describe("databaseBlockWriter", () => {
 
         expect(second.characters.chatRefs["char-1"].refs["chat-1"].hash).not.toBe(firstChat.hash);
         expect((await readDatabaseBlock<any>(storage, firstChat)).message).toHaveLength(2);
+    });
+
+    it("rejects duplicate character and chat ids", async () => {
+        const duplicateCharacters = createDatabase();
+        duplicateCharacters.characters.push(structuredClone(duplicateCharacters.characters[0]));
+        await expect(createDatabaseBlockManifest(duplicateCharacters, new MemoryBlockStorage()))
+            .rejects.toThrow("Duplicate character id");
+
+        const duplicateChats = createDatabase();
+        duplicateChats.characters[0].chats.push(structuredClone(duplicateChats.characters[0].chats[0]));
+        await expect(createDatabaseBlockManifest(duplicateChats, new MemoryBlockStorage()))
+            .rejects.toThrow("Duplicate chat id");
     });
 });

@@ -19,6 +19,7 @@ const componentKeys = [
 type DatabaseBlockComponentKey = typeof componentKeys[number];
 
 export type DatabaseBlockSaveChangeSet = {
+    root?: boolean;
     character?: string[];
     chat?: [string, string][];
     botPreset?: boolean;
@@ -90,12 +91,10 @@ function chatMetadata(chat: Chat): DatabaseBlockChatMetadata {
 }
 
 function storedCharacter(char: character | groupChat): DatabaseBlockStoredCharacter {
-    const cloned = cloneJson(char);
-    const chats = cloned.chats.map(chatMetadata);
-    delete (cloned as Partial<character | groupChat>).chats;
+    const { chats, ...data } = char;
     return {
-        data: cloned as Omit<character | groupChat, "chats">,
-        chats,
+        data: cloneJson(data) as Omit<character | groupChat, "chats">,
+        chats: chats.map(chatMetadata),
     };
 }
 
@@ -132,11 +131,18 @@ export async function createDatabaseBlockManifest(
     previous?: DatabaseBlockManifest,
     changes?: DatabaseBlockSaveChangeSet,
 ) {
+    const root = previous?.root && changes && !changes.root
+        ? previous.root
+        : await writeDatabaseBlock(
+            storage,
+            `${databaseBlockNamespace}/root.bin`,
+            buildRoot(db),
+        );
     const next: DatabaseBlockManifest = {
         kind: "risu-database-block-manifest",
         version: 2,
         updatedAt: Date.now(),
-        root: buildRoot(db),
+        root,
         components: {},
         characters: {
             order: [],
@@ -147,6 +153,7 @@ export async function createDatabaseBlockManifest(
     const changedCharacters = new Set(changes?.character ?? []);
     const changedChats = new Set((changes?.chat ?? []).map(([characterId, chatId]) => `${characterId}:${chatId}`));
 
+    const characterIds = new Set<string>();
     for (const key of componentKeys) {
         await writeComponent(db, storage, previous, next, changes, key);
     }
@@ -154,15 +161,24 @@ export async function createDatabaseBlockManifest(
     for (let characterIndex = 0; characterIndex < db.characters.length; characterIndex++) {
         const char = db.characters[characterIndex];
         const characterId = char.chaId || `character-${characterIndex}`;
+        if (characterIds.has(characterId)) {
+            throw new Error(`Duplicate character id: ${characterId}`);
+        }
+        characterIds.add(characterId);
         const characterKey = keyPart(characterId);
         const previousChats = previous?.characters.chatRefs[characterId];
         const chatOrder: string[] = [];
         const chatRefs: Record<string, DatabaseBlockRef> = {};
         let chatChanged = false;
+        const chatIds = new Set<string>();
 
         for (let chatIndex = 0; chatIndex < char.chats.length; chatIndex++) {
             const chat = char.chats[chatIndex];
             const chatId = chat.id || `chat-${chatIndex}`;
+            if (chatIds.has(chatId)) {
+                throw new Error(`Duplicate chat id: ${characterId}/${chatId}`);
+            }
+            chatIds.add(chatId);
             const attached = getAttachedDatabaseBlockRef(chat);
             const existing = previousChats?.refs[chatId] ?? attached;
             const changed = changedChats.has(`${characterId}:${chatId}`);
