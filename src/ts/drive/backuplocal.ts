@@ -1,10 +1,10 @@
 import { BaseDirectory, readFile, readDir, writeFile } from "@tauri-apps/plugin-fs";
 import localforage from "localforage";
 import { alertError, alertNormal, alertStore, alertWait, alertMd, alertConfirm } from "../alert";
-import { LocalWriter, forageStorage, requiresFullEncoderReload } from "../globalApi.svelte";
+import { LocalWriter, forageStorage, getHydratedDatabaseSnapshot, requiresFullEncoderReload } from "../globalApi.svelte";
 import { isTauri } from "src/ts/platform"
 import { decodeRisuSave, encodeRisuSaveLegacy } from "../storage/risuSave";
-import { getDatabase, setDatabaseLite } from "../storage/database.svelte";
+import { setDatabaseLite } from "../storage/database.svelte";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { decryptBuffer, encryptBuffer, sleep } from "../util";
 import { hubURL } from "../characterCards";
@@ -43,7 +43,7 @@ export async function SaveLocalBackup(){
         return
     }
 
-    const db = getDatabase()
+    const db = await getHydratedDatabaseSnapshot({ databaseBlockStorage: false })
     const assetMap = new Map<string, { charName: string, assetName: string }>()
     if (db.characters) {
         for (const char of db.characters) {
@@ -162,7 +162,7 @@ export async function SaveLocalBackup(){
 
     if(!forageStorage.isAccount){
         //save coldstorages
-        const coldKeys = await listColdDataKeys()
+        const coldKeys = await listColdDataKeys(db)
         for(let i=0;i<coldKeys.length;i++){
             const key = coldKeys[i]
             let message = `Saving local Backup Cold data... (${i + 1} / ${coldKeys.length})`
@@ -242,7 +242,7 @@ export async function SavePartialLocalBackup(){
         return
     }
 
-    const db = getDatabase()
+    const db = await getHydratedDatabaseSnapshot({ databaseBlockStorage: false })
     const assetMap = new Map<string, { charName: string, assetName: string }>()
     
     // Only collect main profile images for both characters and groups
@@ -386,7 +386,7 @@ export async function SavePartialLocalBackup(){
 
     if(!forageStorage.isAccount){
         //save coldstorages
-        const coldKeys = await listColdDataKeys()
+        const coldKeys = await listColdDataKeys(db)
         for(let i=0;i<coldKeys.length;i++){
             const key = coldKeys[i]
             let message = `Saving partial local Backup Cold data... (${i + 1} / ${coldKeys.length})`

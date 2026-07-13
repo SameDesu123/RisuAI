@@ -2,7 +2,7 @@ import { writable } from "svelte/store"
 import { getDatabase } from "./database.svelte"
 import localforage from "localforage"
 import { alertLogin, alertNormalWait, alertStore } from "../alert"
-import { forageStorage, getUncleanables, getUncleanablesSync } from "../globalApi.svelte"
+import { forageStorage, getHydratedDatabaseSnapshot, getUncleanables, getUncleanablesSync } from "../globalApi.svelte"
 import { encodeRisuSaveLegacy } from "./risuSave"
 import { v4 } from "uuid"
 import { language } from "src/lang"
@@ -192,7 +192,7 @@ export class AccountStorage{
 
 export async function unMigrationAccount() {
     const keys = await forageStorage.keys()
-    let db = getDatabase()
+    let db = await getHydratedDatabaseSnapshot({ databaseBlockStorage: false })
     let i = 0;
     const MigrationStorage = localforage.createInstance({name: "risuai"})
     
