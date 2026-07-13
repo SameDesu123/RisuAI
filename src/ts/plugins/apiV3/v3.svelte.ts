@@ -8,7 +8,7 @@ import { v4 } from "uuid";
 import { sleep } from "src/ts/util";
 import { alertConfirm, alertError, alertNormal } from "src/ts/alert";
 import { language } from "src/lang";
-import { checkCharOrder, forageStorage, getFetchLogs, getHydratedDatabaseSnapshot, preLoadDatabaseBlockCharacter, preLoadDatabaseBlockChat, requestCharacterSave, requestChatSave } from "src/ts/globalApi.svelte";
+import { checkCharOrder, forageStorage, getFetchLogs, getHydratedDatabaseSnapshot, preLoadDatabaseBlockCharacter, preLoadDatabaseBlockChat, requestCharacterSave, requestChatSave, requiresFullEncoderReload } from "src/ts/globalApi.svelte";
 import { changeColorScheme, updateColorScheme, updateTextThemeAndCSS, type ColorScheme } from "src/ts/gui/colorscheme";
 import { isNodeServer, isTauri } from "src/ts/platform";
 import { get } from "svelte/store";
@@ -33,6 +33,10 @@ import {
     type AfterTTSResult,
     type TTSHookFn,
 } from "src/ts/process/ttsHooks";
+import {
+    readHydratedPluginCharacter,
+    replaceHydratedPluginCharacter,
+} from "../pluginDatabaseBlockCompatibility";
 
 /*
     V3 API for RisuAI Plugins
@@ -628,6 +632,29 @@ const authorizationHeaders = [
 const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
 
     const oldApis = getV2PluginAPIs();
+    const getCurrentPluginCharacter = async () => {
+        const index = get(selectedCharID)
+        return await readHydratedPluginCharacter(
+            DBState.db,
+            index,
+            preLoadDatabaseBlockCharacter,
+            (character) => $state.snapshot(character),
+        )
+    }
+    const setCurrentPluginCharacter = async (character: any) => {
+        const index = get(selectedCharID)
+        const replaced = await replaceHydratedPluginCharacter(
+            DBState.db,
+            index,
+            character,
+            preLoadDatabaseBlockCharacter,
+            requestCharacterSave,
+            requestChatSave,
+        )
+        if (replaced) {
+            requiresFullEncoderReload.state = true
+        }
+    }
     return {
 
         //Old APIs from v2.1
@@ -664,8 +691,8 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             }
             return oldApis.nativeFetch(url, options);
         },
-        getChar: oldApis.getChar,
-        setChar: oldApis.setChar,
+        getChar: getCurrentPluginCharacter,
+        setChar: setCurrentPluginCharacter,
         addProvider: (name: string, func: (arg: PluginV2ProviderArgument, abortSignal?: AbortSignal) => Promise<{ success: boolean, content: string }>, options?: PluginV3ProviderOptions) => {
             console.warn(`[WARN] addProvider is a powerful API that can potentially be unsafe if used incorrectly. addProvider's functionality might be limited or changed in future updates to ensure security. please use other APIs if possible.`);
             let provs = get(customProviderStore)
@@ -855,6 +882,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                 for(const chat of char?.chats ?? []){
                     requestChatSave(char?.chaId ?? previousCharacterId, chat?.id)
                 }
+                requiresFullEncoderReload.state = true
             }
         },
         getChatFromIndex: async (characterIndex:number, chatIndex:number) => {
@@ -887,6 +915,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                         requestCharacterSave(character?.chaId)
                     }
                     requestChatSave(character?.chaId, nextChatId)
+                    requiresFullEncoderReload.state = true
                 }
             }
         },
@@ -911,8 +940,8 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             return $state.snapshot(characterLore.concat(chatLore).concat(moduleLore))
         },
         //New names for character APIs, to match API naming conventions
-        getCharacter: oldApis.getChar,
-        setCharacter: oldApis.setChar,
+        getCharacter: getCurrentPluginCharacter,
+        setCharacter: setCurrentPluginCharacter,
 
         showContainer: (
             //more types may be added in future
