@@ -67,6 +67,7 @@ import {
 import { SaveDirtyTracker, type SaveDirtyFlag } from "./storage/saveDirtyTracker";
 import { cleanupDatabaseBlockGenerations } from "./storage/databaseBlockCleanup";
 import { saveDatabaseBlockSnapshot } from "./storage/databaseBlockSaveCycle";
+import { retainDatabaseBackupIds } from "./storage/databaseBackupRetention";
 
 export const forageStorage = new AutoStorage()
 const hydratedDatabaseBlockChats = new WeakSet<object>()
@@ -179,11 +180,12 @@ async function cleanRetainedDatabaseBlocks(
     backups: number[],
 ) {
     if (Date.now() - lastDatabaseBlockCleanup < 1000 * 60 * 60 * 24) {
-        return
+        return backups
     }
     try {
+        const refreshedBackups = await getDbBackups()
         const manifests = [current]
-        for (const backup of backups) {
+        for (const backup of refreshedBackups) {
             const backupData = isTauri
                 ? await readFile(`database/dbbackup-${backup}.bin`, { baseDir: BaseDirectory.AppData })
                 : await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
@@ -194,8 +196,10 @@ async function cleanRetainedDatabaseBlocks(
         }
         await cleanupDatabaseBlockGenerations(storage, manifests)
         lastDatabaseBlockCleanup = Date.now()
+        return refreshedBackups
     } catch (error) {
         console.error("Skipped database block cleanup because retained manifests could not be verified", error)
+        return backups
     }
 }
 
@@ -487,6 +491,24 @@ export async function saveDb() {
     let encoder: RisuSaveEncoder | null = null
     let blockManifest: DatabaseBlockManifest | null | undefined
     let blockModeActive = !!getDatabase().databaseBlockStorage && !forageStorage.isAccount
+    let retainedBackupIds: number[] | null = null
+    async function retainDatabaseBackup(backupId: number) {
+        if (retainedBackupIds === null) {
+            retainedBackupIds = await getDbBackups()
+            return retainedBackupIds
+        }
+        const next = retainDatabaseBackupIds(retainedBackupIds, backupId)
+        for (const removedId of next.removed) {
+            if (isTauri) {
+                await remove(`database/dbbackup-${removedId}.bin`, { baseDir: BaseDirectory.AppData })
+            }
+            else {
+                await forageStorage.removeItem(`database/dbbackup-${removedId}.bin`)
+            }
+        }
+        retainedBackupIds = next.retained
+        return retainedBackupIds
+    }
     if (blockModeActive) {
         try {
             blockManifest = await readDatabaseBlockManifest(getDatabaseBlockStorage())
@@ -736,9 +758,10 @@ export async function saveDb() {
                 blockManifest = result.manifest
                 blockModeActive = true
                 changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
-                await blockStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, result.encoded)
-                const backups = await getDbBackups()
-                await cleanRetainedDatabaseBlocks(blockStorage, result.manifest, backups)
+                const backupId = parseInt((Date.now() / 100).toFixed())
+                await blockStorage.setItem(`database/dbbackup-${backupId}.bin`, result.encoded)
+                const backups = await retainDatabaseBackup(backupId)
+                retainedBackupIds = await cleanRetainedDatabaseBlocks(blockStorage, result.manifest, backups)
                 encoder = null
                 savetrys = 0
                 await saveDbKei(() => getHydratedDatabaseSnapshot())
@@ -775,13 +798,15 @@ export async function saveDb() {
                 continue
             }
             const dbData = new Uint8Array(encoded)
+            let backupId: number | null = null
             if (isTauri) {
                 await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
                 blockModeActive = false
                 blockManifest = null
                 dirtyTracker.ack(saveSnapshot)
                 changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
-                await writeFile(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData, { baseDir: BaseDirectory.AppData });
+                backupId = parseInt((Date.now() / 100).toFixed())
+                await writeFile(`database/dbbackup-${backupId}.bin`, dbData, { baseDir: BaseDirectory.AppData });
             }
             else {
 
@@ -791,14 +816,15 @@ export async function saveDb() {
                 dirtyTracker.ack(saveSnapshot)
                 changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
                 if (!forageStorage.isAccount) {
-                    await forageStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData)
+                    backupId = parseInt((Date.now() / 100).toFixed())
+                    await forageStorage.setItem(`database/dbbackup-${backupId}.bin`, dbData)
                 }
                 if (forageStorage.isAccount) {
                     await sleep(3000)
                 }
             }
-            if (!forageStorage.isAccount) {
-                await getDbBackups()
+            if (backupId !== null) {
+                await retainDatabaseBackup(backupId)
             }
             savetrys = 0
             await saveDbKei()
@@ -827,8 +853,7 @@ export async function saveDb() {
  * @returns {Promise<number[]>} - A promise that resolves to an array of backup timestamps.
  */
 export async function getDbBackups() {
-    let db = getDatabase()
-    if (db?.account?.useSync && !isTauri && !isNodeServer) {
+    if (forageStorage.isAccount) {
         return []
     }
     if (isTauri) {
