@@ -8,7 +8,7 @@ import { v4 } from "uuid";
 import { sleep } from "src/ts/util";
 import { alertConfirm, alertError, alertNormal } from "src/ts/alert";
 import { language } from "src/lang";
-import { checkCharOrder, forageStorage, getFetchLogs, requestCharacterSave, requestChatSave } from "src/ts/globalApi.svelte";
+import { checkCharOrder, forageStorage, getFetchLogs, getHydratedDatabaseSnapshot, preLoadDatabaseBlockCharacter, preLoadDatabaseBlockChat, requestCharacterSave, requestChatSave } from "src/ts/globalApi.svelte";
 import { changeColorScheme, updateColorScheme, updateTextThemeAndCSS, type ColorScheme } from "src/ts/gui/colorscheme";
 import { isNodeServer, isTauri } from "src/ts/platform";
 import { get } from "svelte/store";
@@ -728,7 +728,10 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             if(!conf){
                 return null;
             }
-            const db = DBState.db
+            const includesCharacters = includeOnly === 'all' || includeOnly.includes('characters')
+            const db = includesCharacters
+                ? await getHydratedDatabaseSnapshot()
+                : DBState.db
             let liteDB = {}
             for(const key of allowedDbKeys){
                 if(includeOnly !== 'all' && !includeOnly.includes(key)){
@@ -826,21 +829,26 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                 }
             }
         },
-        getCharacterFromIndex: (index:number) => {
+        getCharacterFromIndex: async (index:number) => {
             const db = DBState.db
             const charIds = Object.keys(db.characters);
             const charId = charIds[index];
             if(charId){
-                return $state.snapshot(db.characters[charId]);
+                await preLoadDatabaseBlockCharacter(Number(charId))
+                return $state.snapshot(DBState.db.characters[charId]);
             }
             return null;
         },
-        setCharacterToIndex: (index:number, char:any) => {
+        setCharacterToIndex: async (index:number, char:any) => {
             const db = DBState.db
             const charIds = Object.keys(db.characters);
             const charId = charIds[index];
             if(charId){
+                await preLoadDatabaseBlockCharacter(Number(charId))
                 const previousCharacterId = DBState.db.characters[charId]?.chaId
+                for(const chat of char?.chats ?? []){
+                    delete chat.databaseBlockStorage
+                }
                 DBState.db.characters[charId] = char
                 requestCharacterSave(previousCharacterId)
                 requestCharacterSave(char?.chaId)
@@ -849,27 +857,30 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                 }
             }
         },
-        getChatFromIndex: (characterIndex:number, chatIndex:number) => {
+        getChatFromIndex: async (characterIndex:number, chatIndex:number) => {
             const db = DBState.db
             const charIds = Object.keys(db.characters);
             const charId = charIds[characterIndex];
             if(charId){
-                const chats = db.characters[charId].chats;
+                await preLoadDatabaseBlockChat(Number(charId), chatIndex)
+                const chats = DBState.db.characters[charId].chats;
                 if(chats && chats[chatIndex]){
                     return $state.snapshot(chats[chatIndex]);
                 }
             }
             return null;
         },
-        setChatToIndex: (characterIndex:number, chatIndex:number, chat:any) => {
+        setChatToIndex: async (characterIndex:number, chatIndex:number, chat:any) => {
             const db = DBState.db
             const charIds = Object.keys(db.characters);
             const charId = charIds[characterIndex];
             if(charId){
+                await preLoadDatabaseBlockChat(Number(charId), chatIndex)
                 const character = DBState.db.characters[charId];
                 const chats = db.characters[charId].chats;
                 if(chats && chats[chatIndex]){
                     const previousChatId = chats[chatIndex]?.id
+                    delete chat.databaseBlockStorage
                     DBState.db.characters[charId].chats[chatIndex] = chat
                     const nextChatId = chat?.id ?? previousChatId
                     if(chat?.id && chat.id !== previousChatId){

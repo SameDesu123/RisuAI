@@ -64,6 +64,7 @@ import {
 import { SaveDirtyTracker, type SaveDirtyFlag } from "./storage/saveDirtyTracker";
 
 export const forageStorage = new AutoStorage()
+const hydratedDatabaseBlockChats = new WeakSet<object>()
 
 export function getDatabaseBlockStorage(): DatabaseBlockStorageAdapter {
     return isTauri
@@ -72,7 +73,24 @@ export function getDatabaseBlockStorage(): DatabaseBlockStorageAdapter {
 }
 
 export async function preLoadDatabaseBlockChat(characterIndex: number, chatIndex: number) {
-    return await hydrateDatabaseBlockChat(DBState.db, getDatabaseBlockStorage(), characterIndex, chatIndex)
+    return await hydrateDatabaseBlockChat(
+        DBState.db,
+        getDatabaseBlockStorage(),
+        characterIndex,
+        chatIndex,
+        (chat) => hydratedDatabaseBlockChats.add(chat),
+    )
+}
+
+export async function preLoadDatabaseBlockCharacter(characterIndex: number) {
+    const character = DBState.db.characters?.[characterIndex]
+    if (!character) {
+        return null
+    }
+    for (let chatIndex = 0; chatIndex < character.chats.length; chatIndex++) {
+        await preLoadDatabaseBlockChat(characterIndex, chatIndex)
+    }
+    return DBState.db.characters[characterIndex]
 }
 
 export async function getHydratedDatabaseSnapshot(options: {
@@ -461,7 +479,9 @@ export async function saveDb() {
                         }
                         $state.snapshot(currentChat)
                         if (initialized) {
-                            requestChatSave(characterId, chatId)
+                            if (!hydratedDatabaseBlockChats.delete(currentChat)) {
+                                requestChatSave(characterId, chatId)
+                            }
                         }
                         else {
                             initialized = true
