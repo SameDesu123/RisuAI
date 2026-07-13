@@ -592,7 +592,7 @@ export async function saveDb() {
 
             if (db.databaseBlockStorage && !forageStorage.isAccount) {
                 const blockStorage = getDatabaseBlockStorage()
-                const previousManifest = blockModeActive ? blockManifest : null
+                const previousManifest = blockModeActive && !reloadConsumed ? blockManifest : null
                 const result = await saveDatabaseBlockDatabase(db, blockStorage, toSave, previousManifest)
                 blockManifest = result.manifest
                 blockModeActive = true
@@ -2274,6 +2274,7 @@ export async function loadInternalBackup() {
     setDatabase(
         await decodeDatabaseStorageBytes(Buffer.from(data) as unknown as Uint8Array)
     )
+    requiresFullEncoderReload.state = true
 
     alertNormal('Loaded backup')
 
