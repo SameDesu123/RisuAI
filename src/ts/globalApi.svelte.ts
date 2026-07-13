@@ -62,6 +62,7 @@ import {
     createAutoDatabaseBlockStorage,
     createTauriDatabaseBlockStorage,
     decodeStoredDatabaseBytes,
+    preserveLegacyDatabaseBackup,
     readDatabaseBlockManifest,
 } from "./storage/databaseBlockStorage";
 import { SaveDirtyTracker, type SaveDirtyFlag } from "./storage/saveDirtyTracker";
@@ -492,10 +493,20 @@ export async function saveDb() {
     let blockManifest: DatabaseBlockManifest | null | undefined
     let blockModeActive = !!getDatabase().databaseBlockStorage && !forageStorage.isAccount
     let retainedBackupIds: number[] | null = null
+    let lastGeneratedBackupId = 0
+    let legacyMigrationBackupChecked = false
+    async function nextDatabaseBackupId() {
+        retainedBackupIds ??= await getDbBackups({ prune: false })
+        lastGeneratedBackupId = Math.max(
+            parseInt((Date.now() / 100).toFixed()),
+            lastGeneratedBackupId + 1,
+            (retainedBackupIds[0] ?? 0) + 1,
+        )
+        return lastGeneratedBackupId
+    }
     async function retainDatabaseBackup(backupId: number) {
         if (retainedBackupIds === null) {
-            retainedBackupIds = await getDbBackups()
-            return retainedBackupIds
+            retainedBackupIds = await getDbBackups({ prune: false })
         }
         const next = retainDatabaseBackupIds(retainedBackupIds, backupId)
         for (const removedId of next.removed) {
@@ -747,6 +758,20 @@ export async function saveDb() {
 
             if (db.databaseBlockStorage && !forageStorage.isAccount) {
                 const blockStorage = getDatabaseBlockStorage()
+                if (!blockManifest && !legacyMigrationBackupChecked) {
+                    const migrationBackupId = await nextDatabaseBackupId()
+                    const preserved = await preserveLegacyDatabaseBackup(
+                        blockStorage,
+                        `database/dbbackup-${migrationBackupId}.bin`,
+                    )
+                    if (preserved) {
+                        retainedBackupIds = [...new Set([
+                            migrationBackupId,
+                            ...(retainedBackupIds ?? []),
+                        ])].sort((first, second) => second - first)
+                    }
+                    legacyMigrationBackupChecked = true
+                }
                 const previousManifest = blockModeActive && !reloadConsumed ? blockManifest : null
                 const result = await saveDatabaseBlockSnapshot(
                     db,
@@ -754,14 +779,23 @@ export async function saveDb() {
                     dirtyTracker,
                     saveSnapshot,
                     previousManifest,
+                    async (published) => {
+                        const backupId = await nextDatabaseBackupId()
+                        await blockStorage.setItem(
+                            `database/dbbackup-${backupId}.bin`,
+                            published.encoded,
+                        )
+                        const backups = await retainDatabaseBackup(backupId)
+                        retainedBackupIds = await cleanRetainedDatabaseBlocks(
+                            blockStorage,
+                            published.manifest,
+                            backups,
+                        )
+                    },
                 )
                 blockManifest = result.manifest
                 blockModeActive = true
                 changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
-                const backupId = parseInt((Date.now() / 100).toFixed())
-                await blockStorage.setItem(`database/dbbackup-${backupId}.bin`, result.encoded)
-                const backups = await retainDatabaseBackup(backupId)
-                retainedBackupIds = await cleanRetainedDatabaseBlocks(blockStorage, result.manifest, backups)
                 encoder = null
                 savetrys = 0
                 await saveDbKei(() => getHydratedDatabaseSnapshot())
@@ -805,7 +839,7 @@ export async function saveDb() {
                 blockManifest = null
                 dirtyTracker.ack(saveSnapshot)
                 changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
-                backupId = parseInt((Date.now() / 100).toFixed())
+                backupId = await nextDatabaseBackupId()
                 await writeFile(`database/dbbackup-${backupId}.bin`, dbData, { baseDir: BaseDirectory.AppData });
             }
             else {
@@ -816,7 +850,7 @@ export async function saveDb() {
                 dirtyTracker.ack(saveSnapshot)
                 changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
                 if (!forageStorage.isAccount) {
-                    backupId = parseInt((Date.now() / 100).toFixed())
+                    backupId = await nextDatabaseBackupId()
                     await forageStorage.setItem(`database/dbbackup-${backupId}.bin`, dbData)
                 }
                 if (forageStorage.isAccount) {
@@ -826,6 +860,7 @@ export async function saveDb() {
             if (backupId !== null) {
                 await retainDatabaseBackup(backupId)
             }
+            legacyMigrationBackupChecked = false
             savetrys = 0
             await saveDbKei()
             await sleep(500)
@@ -852,7 +887,7 @@ export async function saveDb() {
  * 
  * @returns {Promise<number[]>} - A promise that resolves to an array of backup timestamps.
  */
-export async function getDbBackups() {
+export async function getDbBackups(options: { prune?: boolean } = {}) {
     if (forageStorage.isAccount) {
         return []
     }
@@ -867,7 +902,7 @@ export async function getDbBackups() {
             }
         }
         backups.sort((a, b) => b - a)
-        while (backups.length > 20) {
+        while (options.prune !== false && backups.length > 20) {
             const last = backups.pop()
             await remove(`database/dbbackup-${last}.bin`, { baseDir: BaseDirectory.AppData })
         }
@@ -881,7 +916,7 @@ export async function getDbBackups() {
             .map(key => parseInt(key.slice(18, -4)))
             .sort((a, b) => b - a);
 
-        while (backups.length > 20) {
+        while (options.prune !== false && backups.length > 20) {
             const last = backups.pop()
             await forageStorage.removeItem(`database/dbbackup-${last}.bin`)
         }

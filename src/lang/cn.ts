@@ -143,7 +143,7 @@ export const languageChinese = {
         "comfyWorkflow": "输入 Comfy UI 的 API 工作流。您可以通过点击“工作流 > 导出 (API)”按钮在 Comfy UI 中获取您的 API 工作流。您还必须在工作流文本中放入 {{risu_prompt}}。{{risu_prompt}} 将被替换为 Risu 提供的提示词。",
         "automaticCachePoint": "如果缓存点不存在，则在聊天结束后自动创建缓存点。",
         "experimentalChatCompressionDesc": "压缩未使用的聊天数据并保存到单独的文件中。这大大减少了聊天数据的大小，并大大提高了性能，但它是实验性的，可能不稳定，导致备份功能等出现问题。",
-        "databaseBlockStorageDesc": "将数据库条目、角色和聊天存储为单独的本地文件，并在 database.bin 中仅保留一个小型清单。这样可避免本地保存时对整个数据库进行编码。此功能仍处于实验阶段，账号同步继续使用经典单文件格式。",
+        "databaseBlockStorageDesc": "将数据库条目、角色和聊天存储为单独的本地文件，并在 database.bin 中仅保留一个小型清单。这样可避免本地保存时对整个数据库进行编码。账号同步继续使用经典单文件格式。",
         "promptInfoInsideChatDesc": "启用后，这会将提示预设信息存储在聊天元数据中。存储的数据包括预设名称、活动切换和提示文本。这可能会略微增加处理时间和存储使用量。",
         "autoAdjustSchema": "启用后，将自动调整动态输出的 JSON 模式。",
         "dynamicMessages": "启用后，将允许助手连续发送多条消息，而不是一次发送一条。",

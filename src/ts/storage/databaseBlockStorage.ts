@@ -94,6 +94,19 @@ export async function readDatabaseBlockManifest(storage: DatabaseBlockStorageAda
     return decodeDatabaseBlockManifest(data!);
 }
 
+export async function preserveLegacyDatabaseBackup(
+    storage: DatabaseBlockStorageAdapter,
+    backupKey: string,
+) {
+    const data = await storage.getItem(databaseManifestKey);
+    if (!data || isDatabaseBlockManifest(data)) {
+        return false;
+    }
+    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+    await storage.setItem(backupKey, bytes);
+    return true;
+}
+
 export async function decodeStoredDatabaseBytes(
     data: Uint8Array,
     storage: DatabaseBlockStorageAdapter,

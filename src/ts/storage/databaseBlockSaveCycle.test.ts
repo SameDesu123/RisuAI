@@ -63,4 +63,26 @@ describe("saveDatabaseBlockSnapshot", () => {
 
         expect(tracker.snapshot().toSave.chat).toEqual([["char-1", "chat-1"]]);
     });
+
+    it("keeps dirty state when post-publication backup fails", async () => {
+        const storage = new MemoryBlockStorage();
+        const tracker = new SaveDirtyTracker();
+        tracker.markRoot();
+        const snapshot = tracker.snapshot();
+
+        await expect(saveDatabaseBlockSnapshot(
+            createDatabase(),
+            storage,
+            tracker,
+            snapshot,
+            null,
+            async () => {
+                throw new Error("backup publication failed");
+            },
+        )).rejects.toThrow("backup publication failed");
+        expect(tracker.hasChanges()).toBe(true);
+
+        await saveDatabaseBlockSnapshot(createDatabase(), storage, tracker, snapshot, null);
+        expect(tracker.hasChanges()).toBe(false);
+    });
 });

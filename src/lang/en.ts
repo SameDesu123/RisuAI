@@ -238,7 +238,7 @@ export const languageEnglish = {
         experimentalChatCompressionDesc:
             "Compresses the unused chat data and saves in seperate file. This greatly reduces the size of the chat data, and greatly improves the performance, however its experimental and can be unstable, causing issues in backup feature and more.",
         databaseBlockStorageDesc:
-            "Stores database sections, characters, and chats as separate local files while database.bin keeps only a small manifest. This avoids full-database encoding on local saves. It is experimental, and account sync continues to use the classic single-file format.",
+            "Stores database sections, characters, and chats as separate local files while database.bin keeps only a small manifest. This avoids full-database encoding on local saves. Account sync continues to use the classic single-file format.",
         promptInfoInsideChatDesc:
             "When enabled, this stores prompt preset information in the chat metadata. The stored data includes the preset name, active toggles, and the prompt text. This may slightly increase processing time and storage usage.",
         autoAdjustSchema: "When enabled, it will automatically adjust the JSON schema for Dynamic Output.",

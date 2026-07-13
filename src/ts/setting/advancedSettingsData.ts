@@ -149,6 +149,10 @@ export const advancedSettingsItems: SettingItem[] = [
     { id: 'adv.dynamicModelRegistry', type: 'check', labelKey: 'dynamicModelRegistry', bindKey: 'dynamicModelRegistry', classes: 'mt-4' },
     { id: 'adv.disableSeperateParameterChangeOnPresetChange', type: 'check', labelKey: 'disableSeperateParameterChangeOnPresetChange', bindKey: 'disableSeperateParameterChangeOnPresetChange', classes: 'mt-4' },
     { id: 'adv.coldstorage', type: 'check', labelKey: 'coldStorage', bindKey: 'coldstorage', classes: 'mt-4', helpKey: 'coldstorage' },
+    {
+        id: 'adv.databaseBlockStorage', type: 'check', labelKey: 'databaseBlockStorage', bindKey: 'databaseBlockStorage',
+        helpKey: 'databaseBlockStorageDesc', classes: 'mt-4'
+    },
 
     // Experimental Section (visible when useExperimental is true)
     {
@@ -158,10 +162,6 @@ export const advancedSettingsItems: SettingItem[] = [
     {
         id: 'adv.exp.cachePoint', type: 'check', labelKey: 'automaticCachePoint', bindKey: 'automaticCachePoint',
         condition: (ctx) => ctx.db.useExperimental, helpKey: 'automaticCachePoint', showExperimental: true, classes: 'mt-4'
-    },
-    {
-        id: 'adv.exp.databaseBlockStorage', type: 'check', labelKey: 'databaseBlockStorage', bindKey: 'databaseBlockStorage',
-        condition: (ctx) => ctx.db.useExperimental, helpKey: 'databaseBlockStorageDesc', showExperimental: true, classes: 'mt-4'
     },
     // Unrecommended Section
     {

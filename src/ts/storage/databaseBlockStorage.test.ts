@@ -20,6 +20,7 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 import {
     createTauriDatabaseBlockStorage,
     decodeStoredDatabaseBytes,
+    preserveLegacyDatabaseBackup,
     readDatabaseBlockManifest,
     saveDatabaseBlockDatabase,
 } from "./databaseBlockStorage";
@@ -86,6 +87,38 @@ describe("databaseBlockStorage", () => {
         expect(decodeLegacy).toHaveBeenCalledWith(legacy);
     });
 
+    it("preserves the legacy primary before the first block manifest publication", async () => {
+        const storage = new RecordingStorage();
+        const legacy = new Uint8Array([1, 2, 3]);
+        storage.values.set("database/database.bin", legacy);
+
+        await expect(preserveLegacyDatabaseBackup(
+            storage,
+            "database/dbbackup-1.bin",
+        )).resolves.toBe(true);
+        expect(storage.values.get("database/dbbackup-1.bin")).toBe(legacy);
+
+        await saveDatabaseBlockDatabase(createDatabase(), storage, undefined, null);
+        await expect(preserveLegacyDatabaseBackup(
+            storage,
+            "database/dbbackup-2.bin",
+        )).resolves.toBe(false);
+        expect(storage.values.has("database/dbbackup-2.bin")).toBe(false);
+    });
+
+    it("keeps the legacy primary and backup when migration publication fails", async () => {
+        const storage = new RecordingStorage();
+        const legacy = new Uint8Array([1, 2, 3]);
+        storage.values.set("database/database.bin", legacy);
+        await preserveLegacyDatabaseBackup(storage, "database/dbbackup-1.bin");
+        storage.failPrefix = "database/blocks/v2/root-";
+
+        await expect(saveDatabaseBlockDatabase(createDatabase(), storage, undefined, null))
+            .rejects.toThrow("storage write failed");
+        expect(storage.values.get("database/database.bin")).toBe(legacy);
+        expect(storage.values.get("database/dbbackup-1.bin")).toBe(legacy);
+    });
+
     it("loads published manifests without using the legacy decoder", async () => {
         const storage = new RecordingStorage();
         const published = await saveDatabaseBlockDatabase(createDatabase(), storage);
@@ -97,6 +130,36 @@ describe("databaseBlockStorage", () => {
 
         expect(loaded.databaseBlockStorage).toBe(true);
         expect(decodeLegacy).not.toHaveBeenCalled();
+    });
+
+    it("keeps database.bin small and leaves large chats lazy", async () => {
+        const storage = new RecordingStorage();
+        const db = createDatabase();
+        const largePayload = "payload".repeat(50_000);
+        db.loreBook = [{ key: "large", content: largePayload }] as any;
+        db.characters = [{
+            type: "character",
+            chaId: "large-character",
+            name: "Large Character",
+            chats: [{
+                id: "large-chat",
+                name: "Large Chat",
+                note: "",
+                localLore: [],
+                message: [{ role: "user", data: largePayload }],
+            }],
+        }] as any;
+
+        const published = await saveDatabaseBlockDatabase(db, storage);
+        const fullDatabaseSize = new TextEncoder().encode(JSON.stringify(db)).byteLength;
+        const loaded = await decodeStoredDatabaseBytes(
+            published.encoded,
+            storage,
+            vi.fn(async () => db),
+        );
+
+        expect(published.encoded.byteLength).toBeLessThan(fullDatabaseSize / 100);
+        expect(loaded.characters[0].chats[0].message).toEqual([]);
     });
 
     it("keeps the previous manifest when a payload write fails", async () => {

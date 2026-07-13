@@ -20,6 +20,7 @@ import {
     DEFAULT_CHAT_LOAD_INITIAL_PAGES,
     normalizeChatLoadPages,
 } from '../chatLoadPages';
+import { applyDatabaseBlockStorageDefault } from './databaseBlockActivation';
 
 //APP_VERSION_POINT is to locate the app version in the database file for version bumping
 export let appVer = "2026.6.214" //<APP_VERSION_POINT>
@@ -27,7 +28,7 @@ export let webAppSubVer = ''
 
 
 export function setDatabase(data:Database){
-    data.databaseBlockStorage ??= false
+    applyDatabaseBlockStorageDefault(data)
     if(checkNullish(data.characters)){
         data.characters = []
     }

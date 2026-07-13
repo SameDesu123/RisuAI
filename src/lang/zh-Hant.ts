@@ -144,7 +144,7 @@ export const languageChineseTraditional = {
         "comfyWorkflow": "請輸入 Comfy UI 的 API 工作流程。您可以在 Comfy UI 中點選「Workflow > Export (API)」按鈕以取得您的 API 工作流程。此外，您必須在工作流程文本中加入 {{risu_prompt}}，該佔位符將被 Risu 提供的提示詞替換。",
         "automaticCachePoint": "如果不存在快取點，對話結束後會自動建立快取點。",
         "experimentalChatCompressionDesc": "壓縮未使用的對話資料並儲存在單獨的檔案中。這將大幅減少對話資料的大小，並顯著提升效能，但這是實驗性功能，可能會不穩定，並導致備份功能等出現問題。",
-        "databaseBlockStorageDesc": "將資料庫項目、角色和對話儲存為獨立的本機檔案，database.bin 僅保留小型清單。這可避免本機儲存時編碼整個資料庫。此功能仍為實驗性，帳號同步會繼續使用傳統單檔格式。",
+        "databaseBlockStorageDesc": "將資料庫項目、角色和對話儲存為獨立的本機檔案，database.bin 僅保留小型清單。這可避免本機儲存時編碼整個資料庫。帳號同步會繼續使用傳統單檔格式。",
         "promptInfoInsideChatDesc": "啟用後，將在對話中繼資料中儲存預設資訊。儲存的資料包括預設名稱、啟用的切換和提示詞文字。這可能會略微增加處理時間和儲存空間的使用。",
         "autoAdjustSchema": "啟用後，將自動調整動態輸出的 JSON Schema。",
         "dynamicMessages": "啟用後，將允許助理連續發送多條訊息，而不是一次一條。",
