@@ -501,6 +501,7 @@ export async function saveDb() {
             compression: forageStorage.isAccount
         })
     }
+    const skipInitialDirtyTracking = blockModeActive && blockManifest != null
 
     $effect.root(() => {
 
@@ -588,27 +589,48 @@ export async function saveDb() {
             }
         })
 
+        let botPresetInitialized = false
         $effect(() => {
             DBState.db.botPresetsId
             $state.snapshot(DBState.db.botPresets)
-            trackFlagChange('botPreset')
+            if (botPresetInitialized || !skipInitialDirtyTracking) {
+                trackFlagChange('botPreset')
+            }
+            botPresetInitialized = true
         })
+        let modulesInitialized = false
         $effect(() => {
             $state.snapshot(DBState.db.modules)
-            trackFlagChange('modules')
+            if (modulesInitialized || !skipInitialDirtyTracking) {
+                trackFlagChange('modules')
+            }
+            modulesInitialized = true
         })
+        let loadoutsInitialized = false
         $effect(() => {
             $state.snapshot(DBState.db.loadouts)
-            trackFlagChange('loadouts')
+            if (loadoutsInitialized || !skipInitialDirtyTracking) {
+                trackFlagChange('loadouts')
+            }
+            loadoutsInitialized = true
         })
+        let pluginsInitialized = false
         $effect(() => {
             $state.snapshot(DBState.db.plugins)
-            trackFlagChange('plugins')
+            if (pluginsInitialized || !skipInitialDirtyTracking) {
+                trackFlagChange('plugins')
+            }
+            pluginsInitialized = true
         })
+        let pluginStorageInitialized = false
         $effect(() => {
             $state.snapshot(DBState.db.pluginCustomStorage)
-            trackFlagChange('pluginCustomStorage')
+            if (pluginStorageInitialized || !skipInitialDirtyTracking) {
+                trackFlagChange('pluginCustomStorage')
+            }
+            pluginStorageInitialized = true
         })
+        let rootInitialized = false
         $effect(() => {
             for (const key in DBState.db) {
                 if (
@@ -618,9 +640,13 @@ export async function saveDb() {
                     $state.snapshot(DBState.db[key])
                 }
             }
-            dirtyTracker.markRoot()
-            saveTimeoutExecute()
+            if (rootInitialized || !skipInitialDirtyTracking) {
+                dirtyTracker.markRoot()
+                saveTimeoutExecute()
+            }
+            rootInitialized = true
         })
+        let watchedCharacterId: string | undefined
         $effect(() => {
             if (DBState?.db?.characters?.[selIdState]) {
                 const character = DBState.db.characters[selIdState]
@@ -630,13 +656,16 @@ export async function saveDb() {
                     }
                 }
                 character.chats?.map((chat) => chat?.id)
-                requestCharacterSave(character.chaId)
+                if (watchedCharacterId === character.chaId || !skipInitialDirtyTracking) {
+                    requestCharacterSave(character.chaId)
+                }
+                watchedCharacterId = character.chaId
                 syncChatWatchers(character)
             }
             else {
+                watchedCharacterId = undefined
                 cleanupChatWatchers()
             }
-            saveTimeoutExecute()
         })
         return () => {
             unsubscribeSelectedChar()
