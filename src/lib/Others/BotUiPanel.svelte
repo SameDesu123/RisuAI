@@ -121,6 +121,10 @@
         if(lastContext && context !== lastContext){
             closePanel()
             if(lastEngineContext) retireLuaEngines(lastEngineContext)
+
+            lastContext = context
+            lastEngineContext = engineContext
+            return
         }
         lastContext = context
         lastEngineContext = engineContext
