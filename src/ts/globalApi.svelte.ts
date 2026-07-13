@@ -14,7 +14,7 @@ import { appDataDir, join } from "@tauri-apps/api/path";
 import { get } from "svelte/store";
 import { open } from '@tauri-apps/plugin-shell'
 import streamSaver from 'streamsaver';
-import { setDatabase, setDatabaseLite, type Database, defaultSdDataFunc, getDatabase, appVer, getCurrentCharacter, type character, type groupChat } from "./storage/database.svelte";
+import { setDatabase, setDatabaseLite, type Chat, type Database, defaultSdDataFunc, getDatabase, appVer, getCurrentCharacter, type character, type groupChat } from "./storage/database.svelte";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { checkRisuUpdate } from "./update";
 import { MobileGUI, botMakerMode, selectedCharID, loadedStore, DBState, LoadingStatusState, selIdState, ReloadGUIPointer, bodyIntercepterStore } from "./stores.svelte";
@@ -46,12 +46,16 @@ import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
 import {
+    decodeDatabaseBlockManifest,
+    isDatabaseBlockManifest,
     type DatabaseBlockManifest,
     type DatabaseBlockStorageAdapter,
 } from "./storage/databaseBlockFormat";
 import {
+    commitDatabaseBlockChat,
     hasDatabaseBlockChatStubs,
     hydrateDatabaseBlockChat,
+    hydrateDatabaseBlockChatFromRef,
     hydrateDatabaseBlockDatabase,
 } from "./storage/databaseBlockReader";
 import {
@@ -73,13 +77,70 @@ export function getDatabaseBlockStorage(): DatabaseBlockStorageAdapter {
 }
 
 export async function preLoadDatabaseBlockChat(characterIndex: number, chatIndex: number) {
-    return await hydrateDatabaseBlockChat(
-        DBState.db,
-        getDatabaseBlockStorage(),
-        characterIndex,
-        chatIndex,
-        (chat) => hydratedDatabaseBlockChats.add(chat),
-    )
+    const storage = getDatabaseBlockStorage()
+    const beforeCommit = (chat: Chat) => hydratedDatabaseBlockChats.add(chat)
+    try {
+        return await hydrateDatabaseBlockChat(
+            DBState.db,
+            storage,
+            characterIndex,
+            chatIndex,
+            beforeCommit,
+        )
+    } catch (primaryError) {
+        const characterId = DBState.db.characters?.[characterIndex]?.chaId
+        const chatId = DBState.db.characters?.[characterIndex]?.chats?.[chatIndex]?.id
+        if (!characterId || !chatId) {
+            throw primaryError
+        }
+        for (const backup of await getDbBackups()) {
+            try {
+                const backupData = isTauri
+                    ? await readFile(`database/dbbackup-${backup}.bin`, { baseDir: BaseDirectory.AppData })
+                    : await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
+                const bytes = new Uint8Array(backupData)
+                if (isDatabaseBlockManifest(bytes)) {
+                    const manifest = decodeDatabaseBlockManifest(bytes)
+                    const ref = manifest.characters.chatRefs[characterId]?.refs[chatId]
+                    if (!ref) {
+                        continue
+                    }
+                    const recovered = await hydrateDatabaseBlockChatFromRef(
+                        DBState.db,
+                        storage,
+                        characterIndex,
+                        chatIndex,
+                        ref,
+                        beforeCommit,
+                    )
+                    if (recovered) {
+                        requiresFullEncoderReload.state = true
+                        console.warn(`Recovered chat ${characterId}/${chatId} from database backup ${backup}`)
+                        return recovered
+                    }
+                    continue
+                }
+                const legacy = await decodeRisuSave(bytes)
+                const recoveredCharacter = legacy.characters?.find((char) => char.chaId === characterId)
+                const recoveredChat = recoveredCharacter?.chats?.find((chat) => chat.id === chatId)
+                if (recoveredChat) {
+                    const recovered = commitDatabaseBlockChat(
+                        DBState.db,
+                        characterIndex,
+                        chatIndex,
+                        recoveredChat,
+                        beforeCommit,
+                    )
+                    requiresFullEncoderReload.state = true
+                    console.warn(`Recovered chat ${characterId}/${chatId} from legacy database backup ${backup}`)
+                    return recovered
+                }
+            } catch (backupError) {
+                console.error(`Failed to recover chat from database backup ${backup}`, backupError)
+            }
+        }
+        throw primaryError
+    }
 }
 
 export async function preLoadDatabaseBlockCharacter(characterIndex: number) {

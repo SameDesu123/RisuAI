@@ -3,6 +3,7 @@ import type { Database } from "./database.svelte";
 import type { DatabaseBlockStorageAdapter } from "./databaseBlockFormat";
 import {
     hydrateDatabaseBlockChat,
+    hydrateDatabaseBlockChatFromRef,
     hydrateDatabaseBlockDatabase,
     isDatabaseBlockChatStub,
     loadDatabaseBlockDatabase,
@@ -127,6 +128,26 @@ describe("databaseBlockReader", () => {
         storage.values.delete(chatRef.key);
         await expect(hydrateDatabaseBlockChat(loaded, storage, 0, 0))
             .rejects.toThrow("Missing database block");
+    });
+
+    it("hydrates a damaged chat from an older manifest reference", async () => {
+        const storage = new MemoryBlockStorage();
+        const db = createDatabase();
+        const first = await createDatabaseBlockManifest(db, storage);
+        const fallbackRef = first.characters.chatRefs["char-1"].refs["chat-1"];
+
+        db.characters[0].chats[0].message[0].data = "new generation";
+        const second = await createDatabaseBlockManifest(db, storage, first, {
+            chat: [["char-1", "chat-1"]],
+        });
+        const loaded = await loadDatabaseBlockDatabase(second, storage);
+        const damagedRef = second.characters.chatRefs["char-1"].refs["chat-1"];
+        storage.values.delete(damagedRef.key);
+
+        await expect(hydrateDatabaseBlockChat(loaded, storage, 0, 0))
+            .rejects.toThrow("Missing database block");
+        await hydrateDatabaseBlockChatFromRef(loaded, storage, 0, 0, fallbackRef);
+        expect(loaded.characters[0].chats[0].message[0].data).toBe("hello");
     });
 
     it("fails strictly when a required component reference is missing", async () => {

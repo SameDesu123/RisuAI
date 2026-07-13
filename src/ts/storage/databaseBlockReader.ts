@@ -130,11 +130,43 @@ export async function hydrateDatabaseBlockChat(
     if (!chat || !ref) {
         return chat;
     }
-    const hydrated = await readDatabaseBlock<Chat>(storage, ref);
-    const merged = mergeChatMetadata(hydrated, chat);
+    return await hydrateDatabaseBlockChatFromRef(
+        db,
+        storage,
+        characterIndex,
+        chatIndex,
+        ref,
+        beforeCommit,
+    );
+}
+
+export function commitDatabaseBlockChat(
+    db: Database,
+    characterIndex: number,
+    chatIndex: number,
+    hydrated: Chat,
+    beforeCommit?: (chat: Chat) => void,
+) {
+    const current = db.characters?.[characterIndex]?.chats?.[chatIndex];
+    if (!current) {
+        return null;
+    }
+    const merged = mergeChatMetadata(hydrated, current);
     beforeCommit?.(merged);
     db.characters[characterIndex].chats[chatIndex] = merged;
     return merged;
+}
+
+export async function hydrateDatabaseBlockChatFromRef(
+    db: Database,
+    storage: DatabaseBlockStorageAdapter,
+    characterIndex: number,
+    chatIndex: number,
+    ref: DatabaseBlockRef,
+    beforeCommit?: (chat: Chat) => void,
+) {
+    const hydrated = await readDatabaseBlock<Chat>(storage, ref);
+    return commitDatabaseBlockChat(db, characterIndex, chatIndex, hydrated, beforeCommit);
 }
 
 export async function hydrateDatabaseBlockDatabase(
