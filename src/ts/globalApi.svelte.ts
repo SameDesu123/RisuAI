@@ -63,10 +63,10 @@ import {
     createTauriDatabaseBlockStorage,
     decodeStoredDatabaseBytes,
     readDatabaseBlockManifest,
-    saveDatabaseBlockDatabase,
 } from "./storage/databaseBlockStorage";
 import { SaveDirtyTracker, type SaveDirtyFlag } from "./storage/saveDirtyTracker";
 import { cleanupDatabaseBlockGenerations } from "./storage/databaseBlockCleanup";
+import { saveDatabaseBlockSnapshot } from "./storage/databaseBlockSaveCycle";
 
 export const forageStorage = new AutoStorage()
 const hydratedDatabaseBlockChats = new WeakSet<object>()
@@ -697,10 +697,15 @@ export async function saveDb() {
             if (db.databaseBlockStorage && !forageStorage.isAccount) {
                 const blockStorage = getDatabaseBlockStorage()
                 const previousManifest = blockModeActive && !reloadConsumed ? blockManifest : null
-                const result = await saveDatabaseBlockDatabase(db, blockStorage, toSave, previousManifest)
+                const result = await saveDatabaseBlockSnapshot(
+                    db,
+                    blockStorage,
+                    dirtyTracker,
+                    saveSnapshot,
+                    previousManifest,
+                )
                 blockManifest = result.manifest
                 blockModeActive = true
-                dirtyTracker.ack(saveSnapshot)
                 changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
                 await blockStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, result.encoded)
                 const backups = await getDbBackups()
