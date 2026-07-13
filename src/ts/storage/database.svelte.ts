@@ -791,6 +791,7 @@ export interface RisuPersona {
 
 export interface Database{
     characters: (character|groupChat)[],
+    databaseBlockStorage?: boolean
     apiType: string
     openAIKey: string
     proxyKey:string
