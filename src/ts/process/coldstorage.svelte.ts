@@ -450,6 +450,9 @@ export async function makeColdData(){
     if(!DBState.db.coldstorage){
         return
     }
+    if(DBState.db.databaseBlockStorage){
+        return
+    }
 
     const currentTime = Date.now()
     const coldTime = currentTime - 1000 * 60 * 60 * 24 * 10 //10 days before now

@@ -27,6 +27,7 @@ export let webAppSubVer = ''
 
 
 export function setDatabase(data:Database){
+    data.databaseBlockStorage ??= false
     if(checkNullish(data.characters)){
         data.characters = []
     }

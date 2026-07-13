@@ -1,6 +1,7 @@
 import type { Chat, Database, character, groupChat } from "./database.svelte";
 import {
     databaseBlockNamespace,
+    getAttachedDatabaseBlockRef,
     writeDatabaseBlock,
     type DatabaseBlockManifest,
     type DatabaseBlockRef,
@@ -162,8 +163,10 @@ export async function createDatabaseBlockManifest(
         for (let chatIndex = 0; chatIndex < char.chats.length; chatIndex++) {
             const chat = char.chats[chatIndex];
             const chatId = chat.id || `chat-${chatIndex}`;
-            const existing = previousChats?.refs[chatId];
-            if (!existing || changedChats.has(`${characterId}:${chatId}`)) {
+            const attached = getAttachedDatabaseBlockRef(chat);
+            const existing = previousChats?.refs[chatId] ?? attached;
+            const changed = changedChats.has(`${characterId}:${chatId}`);
+            if (!existing || (changed && !attached)) {
                 chatRefs[chatId] = await writeDatabaseBlock(
                     storage,
                     `${databaseBlockNamespace}/characters/${characterKey}/chats/${keyPart(chatId)}.bin`,
@@ -173,6 +176,9 @@ export async function createDatabaseBlockManifest(
             }
             else {
                 chatRefs[chatId] = existing;
+            }
+            if (changed) {
+                chatChanged = true;
             }
             chatOrder.push(chatId);
         }

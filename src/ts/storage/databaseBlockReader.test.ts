@@ -95,6 +95,24 @@ describe("databaseBlockReader", () => {
         expect(hydrated.characters[0].chats[0].message[0].data).toBe("hello");
     });
 
+    it("rebuilds a manifest from lazy stubs without replacing chat payloads", async () => {
+        const storage = new MemoryBlockStorage();
+        const first = await createDatabaseBlockManifest(createDatabase(), storage);
+        const loaded = await loadDatabaseBlockDatabase(first, storage);
+        loaded.characters[0].chats[0].note = "renamed";
+
+        const recovered = await createDatabaseBlockManifest(loaded, storage, undefined, {
+            chat: [["char-1", "chat-1"]],
+        });
+        const reloaded = await loadDatabaseBlockDatabase(recovered, storage);
+        await hydrateDatabaseBlockChat(reloaded, storage, 0, 0);
+
+        expect(recovered.characters.chatRefs["char-1"].refs["chat-1"].hash)
+            .toBe(first.characters.chatRefs["char-1"].refs["chat-1"].hash);
+        expect(reloaded.characters[0].chats[0].note).toBe("renamed");
+        expect(reloaded.characters[0].chats[0].message[0].data).toBe("hello");
+    });
+
     it("fails strictly when a referenced payload is missing", async () => {
         const storage = new MemoryBlockStorage();
         const manifest = await createDatabaseBlockManifest(createDatabase(), storage);

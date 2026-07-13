@@ -19,7 +19,7 @@
     import { stopTTS } from "src/ts/process/tts";
     import MainMenu from '../UI/MainMenu.svelte';
     import AssetInput from './AssetInput.svelte';
-    import { aiLawApplies, chatFoldedState, chatFoldedStateMessageIndex, downloadFile } from 'src/ts/globalApi.svelte';
+    import { aiLawApplies, chatFoldedState, chatFoldedStateMessageIndex, downloadFile, preLoadDatabaseBlockChat } from 'src/ts/globalApi.svelte';
     import { runTrigger } from 'src/ts/process/triggers';
     import { v4 } from 'uuid';
     import { PreUnreroll, Prereroll } from 'src/ts/process/prereroll';
@@ -32,6 +32,7 @@
     import Button from '../UI/GUI/Button.svelte';
     import PluginDefinedIcon from '../Others/PluginDefinedIcon.svelte';
     import { getAdditionalChatLoadPages, getInitialChatLoadPages } from 'src/ts/chatLoadPages';
+    import { isDatabaseBlockChatStub } from 'src/ts/storage/databaseBlockReader';
 
     const loadPlaygroundMenu = () => import('../Playground/PlaygroundMenu.svelte').then(m => m.default);
     
@@ -61,6 +62,30 @@
 
     function scrollToBottom() {
         chatsInstance?.scrollToLatestMessage();
+    }
+
+    function getCurrentChatData() {
+        const char = DBState.db.characters[$selectedCharID]
+        return char?.chats?.[char.chatPage]
+    }
+
+    function currentChatNeedsPreload() {
+        const chat = getCurrentChatData()
+        return isDatabaseBlockChatStub(chat) || chat?.message?.[0]?.data?.startsWith(coldStorageHeader)
+    }
+
+    async function preLoadCurrentChat() {
+        const char = DBState.db.characters[$selectedCharID]
+        const chatIndex = char?.chatPage
+        if (!char || chatIndex === undefined) {
+            return
+        }
+        if (isDatabaseBlockChatStub(char.chats[chatIndex])) {
+            await preLoadDatabaseBlockChat($selectedCharID, chatIndex)
+        }
+        if (char.chats[chatIndex]?.message?.[0]?.data?.startsWith(coldStorageHeader)) {
+            await preLoadChat($selectedCharID, chatIndex)
+        }
     }
     $effect(() => {
         if(ScrollToMessageStore.value !== -1){
@@ -149,6 +174,10 @@
         if(lastCharId !== $selectedCharID){
             rerolls = []
             rerollid = -1
+        }
+
+        if(isDatabaseBlockChatStub(DBState.db.characters[selectedChar].chats[DBState.db.characters[selectedChar].chatPage])){
+            await preLoadDatabaseBlockChat(selectedChar, DBState.db.characters[selectedChar].chatPage)
         }
 
         let cha = DBState.db.characters[selectedChar].chats[DBState.db.characters[selectedChar].chatPage].message
@@ -795,8 +824,8 @@
                 </div>
             {/if}
 
-            {#if DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message?.[0]?.data?.startsWith(coldStorageHeader)  }
-                {#await preLoadChat($selectedCharID, DBState.db.characters[$selectedCharID].chatPage)}
+            {#if currentChatNeedsPreload() }
+                {#await preLoadCurrentChat()}
                     <div class="w-full flex justify-center text-textcolor2 italic mb-12">
                         {language.loadingChatData}
                     </div>

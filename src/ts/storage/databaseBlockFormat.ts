@@ -22,6 +22,10 @@ export type DatabaseBlockRef = {
     updatedAt: number;
 };
 
+type DatabaseBlockBackedValue = {
+    databaseBlockStorage?: DatabaseBlockRef;
+};
+
 export type DatabaseBlockManifest = {
     kind: "risu-database-block-manifest";
     version: 2;
@@ -94,6 +98,14 @@ async function sha256Hex(data: Uint8Array) {
 export function isDatabaseBlockManifest(data: Uint8Array | ArrayBuffer | null | undefined) {
     const bytes = toUint8Array(data);
     return !!bytes && startsWith(bytes, manifestHeader);
+}
+
+export function getAttachedDatabaseBlockRef(value: unknown) {
+    const ref = (value as DatabaseBlockBackedValue | null)?.databaseBlockStorage;
+    if (!ref || typeof ref.key !== "string" || typeof ref.hash !== "string") {
+        return null;
+    }
+    return ref;
 }
 
 export function encodeDatabaseBlockManifest(manifest: DatabaseBlockManifest) {

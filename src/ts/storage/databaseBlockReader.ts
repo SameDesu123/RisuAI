@@ -1,5 +1,6 @@
 import type { Chat, Database, character, groupChat } from "./database.svelte";
 import {
+    getAttachedDatabaseBlockRef,
     readDatabaseBlock,
     type DatabaseBlockManifest,
     type DatabaseBlockRef,
@@ -24,7 +25,7 @@ function cloneJson<T>(data: T): T {
 }
 
 function chatBlockRef(chat: Chat | undefined) {
-    return (chat as DatabaseBlockChatStub | undefined)?.databaseBlockStorage;
+    return getAttachedDatabaseBlockRef(chat);
 }
 
 function createChatStub(
@@ -69,6 +70,10 @@ function mergeChatMetadata(hydrated: Chat, stub: Chat): Chat {
 
 export function isDatabaseBlockChatStub(chat: Chat | undefined) {
     return !!chatBlockRef(chat);
+}
+
+export function hasDatabaseBlockChatStubs(db: Database | undefined) {
+    return !!db?.characters?.some((char) => char.chats?.some(isDatabaseBlockChatStub));
 }
 
 export async function loadDatabaseBlockDatabase(

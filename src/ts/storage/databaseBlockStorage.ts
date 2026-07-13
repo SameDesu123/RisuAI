@@ -53,9 +53,11 @@ export async function saveDatabaseBlockDatabase(
     db: Database,
     storage: DatabaseBlockStorageAdapter,
     changes?: DatabaseBlockSaveChangeSet,
-    previous?: DatabaseBlockManifest,
+    previous?: DatabaseBlockManifest | null,
 ) {
-    const current = previous ?? await readDatabaseBlockManifest(storage) ?? undefined;
+    const current = previous === undefined
+        ? await readDatabaseBlockManifest(storage) ?? undefined
+        : previous ?? undefined;
     const manifest = await createDatabaseBlockManifest(db, storage, current, changes);
     const encoded = encodeDatabaseBlockManifest(manifest);
 

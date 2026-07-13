@@ -24,8 +24,12 @@ class RecordingStorage implements DatabaseBlockStorageAdapter {
     values = new Map<string, Uint8Array>();
     writes: string[] = [];
     failPrefix = "";
+    failReadKey = "";
 
     async getItem(key: string) {
+        if (key === this.failReadKey) {
+            throw new Error("storage read failed");
+        }
         return this.values.get(key) ?? null;
     }
 
@@ -78,6 +82,14 @@ describe("databaseBlockStorage", () => {
 
         expect(storage.writes).not.toContain("database/database.bin");
         expect(storage.values.get("database/database.bin")).toBe(published);
+    });
+
+    it("can republish a recovered generation without reading a broken primary manifest", async () => {
+        const storage = new RecordingStorage();
+        storage.failReadKey = "database/database.bin";
+
+        await expect(saveDatabaseBlockDatabase(createDatabase(), storage, undefined, null)).resolves.toBeTruthy();
+        expect(storage.writes.at(-1)).toBe("database/database.bin");
     });
 
     it("creates Tauri directories and uses AppData file operations", async () => {

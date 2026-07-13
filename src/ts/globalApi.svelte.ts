@@ -14,7 +14,7 @@ import { appDataDir, join } from "@tauri-apps/api/path";
 import { get } from "svelte/store";
 import { open } from '@tauri-apps/plugin-shell'
 import streamSaver from 'streamsaver';
-import { setDatabase, type Database, defaultSdDataFunc, getDatabase, appVer, getCurrentCharacter, type character, type groupChat } from "./storage/database.svelte";
+import { setDatabase, setDatabaseLite, type Database, defaultSdDataFunc, getDatabase, appVer, getCurrentCharacter, type character, type groupChat } from "./storage/database.svelte";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { checkRisuUpdate } from "./update";
 import { MobileGUI, botMakerMode, selectedCharID, loadedStore, DBState, LoadingStatusState, selIdState, ReloadGUIPointer, bodyIntercepterStore } from "./stores.svelte";
@@ -45,8 +45,59 @@ import { isTauri, isNodeServer } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
+import {
+    decodeDatabaseBlockManifest,
+    isDatabaseBlockManifest,
+    type DatabaseBlockManifest,
+    type DatabaseBlockStorageAdapter,
+} from "./storage/databaseBlockFormat";
+import {
+    hasDatabaseBlockChatStubs,
+    hydrateDatabaseBlockChat,
+    hydrateDatabaseBlockDatabase,
+    loadDatabaseBlockDatabase,
+} from "./storage/databaseBlockReader";
+import {
+    createAutoDatabaseBlockStorage,
+    createTauriDatabaseBlockStorage,
+    readDatabaseBlockManifest,
+    saveDatabaseBlockDatabase,
+} from "./storage/databaseBlockStorage";
 
 export const forageStorage = new AutoStorage()
+
+export function getDatabaseBlockStorage(): DatabaseBlockStorageAdapter {
+    return isTauri
+        ? createTauriDatabaseBlockStorage()
+        : createAutoDatabaseBlockStorage(forageStorage)
+}
+
+export async function preLoadDatabaseBlockChat(characterIndex: number, chatIndex: number) {
+    return await hydrateDatabaseBlockChat(DBState.db, getDatabaseBlockStorage(), characterIndex, chatIndex)
+}
+
+export async function getHydratedDatabaseSnapshot(options: {
+    databaseBlockStorage?: boolean
+} = {}) {
+    let db = getDatabase({ snapshot: true })
+    if (hasDatabaseBlockChatStubs(db)) {
+        db = await hydrateDatabaseBlockDatabase(db, getDatabaseBlockStorage())
+    }
+    if (options.databaseBlockStorage !== undefined) {
+        db.databaseBlockStorage = options.databaseBlockStorage
+    }
+    return db
+}
+
+export async function decodeDatabaseStorageBytes(data: Uint8Array) {
+    if (isDatabaseBlockManifest(data)) {
+        return await loadDatabaseBlockDatabase(
+            decodeDatabaseBlockManifest(data),
+            getDatabaseBlockStorage(),
+        )
+    }
+    return await decodeRisuSave(data)
+}
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
 
@@ -322,10 +373,22 @@ export async function saveDb() {
         pluginCustomStorage: false
     }
 
-    let encoder = new RisuSaveEncoder()
-    await encoder.init(getDatabase(), {
-        compression: forageStorage.isAccount
-    })
+    let encoder: RisuSaveEncoder | null = null
+    let blockManifest: DatabaseBlockManifest | null | undefined
+    if (getDatabase().databaseBlockStorage && !forageStorage.isAccount) {
+        try {
+            blockManifest = await readDatabaseBlockManifest(getDatabaseBlockStorage())
+        } catch (error) {
+            console.error("Failed to read the current database block manifest", error)
+            blockManifest = null
+        }
+    }
+    else {
+        encoder = new RisuSaveEncoder()
+        await encoder.init(getDatabase(), {
+            compression: forageStorage.isAccount
+        })
+    }
 
     $effect.root(() => {
 
@@ -416,20 +479,14 @@ export async function saveDb() {
         changed = false
         try {
 
-            if (requiresFullEncoderReload.state) {
-                encoder = new RisuSaveEncoder()
-                await encoder.init(getDatabase(), {
-                    compression: forageStorage.isAccount,
-                    skipRemoteSavingOnCharacters: false
-                })
-                requiresFullEncoderReload.state = false
-            }
-
             let toSave = safeStructuredClone(changeTracker)
             changeTracker.character = changeTracker.character.length === 0 ? [] : [changeTracker.character[0]]
             changeTracker.chat = changeTracker.chat.length === 0 ? [] : [changeTracker.chat[0]]
             changeTracker.botPreset = false
             changeTracker.modules = false
+            changeTracker.loadouts = false
+            changeTracker.plugins = false
+            changeTracker.pluginCustomStorage = false
             if (gotChannel) {
                 //Data is saved in other tab
                 await sleep(1000)
@@ -442,6 +499,37 @@ export async function saveDb() {
             if (!db.characters) {
                 await sleep(1000)
                 continue
+            }
+
+            if (db.databaseBlockStorage && !forageStorage.isAccount) {
+                const blockStorage = getDatabaseBlockStorage()
+                const result = await saveDatabaseBlockDatabase(db, blockStorage, toSave, blockManifest)
+                blockManifest = result.manifest
+                await blockStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, result.encoded)
+                await getDbBackups()
+                requiresFullEncoderReload.state = false
+                encoder = null
+                savetrys = 0
+                await saveDbKei(() => getHydratedDatabaseSnapshot())
+                await sleep(500)
+                saving.state = false
+                continue
+            }
+
+            if (hasDatabaseBlockChatStubs(db)) {
+                db = await hydrateDatabaseBlockDatabase(db, getDatabaseBlockStorage())
+                db.databaseBlockStorage = false
+                setDatabaseLite(db)
+                requiresFullEncoderReload.state = true
+            }
+
+            if (requiresFullEncoderReload.state || !encoder) {
+                encoder = new RisuSaveEncoder()
+                await encoder.init(db, {
+                    compression: forageStorage.isAccount,
+                    skipRemoteSavingOnCharacters: false
+                })
+                requiresFullEncoderReload.state = false
             }
 
             await encoder.set(db, toSave)
@@ -2075,7 +2163,7 @@ export async function loadInternalBackup() {
     ) : (await forageStorage.getItem(selectedBackup))
 
     setDatabase(
-        await decodeRisuSave(Buffer.from(data) as unknown as Uint8Array)
+        await decodeDatabaseStorageBytes(Buffer.from(data) as unknown as Uint8Array)
     )
 
     alertNormal('Loaded backup')
