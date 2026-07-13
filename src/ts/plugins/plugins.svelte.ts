@@ -675,6 +675,9 @@ export const getV2PluginAPIs = () => {
             return new Proxy(db, {
                 get(target, prop) {
                     if (typeof prop === 'string' && allowedDbKeys.includes(prop)) {
+                        if(prop === 'characters'){
+                            requiresFullEncoderReload.state = true
+                        }
                         return (target as any)[prop];
                     }
                     else if(target.pluginCustomStorage){
