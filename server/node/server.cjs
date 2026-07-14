@@ -1261,7 +1261,7 @@ app.get('/api/list', authenticatedRouteLimiter, async (req, res, next) => {
     }
 });
 
-app.post('/api/write', authenticatedRouteLimiter, async (req, res, next) => {
+app.post('/api/write', authenticatedRouteLimiter, async (req, res) => {
     if(!await checkAuth(req, res)){
         return;
     }
@@ -1286,7 +1286,22 @@ app.post('/api/write', authenticatedRouteLimiter, async (req, res, next) => {
             success: true
         });
     } catch (error) {
-        next(error);
+        const storageKey = Buffer.from(filePath, 'hex').toString('utf-8');
+        const errorCode = typeof error?.code === 'string' ? error.code : 'WRITE_FAILED';
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const status = errorCode === 'ENOSPC' || errorCode === 'EDQUOT' ? 507 : 500;
+
+        console.error('[Storage] Failed to write item:', {
+            key: storageKey,
+            size: fileContent.byteLength,
+            code: errorCode,
+            message: errorMessage,
+        });
+        res.status(status).send({
+            error: 'Failed to write storage item',
+            code: errorCode,
+            message: errorMessage,
+        });
     }
 });
 
