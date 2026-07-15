@@ -629,6 +629,11 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
             }]
         }
 
+        arg.onUsageAttemptPrepared?.({
+            input: body.messages,
+            batchProcessing: true,
+        })
+
         const resp = await fetchNative(batchRequestUrl, {
             "body": JSON.stringify(batchRequestBody),
             "method": "POST",
@@ -651,7 +656,8 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
             })
             return {
                 type: 'fail',
-                result: responseText
+                result: responseText,
+                usageBillingStatus: 'not_billed',
             }
         }
 
@@ -669,7 +675,8 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
             })
             return {
                 type: 'fail',
-                result: 'No results URL returned from Claude batch request'
+                result: 'No results URL returned from Claude batch request',
+                usageBillingStatus: 'not_billed',
             }
         }
 
@@ -816,7 +823,10 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
                                     thinking = false
                                 }
 
-                                controller.enqueue({ "0": resText })
+                                controller.enqueue({
+                                    "0": resText,
+                                    "__usage": JSON.stringify(batchData.result.message.usage ?? {}),
+                                })
                                 addFetchLog({
                                     body: batchRequestBody,
                                     headers: headers,
@@ -845,6 +855,7 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
                                     chatId: arg.chatId,
                                     status: batchRes.status
                                 })
+                                controller.enqueue({ "__usageBillingStatus": "not_billed" })
                                 controller.error(new Error(message))
                                 return
                             }
@@ -858,6 +869,7 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
                                     chatId: arg.chatId,
                                     status: batchRes.status
                                 })
+                                controller.enqueue({ "__usageBillingStatus": "not_billed" })
                                 controller.close()
                                 return
                             }
@@ -871,6 +883,7 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
                                     chatId: arg.chatId,
                                     status: batchRes.status
                                 })
+                                controller.enqueue({ "__usageBillingStatus": "not_billed" })
                                 controller.error(new Error('Claude batch request expired'))
                                 return
                             }
@@ -901,7 +914,8 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
 }
 
 async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:string}, body:any, arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
-    
+    arg.onUsageAttemptPrepared?.({ input: body.messages, batchProcessing: false })
+
     if(arg.useStreaming){
         
         const res = await fetchNative(replacerURL, {
@@ -927,10 +941,18 @@ async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:strin
                 let text = ''
                 let reader = res.body.getReader()
                 let parserData = ''
+                let usage: Record<string, number> = {}
                 const decoder = new TextDecoder()
                 const parseEvent = ((e:string) => {
                     try {               
                         const parsedData = JSON.parse(e)
+
+                        if(parsedData?.type === 'message_start' && parsedData.message?.usage){
+                            usage = { ...usage, ...parsedData.message.usage }
+                        }
+                        if(parsedData?.type === 'message_delta' && parsedData.usage){
+                            usage = { ...usage, ...parsedData.usage }
+                        }
 
                         if(parsedData?.type === 'content_block_delta'){
                             if(parsedData?.delta?.type === 'text' || parsedData.delta?.type === 'text_delta'){
@@ -1003,6 +1025,7 @@ async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:strin
                                     text = ''
                                     reader.cancel()
                                     await arg.onUsageNextAttempt?.('failed')
+                                    arg.onUsageAttemptPrepared?.({ input: body.messages, batchProcessing: false })
                                     const res = await fetchNative(replacerURL, {
                                         body: JSON.stringify(body),
                                         headers: headers,
@@ -1030,7 +1053,8 @@ async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:strin
                         text = prevText
 
                         controller.enqueue({
-                            "0": text
+                            "0": text,
+                            ...(Object.keys(usage).length > 0 ? { "__usage": JSON.stringify(usage) } : {}),
                         })
 
                     } catch (error) {
@@ -1040,7 +1064,8 @@ async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:strin
                 if(thinking){
                     text += "</Thoughts>\n\n"
                     controller.enqueue({
-                        "0": text
+                        "0": text,
+                        ...(Object.keys(usage).length > 0 ? { "__usage": JSON.stringify(usage) } : {}),
                     })
                 }
                 controller.close()
@@ -1094,6 +1119,10 @@ async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:strin
     const hasToolUse = (contents as any[]).some((v) => v.type === 'tool_use')
 
     if(hasToolUse){
+        await arg.onUsageNextAttempt?.('success', {
+            usage: res.data.usage,
+            output: [JSON.stringify(contents)],
+        })
 
         const messages:Claude3ExtendedChat[] = body.messages
         const response:Claude3Chat = {
@@ -1206,11 +1235,13 @@ async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:strin
     if(arg.extractJson && db.jsonSchemaEnabled){
         return {
             type: 'success',
-            result: arg.additionalOutput + extractJSON(resText, db.jsonSchema)
+            result: arg.additionalOutput + extractJSON(resText, db.jsonSchema),
+            usage: res.data.usage,
         }
     }
     return {
         type: 'success',
-        result: arg.additionalOutput + resText
+        result: arg.additionalOutput + resText,
+        usage: res.data.usage,
     }
 }

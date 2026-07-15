@@ -29,6 +29,7 @@ export interface ApiUsageCustomPricing {
 export type ApiUsageSummaryRange = 7 | 30 | 90 | 365 | 'all'
 export type ApiUsageRequestStatus = 'success' | 'failed' | 'cancelled'
 export type ApiUsageRequestMode = 'model' | 'submodel' | 'memory' | 'emotion' | 'otherAx' | 'translate'
+export type ApiUsageBillingStatus = 'estimated' | 'not_billed' | 'unknown'
 
 export const apiUsageRequestModes: ApiUsageRequestMode[] = [
     'model',
@@ -55,6 +56,8 @@ export interface ApiUsageRecord {
     outputTokens: number
     date?: Date
     flexProcessing?: boolean
+    batchProcessing?: boolean
+    billingStatus?: ApiUsageBillingStatus
     status?: ApiUsageRequestStatus
     mode?: ApiUsageRequestMode
     useBuiltInPricing?: boolean
@@ -316,10 +319,14 @@ export function estimateApiUsageCost(
     record: ApiUsageRecord,
     customPricing: Record<string, ApiUsageCustomPricing> = {},
 ): number | null {
+    if (record.billingStatus === 'not_billed') return 0
+    if (record.billingStatus === 'unknown') return null
+
     const model = normalizePricingModel(record.model)
     const customRate = customPricing[record.model] ?? (model ? customPricing[model] : undefined)
     if (customRate) {
-        const processingMultiplier = record.flexProcessing && model?.startsWith('gpt-') ? 0.5 : 1
+        const processingMultiplier = (record.flexProcessing && model?.startsWith('gpt-') ? 0.5 : 1)
+            * (record.batchProcessing ? 0.5 : 1)
         return (
             (record.inputTokens * customRate.input + record.outputTokens * customRate.output)
             / 1_000_000
@@ -337,7 +344,8 @@ export function estimateApiUsageCost(
     const rate = rule.longContext && record.inputTokens > rule.longContext.threshold
         ? rule.longContext
         : rule
-    const processingMultiplier = record.flexProcessing && model.startsWith('gpt-') ? 0.5 : 1
+    const processingMultiplier = (record.flexProcessing && model.startsWith('gpt-') ? 0.5 : 1)
+        * (record.batchProcessing ? 0.5 : 1)
 
     return (
         (record.inputTokens * rate.input + record.outputTokens * rate.output)

@@ -1,6 +1,11 @@
 import type { LLMModel } from './model/modellist'
 import type { OpenAIChat } from './process/index.svelte'
-import type { requestDataResponse, StreamResponseChunk } from './process/request/request'
+import type {
+    ApiUsageAttemptDetails,
+    ApiUsageAttemptResult,
+    requestDataResponse,
+    StreamResponseChunk,
+} from './process/request/request'
 import {
     recordApiUsage,
     type ApiUsageRequestMode,
@@ -15,7 +20,13 @@ interface ApiUsageRecorderOptions {
     modelInfo: LLMModel
     abortSignal?: AbortSignal | null
     flexProcessing?: boolean
+    batchProcessing?: boolean
     useBuiltInPricing?: boolean
+}
+
+interface NormalizedUsage {
+    inputTokens: number
+    outputTokens: number
 }
 
 function getTokenizerOptions(model: string, modelInfo: LLMModel): TokenizerEncodeOptions {
@@ -49,39 +60,142 @@ function getStreamOutput(chunk: StreamResponseChunk): string[] {
         .map(([, text]) => text)
 }
 
+function snapshotValue<T>(value: T): T {
+    try {
+        return structuredClone(value)
+    }
+    catch {
+        return JSON.parse(JSON.stringify(value)) as T
+    }
+}
+
+function serializeInput(input: unknown): string {
+    return JSON.stringify(input, (key, value) => {
+        if (typeof value !== 'string') return value
+        if ((key === 'data' || key === 'image_url' || key === 'file_data') && value.startsWith('data:')) {
+            return '[binary data]'
+        }
+        return value
+    })
+}
+
+function normalizeUsage(usage: unknown): NormalizedUsage | null {
+    if (!usage || typeof usage !== 'object') return null
+    const value = usage as Record<string, unknown>
+    const number = (candidate: unknown) => typeof candidate === 'number' && Number.isFinite(candidate)
+        ? Math.max(0, candidate)
+        : 0
+
+    if ('promptTokenCount' in value || 'candidatesTokenCount' in value) {
+        return {
+            inputTokens: number(value.promptTokenCount),
+            outputTokens: number(value.candidatesTokenCount) + number(value.thoughtsTokenCount),
+        }
+    }
+
+    if ('prompt_tokens' in value || 'completion_tokens' in value) {
+        return {
+            inputTokens: number(value.prompt_tokens),
+            outputTokens: number(value.completion_tokens),
+        }
+    }
+
+    if ('input_tokens' in value || 'output_tokens' in value) {
+        return {
+            inputTokens: number(value.input_tokens)
+                + number(value.cache_creation_input_tokens)
+                + number(value.cache_read_input_tokens),
+            outputTokens: number(value.output_tokens),
+        }
+    }
+
+    return null
+}
+
+function getStreamAttemptResult(chunk: StreamResponseChunk): ApiUsageAttemptResult {
+    let usage: unknown
+    try {
+        usage = chunk.__usage ? JSON.parse(chunk.__usage) : undefined
+    }
+    catch {
+        usage = undefined
+    }
+    const billingStatus = chunk.__usageBillingStatus === 'not_billed'
+        || chunk.__usageBillingStatus === 'unknown'
+        || chunk.__usageBillingStatus === 'estimated'
+        ? chunk.__usageBillingStatus
+        : undefined
+    return { usage, billingStatus }
+}
+
 export function createApiUsageRecorder(options: ApiUsageRecorderOptions) {
     const tokenizerOptions = getTokenizerOptions(options.model, options.modelInfo)
     const chatAdditionalTokens = options.model.startsWith('gpt') ? 5 : 3
     const useName = options.model.startsWith('gpt') ? 'noName' : 'name'
     const tokenizer = new ChatTokenizer(chatAdditionalTokens, useName, tokenizerOptions)
-    const inputTokensPromise = tokenizer.tokenizeChats(options.formated).catch((error) => {
-        console.error('[API Usage] Failed to count input tokens', error)
-        return 0
-    })
+    const countChats = async (chats: OpenAIChat[]) => {
+        const snapshot = snapshotValue(chats)
+        if (snapshot.some((chat) => typeof chat.content !== 'string')) {
+            return tokenize(serializeInput(snapshot), tokenizerOptions)
+        }
+        const baseTokens = await tokenizer.tokenizeChats(snapshot)
+        const structuredFields = snapshot.map((chat) => {
+            const extended = chat as OpenAIChat & { tool_calls?: unknown, tool_call_id?: unknown }
+            return {
+                tool_calls: extended.tool_calls,
+                tool_call_id: extended.tool_call_id,
+            }
+        }).filter((chat) => chat.tool_calls || chat.tool_call_id)
+        return baseTokens + (structuredFields.length > 0
+            ? await tokenize(serializeInput(structuredFields), tokenizerOptions)
+            : 0)
+    }
+    const countInput = (attempt: ApiUsageAttemptDetails) => {
+        const promise = attempt.inputChats
+            ? countChats(attempt.inputChats)
+            : attempt.input !== undefined
+                ? tokenize(serializeInput(snapshotValue(attempt.input)), tokenizerOptions)
+                : countChats(options.formated)
+        return promise.catch((error) => {
+            console.error('[API Usage] Failed to count input tokens', error)
+            return 0
+        })
+    }
+    let currentAttempt: ApiUsageAttemptDetails = {
+        inputChats: options.formated,
+        flexProcessing: options.flexProcessing,
+        batchProcessing: options.batchProcessing,
+    }
+    let inputTokensPromise = countInput(currentAttempt)
     let resolvedModel = options.modelInfo.internalID || options.model
     let finalized = false
 
-    async function recordAttempt(status: ApiUsageRequestStatus, output: string[] = []) {
+    async function recordAttempt(status: ApiUsageRequestStatus, result: ApiUsageAttemptResult = {}) {
         const attemptModel = resolvedModel
+        const reportedUsage = normalizeUsage(result.usage)
         const [inputTokens, outputTokens] = await Promise.all([
-            inputTokensPromise,
-            countOutputTokens(output, tokenizerOptions),
+            reportedUsage ? reportedUsage.inputTokens : inputTokensPromise,
+            reportedUsage ? reportedUsage.outputTokens : countOutputTokens(result.output ?? [], tokenizerOptions),
         ])
+        const billingStatus = result.billingStatus
+            ?? (reportedUsage || status === 'success' ? 'estimated' : 'unknown')
         recordApiUsage({
             model: attemptModel,
             inputTokens,
             outputTokens,
-            flexProcessing: options.flexProcessing,
+            flexProcessing: currentAttempt.flexProcessing,
+            batchProcessing: currentAttempt.batchProcessing,
+            billingStatus,
             status,
             mode: options.mode,
             useBuiltInPricing: options.useBuiltInPricing,
         })
     }
 
-    async function finalize(status: ApiUsageRequestStatus, output: string[] = []) {
+    async function finalize(status: ApiUsageRequestStatus, result: ApiUsageAttemptResult = {}) {
         if (finalized) return
         finalized = true
-        await recordAttempt(status, output)
+        await recordAttempt(status, result)
     }
 
     return {
@@ -89,17 +203,37 @@ export function createApiUsageRecorder(options: ApiUsageRecorderOptions) {
             const normalizedModel = model?.trim()
             if (normalizedModel) resolvedModel = normalizedModel
         },
+        prepareAttempt(attempt: ApiUsageAttemptDetails) {
+            currentAttempt = {
+                ...currentAttempt,
+                ...attempt,
+                input: attempt.inputChats !== undefined ? undefined : attempt.input ?? currentAttempt.input,
+                inputChats: attempt.input !== undefined ? undefined : attempt.inputChats ?? currentAttempt.inputChats,
+            }
+            inputTokensPromise = countInput(currentAttempt)
+        },
         async finalizeResponse(response: requestDataResponse): Promise<requestDataResponse> {
             if (response.type === 'success') {
-                await finalize('success', [response.result])
+                await finalize('success', {
+                    usage: response.usage,
+                    output: [response.result],
+                    billingStatus: response.usageBillingStatus,
+                })
                 return response
             }
             if (response.type === 'multiline') {
-                await finalize('success', response.result.map(([, text]) => text))
+                await finalize('success', {
+                    usage: response.usage,
+                    output: response.result.map(([, text]) => text),
+                    billingStatus: response.usageBillingStatus,
+                })
                 return response
             }
             if (response.type === 'fail') {
-                await finalize(options.abortSignal?.aborted ? 'cancelled' : 'failed')
+                await finalize(options.abortSignal?.aborted ? 'cancelled' : 'failed', {
+                    usage: response.usage,
+                    billingStatus: response.usageBillingStatus,
+                })
                 return response
             }
 
@@ -111,21 +245,23 @@ export function createApiUsageRecorder(options: ApiUsageRecorderOptions) {
                     try {
                         const { done, value } = await reader.read()
                         if (value) {
-                            lastResponseChunk = value
+                            lastResponseChunk = { ...lastResponseChunk, ...value }
                             controller.enqueue(value)
                         }
                         if (done) {
+                            const result = getStreamAttemptResult(lastResponseChunk)
                             await finalize(
                                 options.abortSignal?.aborted ? 'cancelled' : 'success',
-                                getStreamOutput(lastResponseChunk),
+                                { ...result, output: getStreamOutput(lastResponseChunk) },
                             )
                             controller.close()
                         }
                     }
                     catch (error) {
+                        const result = getStreamAttemptResult(lastResponseChunk)
                         await finalize(
                             options.abortSignal?.aborted ? 'cancelled' : 'failed',
-                            getStreamOutput(lastResponseChunk),
+                            { ...result, output: getStreamOutput(lastResponseChunk) },
                         )
                         controller.error(error)
                     }
@@ -135,7 +271,8 @@ export function createApiUsageRecorder(options: ApiUsageRecorderOptions) {
                         await reader.cancel(reason)
                     }
                     finally {
-                        await finalize('cancelled', getStreamOutput(lastResponseChunk))
+                        const result = getStreamAttemptResult(lastResponseChunk)
+                        await finalize('cancelled', { ...result, output: getStreamOutput(lastResponseChunk) })
                     }
                 },
             })
@@ -148,12 +285,12 @@ export function createApiUsageRecorder(options: ApiUsageRecorderOptions) {
         async finalizeFailure() {
             await finalize(options.abortSignal?.aborted ? 'cancelled' : 'failed')
         },
-        async finalizeAttempt(completedStatus: 'success' | 'failed') {
-            await finalize(completedStatus)
+        async finalizeAttempt(completedStatus: 'success' | 'failed', result?: ApiUsageAttemptResult) {
+            await finalize(completedStatus, result)
         },
-        async recordNextAttempt(completedStatus: 'success' | 'failed') {
+        async recordNextAttempt(completedStatus: 'success' | 'failed', result?: ApiUsageAttemptResult) {
             if (finalized) return
-            await recordAttempt(completedStatus)
+            await recordAttempt(completedStatus, result)
         },
     }
 }

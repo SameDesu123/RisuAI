@@ -598,6 +598,7 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
 async function requestGoogle(url:string, body:any, headers:{[key:string]:string}, arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
     
     const db = getDatabase()
+    arg.onUsageAttemptPrepared?.({ input: body.contents })
 
     const fallBackGemini = async (originalError:string):Promise<requestDataResponse> => {
         if(!db.antiServerOverloads){
@@ -716,7 +717,8 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
         }
     }
 
-    let rDatas:{text: string, thought?: boolean}[] = [] 
+    let rDatas:{text: string, thought?: boolean}[] = []
+    let responseUsage: unknown
     const processDataItem = async (data:any):Promise<GeminiPart[]> => {
         const parts = data?.candidates?.[0]?.content?.parts as GeminiPart[]
 
@@ -776,6 +778,7 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
         }
 
         if(data?.usageMetadata){
+            responseUsage = data.usageMetadata
             
             for (const interceptor of bodyIntercepterStore) {
                 try {
@@ -923,7 +926,10 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
         let resRec
         let attempt = 0
         do {
-            await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed')
+            await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed', attempt === 0 ? {
+                usage: responseUsage,
+                output: [JSON.stringify(calls)],
+            } : undefined)
             attempt++
             resRec = await requestGoogle(url, body, headers, arg)
             
@@ -946,7 +952,9 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
         } else if(resRec.type === 'success'){
             return {
                 type: 'success',
-                result: result + '\n\n' + resRec.result
+                result: result + '\n\n' + resRec.result,
+                usage: resRec.usage,
+                usageBillingStatus: resRec.usageBillingStatus,
             }
         }
         
@@ -966,7 +974,8 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
     console.log(result)
     return {
         type: 'success',
-        result: result
+        result: result,
+        usage: responseUsage,
     }
 }
 
@@ -1239,8 +1248,21 @@ function wrapToolStream(
                         let errorFlag = true
                         
                         do {
-                            await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed')
+                            let usage: unknown
+                            try {
+                                usage = attempt === 0 && value["__usageMetadata"]
+                                    ? JSON.parse(value["__usageMetadata"])
+                                    : undefined
+                            }
+                            catch {
+                                usage = undefined
+                            }
+                            await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed', attempt === 0 ? {
+                                usage,
+                                output: [content, JSON.stringify(calls)],
+                            } : undefined)
                             attempt++
+                            arg.onUsageAttemptPrepared?.({ input: body.contents })
                             resRec = await fetchNative(url, {
                                 headers: headers,
                                 body: JSON.stringify(body),
@@ -1287,7 +1309,7 @@ function wrapToolStream(
                                 + callCodes.join('\n\n')
                         }
 
-                        controller.enqueue({"0": prefix})
+                        controller.enqueue({"0": prefix, "__usage": ""})
                         
                         continue
                     }
@@ -1310,14 +1332,16 @@ function wrapToolStream(
                         "0": (prefix ? prefix + '\n\n' : '')
                             + (thoughts ? `<Thoughts>\n\n${thoughts}\n\n</Thoughts>\n\n` : '')
                             + (lastThought ? lastThought + '\n\n' : '') 
-                            + content
+                            + content,
+                        ...(value["__usageMetadata"] ? { "__usage": value["__usageMetadata"] } : {}),
                     })
                 }
                 else {
                     controller.enqueue({
                         "0": (prefix ? prefix + '\n\n' : '')
                             + (thoughts + lastThought ? `<Thoughts>\n\n${thoughts + lastThought}\n\n</Thoughts>\n\n` : '')
-                            + content
+                            + content,
+                        ...(value["__usageMetadata"] ? { "__usage": value["__usageMetadata"] } : {}),
                     })
                 }
             }

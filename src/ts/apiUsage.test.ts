@@ -37,6 +37,27 @@ describe('API usage statistics', () => {
         })).toBe(3.75)
     })
 
+    it('applies batch pricing and preserves explicitly unbilled attempts', () => {
+        expect(estimateApiUsageCost({
+            model: 'claude-sonnet-4-6',
+            inputTokens: 1_000_000,
+            outputTokens: 1_000_000,
+            batchProcessing: true,
+        })).toBe(9)
+        expect(estimateApiUsageCost({
+            model: 'claude-sonnet-4-6',
+            inputTokens: 1_000_000,
+            outputTokens: 1_000_000,
+            billingStatus: 'not_billed',
+        })).toBe(0)
+        expect(estimateApiUsageCost({
+            model: 'claude-sonnet-4-6',
+            inputTokens: 1_000_000,
+            outputTokens: 0,
+            billingStatus: 'unknown',
+        })).toBeNull()
+    })
+
     it('keeps requests without reliable first-party pricing unpriced', () => {
         expect(estimateApiUsageCost({
             model: 'openrouter-openai/gpt-5.5',

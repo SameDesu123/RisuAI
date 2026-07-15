@@ -64,9 +64,23 @@ export interface RequestDataArgumentExtended extends requestDataArgument{
     key?:string
     additionalOutput?:string
     saveSignatures?:boolean
-    onUsageNextAttempt?: (completedStatus: 'success' | 'failed') => Promise<void>
-    onUsageFinalAttempt?: (completedStatus: 'success' | 'failed') => Promise<void>
+    onUsageAttemptPrepared?: (attempt: ApiUsageAttemptDetails) => void
+    onUsageNextAttempt?: (completedStatus: 'success' | 'failed', result?: ApiUsageAttemptResult) => Promise<void>
+    onUsageFinalAttempt?: (completedStatus: 'success' | 'failed', result?: ApiUsageAttemptResult) => Promise<void>
     onUsageModelResolved?: (model: string | null | undefined) => void
+}
+
+export interface ApiUsageAttemptDetails {
+    input?: unknown
+    inputChats?: OpenAIChat[]
+    flexProcessing?: boolean
+    batchProcessing?: boolean
+}
+
+export interface ApiUsageAttemptResult {
+    usage?: unknown
+    output?: string[]
+    billingStatus?: 'estimated' | 'not_billed' | 'unknown'
 }
 
 export type requestDataResponse = {
@@ -78,6 +92,8 @@ export type requestDataResponse = {
     },
     failByServerError?: boolean
     model?: string
+    usage?: unknown
+    usageBillingStatus?: 'estimated' | 'not_billed' | 'unknown'
 }|{
     type: "streaming",
     result: ReadableStream<StreamResponseChunk>,
@@ -85,6 +101,8 @@ export type requestDataResponse = {
         emotion?: string
     }
     model?: string
+    usage?: unknown
+    usageBillingStatus?: 'estimated' | 'not_billed' | 'unknown'
 }|{
     type: "multiline",
     result: ['user'|'char',string][],
@@ -92,6 +110,8 @@ export type requestDataResponse = {
         emotion?: string
     }
     model?: string
+    usage?: unknown
+    usageBillingStatus?: 'estimated' | 'not_billed' | 'unknown'
 }
 
 export interface StreamResponseChunk{[key:string]:string}
@@ -502,6 +522,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
     targ.onUsageNextAttempt = usageRecorder?.recordNextAttempt
     targ.onUsageFinalAttempt = usageRecorder?.finalizeAttempt
     targ.onUsageModelResolved = usageRecorder?.resolveModel
+    targ.onUsageAttemptPrepared = usageRecorder?.prepareAttempt
 
     try {
         let response: requestDataResponse

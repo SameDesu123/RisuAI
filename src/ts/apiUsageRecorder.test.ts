@@ -62,7 +62,87 @@ describe('API usage request recorder', () => {
             successRequestCount: 1,
             failedRequestCount: 1,
             requestCountsByMode: { otherAx: 2 },
+            unpricedRequestCount: 1,
         })
+    })
+
+    it('uses each prepared request input and provider-reported usage per attempt', async () => {
+        const recorder = makeRecorder()
+        recorder.prepareAttempt({ input: { messages: ['first expanded request'] } })
+        await recorder.recordNextAttempt('success', {
+            usage: { prompt_tokens: 30, completion_tokens: 7 },
+        })
+        recorder.prepareAttempt({ input: { messages: ['second expanded request'] } })
+        await recorder.finalizeResponse({
+            type: 'success',
+            result: 'Done',
+            usage: { input_tokens: 50, output_tokens: 9 },
+        })
+
+        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        expect(day).toMatchObject({
+            inputTokens: 80,
+            outputTokens: 16,
+            requestCount: 2,
+            successRequestCount: 2,
+        })
+    })
+
+    it('recounts locally when a follow-up request has no provider usage', async () => {
+        const recorder = makeRecorder()
+        const firstInput = { messages: ['first'] }
+        const secondInput = { messages: ['second request with tool output'] }
+        recorder.prepareAttempt({ input: firstInput })
+        await recorder.recordNextAttempt('success', { output: ['tool call'] })
+        recorder.prepareAttempt({ input: secondInput })
+        await recorder.finalizeResponse({ type: 'success', result: 'Done' })
+
+        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        expect(day.inputTokens).toBe(JSON.stringify(firstInput).length + JSON.stringify(secondInput).length)
+        expect(day.outputTokens).toBe('tool call'.length + 'Done'.length)
+    })
+
+    it('leaves failed attempts without provider usage unpriced', async () => {
+        const recorder = makeRecorder()
+        await recorder.finalizeResponse({ type: 'fail', result: 'Unauthorized' })
+
+        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        expect(day).toMatchObject({
+            failedRequestCount: 1,
+            estimatedCostUsd: 0,
+            unpricedRequestCount: 1,
+        })
+    })
+
+    it('records explicitly unbilled batch failures as zero cost', async () => {
+        const recorder = makeRecorder()
+        recorder.prepareAttempt({ input: { messages: ['batch'] }, batchProcessing: true })
+        await recorder.finalizeResponse({
+            type: 'fail',
+            result: 'Batch item errored',
+            usageBillingStatus: 'not_billed',
+        })
+
+        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        expect(day).toMatchObject({
+            failedRequestCount: 1,
+            estimatedCostUsd: 0,
+            unpricedRequestCount: 0,
+        })
+    })
+
+    it('uses final request Flex metadata for custom pricing', async () => {
+        DBState.db.apiUsage.customPricing['gpt-5.5'] = { input: 1, output: 1 }
+        const recorder = makeRecorder({ useBuiltInPricing: false })
+        recorder.prepareAttempt({ input: { messages: ['flex'] }, flexProcessing: true })
+        await recorder.finalizeResponse({
+            type: 'success',
+            result: 'Done',
+            usage: { input_tokens: 1_000_000, output_tokens: 1_000_000 },
+        })
+
+        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        expect(day.estimatedCostUsd).toBe(1)
     })
 
     it('records the provider-resolved model ID instead of the routing model', async () => {

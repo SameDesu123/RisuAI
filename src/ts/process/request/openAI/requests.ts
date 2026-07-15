@@ -590,6 +590,12 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
 
     if(arg.useStreaming){
         body.stream = true
+        if(shouldUseOpenAIFlexProcessing(aiModel, replacerURL, arg.modelInfo.provider)){
+            body.stream_options = {
+                ...(body.stream_options ?? {}),
+                include_usage: true,
+            }
+        }
         let urlHost = new URL(replacerURL).host
         if(urlHost.includes("localhost") || urlHost.includes("172.0.0.1") || urlHost.includes("0.0.0.0")){
             if(!isTauri && !isNodeServer){
@@ -610,6 +616,10 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
                 })
             }
         }
+        arg.onUsageAttemptPrepared?.({
+            inputChats: body.messages,
+            flexProcessing: body.service_tier === 'flex',
+        })
         const da = await fetchNative(replacerURL, {
             body: JSON.stringify(body),
             method: "POST",
@@ -677,6 +687,11 @@ export async function requestHTTPOpenAI(
 ):Promise<requestDataResponse>{
     
     const db = getDatabase()
+    arg.onUsageAttemptPrepared?.({
+        inputChats: Array.isArray(body.messages) ? body.messages : undefined,
+        input: Array.isArray(body.messages) ? undefined : body.prompt,
+        flexProcessing: body.service_tier === 'flex',
+    })
     const res = await globalFetch(replacerURL, {
         body: body,
         headers: headers,
@@ -823,7 +838,10 @@ export async function requestHTTPOpenAI(
                 let attempt = 0
                 
                 do {
-                    await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed')
+                    await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed', attempt === 0 ? {
+                        usage: dat.usage,
+                        output: [JSON.stringify(dat.choices?.[0]?.message?.tool_calls ?? [])],
+                    } : undefined)
                     attempt++
                     resRec = await requestHTTPOpenAI(replacerURL, body, headers, arg, networkOptions)
                     
@@ -847,7 +865,9 @@ export async function requestHTTPOpenAI(
                 } else if(resRec.type === 'success') {
                     return {
                         type: 'success',
-                        result: result + '\n\n' + resRec.result
+                        result: result + '\n\n' + resRec.result,
+                        usage: resRec.usage,
+                        usageBillingStatus: resRec.usageBillingStatus,
                     }
                 }
                         
@@ -871,7 +891,8 @@ export async function requestHTTPOpenAI(
                     type: 'multiline',
                     result: dat.choices.map((v) => {
                         return ["char", v.message.content ?? '']
-                    })
+                    }),
+                    usage: dat.usage,
                 }
             }            
                     
@@ -879,7 +900,8 @@ export async function requestHTTPOpenAI(
             
             return {
                 type: 'success',
-                result: result
+                result: result,
+                usage: dat.usage,
             }
             
         } catch (error) {                    
@@ -1033,6 +1055,9 @@ function getTranStream(arg:RequestDataArgumentExtended):TransformStream<Uint8Arr
                                     if(readed["__tool_calls"]){
                                         chunk["__tool_calls"] = readed["__tool_calls"]
                                     }
+                                    if(readed["__usage"]){
+                                        chunk["__usage"] = readed["__usage"]
+                                    }
                                     control.enqueue(chunk)
                                 }
                                 else{
@@ -1040,7 +1065,11 @@ function getTranStream(arg:RequestDataArgumentExtended):TransformStream<Uint8Arr
                                 }
                                 return
                             }
-                            const choices = JSON.parse(rawChunk).choices
+                            const parsedChunk = JSON.parse(rawChunk)
+                            if(parsedChunk.usage){
+                                readed["__usage"] = JSON.stringify(parsedChunk.usage)
+                            }
+                            const choices = parsedChunk.choices ?? []
                             for(const choice of choices){
                                 const chunk = choice.delta.content ?? choice.text
                                 if(chunk){
@@ -1127,9 +1156,12 @@ function getTranStream(arg:RequestDataArgumentExtended):TransformStream<Uint8Arr
                     const chunk:Record<string,string> = {
                         "0": `<Thoughts>\n${reasoningContent}\n</Thoughts>\n${readed["0"] ?? ''}`,
                     }
-                    if(readed["__tool_calls"]){
-                        chunk["__tool_calls"] = readed["__tool_calls"]
-                    }
+                                    if(readed["__tool_calls"]){
+                                        chunk["__tool_calls"] = readed["__tool_calls"]
+                                    }
+                                    if(readed["__usage"]){
+                                        chunk["__usage"] = readed["__usage"]
+                                    }
                     control.enqueue(chunk)
                 }
                 else{
@@ -1272,8 +1304,24 @@ function wrapToolStream(
                         let errorFlag = true
                         
                         do {
-                            await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed')
+                            let usage: unknown
+                            try {
+                                usage = attempt === 0 && value?.['__usage']
+                                    ? JSON.parse(value['__usage'])
+                                    : undefined
+                            }
+                            catch {
+                                usage = undefined
+                            }
+                            await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed', attempt === 0 ? {
+                                usage,
+                                output: [content, JSON.stringify(toolCalls)],
+                            } : undefined)
                             attempt++
+                            arg.onUsageAttemptPrepared?.({
+                                inputChats: body.messages,
+                                flexProcessing: body.service_tier === 'flex',
+                            })
                             resRec = await fetchNative(replacerURL, {
                                 body: JSON.stringify(body),
                                 method: "POST",
@@ -1311,7 +1359,7 @@ function wrapToolStream(
                         reader = transtream.readable.getReader()
                         
                         prefix += (content && !db.simplifiedToolUse ? content + '\n\n' : '') + callCodes.join('\n\n')
-                        controller.enqueue({"0": prefix})
+                        controller.enqueue({"0": prefix, "__usage": ""})
 
                         continue
                     }
@@ -1320,7 +1368,10 @@ function wrapToolStream(
                 
                 lastValue = value
                 
-                controller.enqueue({"0": (prefix ? prefix + '\n\n' : '') + content})
+                controller.enqueue({
+                    "0": (prefix ? prefix + '\n\n' : '') + content,
+                    ...(value?.["__usage"] ? { "__usage": value["__usage"] } : {}),
+                })
             }
         }
     })

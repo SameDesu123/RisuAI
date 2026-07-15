@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
         nanogptRequestModel: 'nanogpt-model',
         nanogptUseSubscriptionEndpoint: false,
         openAIKey: 'openai-key',
+        openAIFlexProcessing: false,
         openrouterKey: 'openrouter-key',
         openrouterRequestModel: 'google/gemma-4-31b-it',
         proxyKey: 'proxy-key',
@@ -104,6 +105,9 @@ vi.mock('src/ts/model/modellist', () => ({
     LLMFormat: {
         Mistral: 4,
         OpenAIResponseAPI: 18,
+    },
+    LLMProvider: {
+        OpenAI: 0,
     },
     getFreeOpenRouterModels: vi.fn(),
 }))
@@ -193,6 +197,7 @@ describe('OpenAI request helpers', () => {
         mocks.db.nanogptRequestModel = 'nanogpt-model'
         mocks.db.nanogptUseSubscriptionEndpoint = false
         mocks.db.openrouterRequestModel = 'google/gemma-4-31b-it'
+        mocks.db.openAIFlexProcessing = false
         mocks.db.simplifiedToolUse = false
         mocks.db.autofillRequestUrl = false
     })
@@ -476,6 +481,41 @@ describe('OpenAI request helpers', () => {
         expect(onUsageModelResolved).toHaveBeenCalledWith('google/gemma-4-31b-it')
     })
 
+    it('reports Flex from the final body for a custom official OpenAI endpoint', async () => {
+        mocks.db.openAIFlexProcessing = true
+        mocks.globalFetch.mockResolvedValueOnce({
+            ok: true,
+            data: {
+                choices: [{ message: { content: 'ok' } }],
+                usage: { prompt_tokens: 10, completion_tokens: 2 },
+            },
+        })
+        const onUsageAttemptPrepared = vi.fn()
+
+        const result = await requestOpenAI(baseArg({
+            aiModel: 'reverse_proxy',
+            customURL: 'https://api.openai.com/v1/chat/completions',
+            useStreaming: false,
+            onUsageAttemptPrepared,
+            formated: [{ role: 'user', content: 'Hello' }],
+            modelInfo: {
+                ...baseArg().modelInfo,
+                flags: [],
+                format: LLMFormat.OpenAICompatible,
+                internalID: 'gpt-5.5',
+                parameters: [],
+                provider: LLMProvider.AsIs,
+            },
+        }))
+
+        expect(result.type).toBe('success')
+        expect(onUsageAttemptPrepared).toHaveBeenCalledWith(expect.objectContaining({
+            flexProcessing: true,
+            inputChats: expect.any(Array),
+        }))
+        expect(mocks.globalFetch.mock.calls[0][1].body.service_tier).toBe('flex')
+    })
+
     it('tracks a model overridden in the final custom Responses request body', async () => {
         mocks.db.additionalParams = [['model', 'provider/custom-model']]
         const onUsageModelResolved = vi.fn()
@@ -664,7 +704,9 @@ describe('OpenAI request helpers', () => {
 
         expect(result.type).toBe('streaming')
         await collectStream(result.result as ReadableStream<Record<string, string>>)
-        expect(onUsageNextAttempt).toHaveBeenCalledWith('success')
+        expect(onUsageNextAttempt).toHaveBeenCalledWith('success', expect.objectContaining({
+            output: expect.any(Array),
+        }))
         expect(onUsageFinalAttempt).toHaveBeenCalledWith('failed')
     })
 

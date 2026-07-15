@@ -515,6 +515,10 @@ async function appendResponsesToolOutputs(body:any, calls:ResponseFunctionCallIt
 
 async function requestHTTPResponsesAPI(requestURL:string, body:any, headers:Record<string,string>, arg:RequestDataArgumentExtended, networkOptions:LocalNetworkRequestOptions):Promise<requestDataResponse>{
     const db = getDatabase()
+    arg.onUsageAttemptPrepared?.({
+        input: body.input,
+        flexProcessing: body.service_tier === 'flex',
+    })
     const response = await globalFetch(requestURL, {
         body: toExternalResponsesBody(body),
         headers: headers,
@@ -552,7 +556,10 @@ async function requestHTTPResponsesAPI(requestURL:string, body:any, headers:Reco
         let resRec:requestDataResponse
         let attempt = 0
         do{
-            await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed')
+            await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed', attempt === 0 ? {
+                usage: data.usage,
+                output: [JSON.stringify(data.output ?? calls)],
+            } : undefined)
             attempt++
             resRec = await requestHTTPResponsesAPI(requestURL, body, headers, arg, networkOptions)
             if(resRec.type !== 'fail'){
@@ -561,7 +568,12 @@ async function requestHTTPResponsesAPI(requestURL:string, body:any, headers:Reco
         } while(attempt <= db.requestRetrys)
 
         if(resRec.type === 'success'){
-            return { type: 'success', result: prefix ? prefix + '\n\n' + resRec.result : resRec.result }
+            return {
+                type: 'success',
+                result: prefix ? prefix + '\n\n' + resRec.result : resRec.result,
+                usage: resRec.usage,
+                usageBillingStatus: resRec.usageBillingStatus,
+            }
         }
         return resRec
     }
@@ -572,7 +584,7 @@ async function requestHTTPResponsesAPI(requestURL:string, body:any, headers:Reco
         return { type: 'fail', result: incomplete || JSON.stringify(data) }
     }
 
-    return { type: 'success', result }
+    return { type: 'success', result, usage: data.usage }
 }
 
 function getResponsesTranStream(arg:RequestDataArgumentExtended):TransformStream<Uint8Array, StreamResponseChunk>{
@@ -582,6 +594,7 @@ function getResponsesTranStream(arg:RequestDataArgumentExtended):TransformStream
     let text = ''
     let reasoning = ''
     let error = ''
+    let usage: unknown
     const calls:Record<string, ResponseFunctionCallItem> = {}
 
     const appendReasoning = (incoming?:string) => {
@@ -608,6 +621,9 @@ function getResponsesTranStream(arg:RequestDataArgumentExtended):TransformStream
         const chunk:Record<string,string> = { "0": error || result }
         if(Object.keys(calls).length > 0){
             chunk["__tool_calls"] = JSON.stringify(calls)
+        }
+        if(usage){
+            chunk["__usage"] = JSON.stringify(usage)
         }
         controller.enqueue(chunk)
     }
@@ -649,6 +665,7 @@ function getResponsesTranStream(arg:RequestDataArgumentExtended):TransformStream
             error = JSON.stringify(event.error ?? event)
         }
         else if(type === 'response.completed'){
+            usage = event.response?.usage
             const finalText = extractResponsesText(event.response, arg)
             if(finalText){
                 text = finalText
@@ -729,7 +746,10 @@ function wrapResponsesToolStream(stream:ReadableStream<StreamResponseChunk>, bod
                 const { done, value } = await reader.read()
                 if(!done){
                     lastValue = value
-                    controller.enqueue({ "0": (prefix ? prefix + '\n\n' : '') + (value?.["0"] ?? '') })
+                    controller.enqueue({
+                        "0": (prefix ? prefix + '\n\n' : '') + (value?.["0"] ?? ''),
+                        ...(value?.["__usage"] ? { "__usage": value["__usage"] } : {}),
+                    })
                     continue
                 }
 
@@ -749,16 +769,30 @@ function wrapResponsesToolStream(stream:ReadableStream<StreamResponseChunk>, bod
                 const callPrefix = await appendResponsesToolOutputs(body, calls, arg, lastValue?.["0"] ?? '')
                 delete body.__lastOutput
                 prefix += (prefix && callPrefix ? '\n\n' : '') + callPrefix
-                if(prefix){
-                    controller.enqueue({ "0": prefix })
-                }
+                controller.enqueue({ "0": prefix, "__usage": "" })
 
                 let resRec:Response
                 let attempt = 0
                 let ok = false
                 do{
-                    await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed')
+                    let usage: unknown
+                    try {
+                        usage = attempt === 0 && lastValue?.["__usage"]
+                            ? JSON.parse(lastValue["__usage"])
+                            : undefined
+                    }
+                    catch {
+                        usage = undefined
+                    }
+                    await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed', attempt === 0 ? {
+                        usage,
+                        output: [lastValue?.["0"] ?? '', JSON.stringify(calls)],
+                    } : undefined)
                     attempt++
+                    arg.onUsageAttemptPrepared?.({
+                        input: body.input,
+                        flexProcessing: body.service_tier === 'flex',
+                    })
                     resRec = await fetchNative(requestURL, {
                         body: JSON.stringify(toExternalResponsesBody(body)),
                         method: "POST",
@@ -828,6 +862,10 @@ export async function requestOpenAIResponseAPI(arg:RequestDataArgumentExtended):
 
     if(arg.useStreaming){
         body.stream = true
+        arg.onUsageAttemptPrepared?.({
+            input: body.input,
+            flexProcessing: body.service_tier === 'flex',
+        })
         const response = await fetchNative(requestURL, {
             body: JSON.stringify(toExternalResponsesBody(body)),
             method: "POST",
