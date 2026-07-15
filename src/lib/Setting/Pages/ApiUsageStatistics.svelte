@@ -229,6 +229,7 @@
                 <input
                     class="h-10 rounded-md border border-darkborderc bg-darkbutton px-3 text-sm text-textcolor focus:border-borderc focus:outline-hidden focus:ring-2 focus:ring-borderc"
                     list="api-usage-recorded-models"
+                    placeholder="google/gemma-4-31b-it"
                     autocomplete="off"
                     spellcheck={false}
                     bind:value={customPricingModel}
