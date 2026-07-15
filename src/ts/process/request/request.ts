@@ -490,7 +490,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
         modelInfo: targ.modelInfo,
         abortSignal,
         flexProcessing: db.openAIFlexProcessing && !targ.aiModel.endsWith('-response-api'),
-    })
+    }) : null
     targ.onUsageNextAttempt = usageRecorder?.recordNextAttempt
 
     try {
