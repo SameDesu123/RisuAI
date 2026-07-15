@@ -160,11 +160,11 @@
         </div>
 
         <div class="overflow-x-auto pb-2">
-            <div class="grid grid-flow-col grid-rows-7 gap-[3px] w-max min-w-full">
+            <div class="grid grid-flow-col grid-rows-7 auto-cols-max gap-[2px] w-max">
                 {#each heatmapDays as day}
                     <button
                         type="button"
-                        class={`size-[11px] rounded-[2px] p-0 ${getHeatmapClass(day)}`}
+                        class={`size-3 rounded-[2px] p-0 ${getHeatmapClass(day)}`}
                         class:outline={selectedDate === day.key}
                         class:outline-1={selectedDate === day.key}
                         class:outline-textcolor={selectedDate === day.key}
