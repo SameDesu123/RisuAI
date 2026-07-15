@@ -374,6 +374,17 @@ export function setDatabase(data:Database){
     data.ainconfig ??= safeStructuredClone(defaultAIN)
     data.openrouterKey ??= ''
     data.openrouterRequestModel ??= 'openai/gpt-3.5-turbo'
+    data.vercelAIKey ??= ''
+    data.vercelRequestModel ??= 'openai/gpt-5-mini'
+    data.vercelRequestFormat ??= LLMFormat.OpenAICompatible
+    data.vercelGateway ??= {} as VercelGatewaySettings
+    data.vercelGateway.order ??= []
+    data.vercelGateway.only ??= []
+    data.vercelGateway.sort ??= 'auto'
+    data.vercelGateway.serviceTier ??= 'default'
+    data.vercelGateway.zeroDataRetention ??= false
+    data.vercelGateway.disallowPromptTraining ??= false
+    data.vercelGateway.automaticCaching ??= false
     data.nanogptKey ??= ''
     data.nanogptRequestModel ??= ''
     data.nanogptRequestModelName ??= ''
@@ -779,6 +790,16 @@ export interface DynamicOutput {
     dynamicRequest: boolean
 }
 
+export interface VercelGatewaySettings {
+    order: string[]
+    only: string[]
+    sort: 'auto' | 'cost' | 'ttft' | 'tps'
+    serviceTier: 'default' | 'priority' | 'flex'
+    zeroDataRetention: boolean
+    disallowPromptTraining: boolean
+    automaticCaching: boolean
+}
+
 export interface RisuPersona {
     personaPrompt:string
     name:string
@@ -934,6 +955,10 @@ export interface Database{
     openrouterRequestModel:string
     openrouterKey:string
     openrouterMiddleOut:boolean
+    vercelAIKey:string
+    vercelRequestModel:string
+    vercelRequestFormat:LLMFormat
+    vercelGateway:VercelGatewaySettings
     nanogptKey:string
     nanogptRequestModel:string
     nanogptRequestModelName:string
@@ -1592,6 +1617,8 @@ export interface botPreset{
     bias: [string, number][]
     proxyRequestModel?:string
     openrouterRequestModel?:string
+    vercelRequestModel?:string
+    vercelRequestFormat?:LLMFormat
     proxyKey?:string
     ooba: OobaSettings
     ainconfig: AINsettings
@@ -1616,6 +1643,7 @@ export interface botPreset{
         only: string[]
         ignore: string[]
     }
+    vercelGateway?:VercelGatewaySettings
     useInstructPrompt?:boolean
     customPromptTemplateToggle?:string
     templateDefaultVariables?:string
@@ -2055,6 +2083,8 @@ export function saveCurrentPreset(){
         ainconfig: safeStructuredClone(db.ainconfig),
         proxyRequestModel: db.proxyRequestModel,
         openrouterRequestModel: db.openrouterRequestModel,
+        vercelRequestModel: db.vercelRequestModel,
+        vercelRequestFormat: db.vercelRequestFormat,
         NAISettings: safeStructuredClone(db.NAIsettings),
         promptTemplate: normalizePromptTemplate(db.promptTemplate) ?? null,
         NAIadventure: db.NAIadventure ?? false,
@@ -2069,6 +2099,7 @@ export function saveCurrentPreset(){
         min_p: db.min_p,
         top_a: db.top_a,
         openrouterProvider: db.openrouterProvider,
+        vercelGateway: safeStructuredClone(db.vercelGateway),
         useInstructPrompt: db.useInstructPrompt,
         customPromptTemplateToggle: db.customPromptTemplateToggle ?? "",
         templateDefaultVariables: db.templateDefaultVariables ?? "",
@@ -2166,6 +2197,8 @@ export function setPreset(db:Database, newPres: botPreset){
     db.ooba = safeStructuredClone(newPres.ooba ?? db.ooba)
     db.ainconfig = safeStructuredClone(newPres.ainconfig ?? db.ainconfig)
     db.openrouterRequestModel = newPres.openrouterRequestModel ?? db.openrouterRequestModel
+    db.vercelRequestModel = newPres.vercelRequestModel ?? db.vercelRequestModel
+    db.vercelRequestFormat = newPres.vercelRequestFormat ?? db.vercelRequestFormat
     db.proxyRequestModel = newPres.proxyRequestModel ?? db.proxyRequestModel
     db.NAIsettings = newPres.NAISettings ?? db.NAIsettings
     db.autoSuggestPrompt = newPres.autoSuggestPrompt ?? db.autoSuggestPrompt
@@ -2195,6 +2228,7 @@ export function setPreset(db:Database, newPres: botPreset){
     db.min_p = newPres.min_p
     db.top_a = newPres.top_a
     db.openrouterProvider = newPres.openrouterProvider
+    db.vercelGateway = safeStructuredClone(newPres.vercelGateway ?? db.vercelGateway)
     db.useInstructPrompt = newPres.useInstructPrompt ?? false
     db.customPromptTemplateToggle = newPres.customPromptTemplateToggle ?? ''
     db.templateDefaultVariables = newPres.templateDefaultVariables ?? ''
