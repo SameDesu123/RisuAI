@@ -20,13 +20,28 @@
         future: boolean
     }
 
-    const today = new Date()
-    today.setHours(12, 0, 0, 0)
-    let selectedDate = $state(getApiUsageDateKey(today))
+    function getToday() {
+        const date = new Date()
+        date.setHours(12, 0, 0, 0)
+        return date
+    }
+
+    let today = $state(getToday())
+    let selectedDate = $state(getApiUsageDateKey(getToday()))
     let summaryRange = $state<ApiUsageSummaryRange>(365)
     let customPricingModel = $state('')
     let customInputPrice = $state<number | undefined>(undefined)
     let customOutputPrice = $state<number | undefined>(undefined)
+
+    $effect(() => {
+        const timer = setInterval(() => {
+            const nextToday = getToday()
+            if(getApiUsageDateKey(nextToday) !== getApiUsageDateKey(today)){
+                today = nextToday
+            }
+        }, 60_000)
+        return () => clearInterval(timer)
+    })
 
     const summaryRangeOptions = $derived([
         { value: 7 as const, label: language.apiUsageStatistics.last7Days },
