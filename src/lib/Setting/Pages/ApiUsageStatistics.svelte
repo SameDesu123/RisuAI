@@ -1,9 +1,11 @@
 <script lang="ts">
-    import { CalendarDaysIcon, ChartNoAxesCombinedIcon, CoinsIcon } from "@lucide/svelte";
+    import { CalendarDaysIcon, ChartNoAxesCombinedIcon, CoinsIcon, PlusIcon, TrashIcon } from "@lucide/svelte";
     import { language } from "src/lang";
     import {
+        deleteApiUsageCustomPricing,
         getApiUsageDateKey,
         getApiUsageSummary,
+        setApiUsageCustomPricing,
         type ApiUsageDay,
         type ApiUsageModelStats,
         type ApiUsageSummaryRange,
@@ -22,6 +24,9 @@
     today.setHours(12, 0, 0, 0)
     let selectedDate = $state(getApiUsageDateKey(today))
     let summaryRange = $state<ApiUsageSummaryRange>(365)
+    let customPricingModel = $state('')
+    let customInputPrice = $state<number | undefined>(undefined)
+    let customOutputPrice = $state<number | undefined>(undefined)
 
     const summaryRangeOptions = $derived([
         { value: 7 as const, label: language.apiUsageStatistics.last7Days },
@@ -57,6 +62,28 @@
     })
 
     const summaryTotals = $derived(getApiUsageSummary(DBState.db.apiUsage, summaryRange, today))
+
+    const customPricingEntries = $derived(
+        Object.entries(DBState.db.apiUsage.customPricing).sort(([a], [b]) => a.localeCompare(b)),
+    )
+
+    const recordedModels = $derived.by(() => {
+        const models = new Set<string>()
+        for (const day of Object.values(DBState.db.apiUsage.daily)) {
+            for (const model of Object.keys(day.models)) models.add(model)
+        }
+        return [...models].sort((a, b) => a.localeCompare(b))
+    })
+
+    const canSaveCustomPricing = $derived(
+        customPricingModel.trim().length > 0
+        && typeof customInputPrice === 'number'
+        && Number.isFinite(customInputPrice)
+        && customInputPrice >= 0
+        && typeof customOutputPrice === 'number'
+        && Number.isFinite(customOutputPrice)
+        && customOutputPrice >= 0,
+    )
 
     const selectedStats = $derived(DBState.db.apiUsage.daily[selectedDate])
 
@@ -105,6 +132,27 @@
     function getDayLabel(day: HeatmapDay) {
         const stats = day.stats
         return `${formatDate(day.date)}: ${formatNumber(getTotalTokens(stats))} ${language.apiUsageStatistics.tokens}, ${formatNumber(stats?.requestCount ?? 0)} ${language.apiUsageStatistics.requests}`
+    }
+
+    function saveCustomPricing(event: SubmitEvent) {
+        event.preventDefault()
+        if (!canSaveCustomPricing || customInputPrice === undefined || customOutputPrice === undefined) return
+        if (setApiUsageCustomPricing(customPricingModel, customInputPrice, customOutputPrice)) {
+            customPricingModel = ''
+            customInputPrice = undefined
+            customOutputPrice = undefined
+        }
+    }
+
+    function updateCustomPricing(model: string, field: 'input' | 'output', value: number) {
+        if (!Number.isFinite(value) || value < 0) return
+        const current = DBState.db.apiUsage.customPricing[model]
+        if (!current) return
+        setApiUsageCustomPricing(
+            model,
+            field === 'input' ? value : current.input,
+            field === 'output' ? value : current.output,
+        )
     }
 </script>
 
@@ -164,6 +212,110 @@
             <div class="text-xs text-textcolor2 mt-0.5">{getRequestModeSummary(summaryTotals)}</div>
         </div>
     </div>
+
+    <section class="rounded-lg border border-borderc bg-darkbg/35 p-4">
+        <div>
+            <h3 class="font-semibold">{language.apiUsageStatistics.customPricing}</h3>
+            <p class="text-xs text-textcolor2 mt-1">{language.apiUsageStatistics.customPricingDescription}</p>
+            <p class="text-xs text-textcolor2 mt-1">{language.apiUsageStatistics.customPricingFutureOnly}</p>
+        </div>
+
+        <form
+            class="grid grid-cols-1 md:grid-cols-[minmax(0,1.4fr)_minmax(8rem,0.6fr)_minmax(8rem,0.6fr)_auto] gap-2 mt-4"
+            onsubmit={saveCustomPricing}
+        >
+            <label class="flex flex-col gap-1 text-xs text-textcolor2">
+                <span>{language.apiUsageStatistics.modelId}</span>
+                <input
+                    class="h-10 rounded-md border border-darkborderc bg-darkbutton px-3 text-sm text-textcolor focus:border-borderc focus:outline-hidden focus:ring-2 focus:ring-borderc"
+                    list="api-usage-recorded-models"
+                    autocomplete="off"
+                    spellcheck={false}
+                    bind:value={customPricingModel}
+                />
+            </label>
+            <label class="flex flex-col gap-1 text-xs text-textcolor2">
+                <span>{language.apiUsageStatistics.input} ({language.apiUsageStatistics.pricePerMillion})</span>
+                <input
+                    class="h-10 rounded-md border border-darkborderc bg-darkbutton px-3 text-sm text-textcolor focus:border-borderc focus:outline-hidden focus:ring-2 focus:ring-borderc"
+                    type="number"
+                    min="0"
+                    step="any"
+                    bind:value={customInputPrice}
+                />
+            </label>
+            <label class="flex flex-col gap-1 text-xs text-textcolor2">
+                <span>{language.apiUsageStatistics.output} ({language.apiUsageStatistics.pricePerMillion})</span>
+                <input
+                    class="h-10 rounded-md border border-darkborderc bg-darkbutton px-3 text-sm text-textcolor focus:border-borderc focus:outline-hidden focus:ring-2 focus:ring-borderc"
+                    type="number"
+                    min="0"
+                    step="any"
+                    bind:value={customOutputPrice}
+                />
+            </label>
+            <button
+                class="h-10 md:self-end inline-flex items-center justify-center gap-1.5 rounded-md bg-selected px-3 text-sm text-textcolor disabled:cursor-not-allowed disabled:opacity-40"
+                type="submit"
+                disabled={!canSaveCustomPricing}
+            >
+                <PlusIcon size={16} />
+                {language.apiUsageStatistics.savePrice}
+            </button>
+        </form>
+
+        <datalist id="api-usage-recorded-models">
+            {#each recordedModels as model}
+                <option value={model}></option>
+            {/each}
+        </datalist>
+
+        {#if customPricingEntries.length === 0}
+            <p class="text-sm text-textcolor2 mt-4">{language.apiUsageStatistics.noCustomPricing}</p>
+        {:else}
+            <div class="flex flex-col gap-2 mt-4">
+                {#each customPricingEntries as [model, rate]}
+                    <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1.4fr)_minmax(8rem,0.6fr)_minmax(8rem,0.6fr)_auto] items-end gap-2 rounded-md border border-borderc/70 bg-darkbg/40 p-3">
+                        <div class="min-w-0 self-center">
+                            <div class="text-xs text-textcolor2">{language.apiUsageStatistics.modelId}</div>
+                            <div class="break-all font-mono text-sm">{model}</div>
+                        </div>
+                        <label class="flex flex-col gap-1 text-xs text-textcolor2">
+                            <span>{language.apiUsageStatistics.input} ({language.apiUsageStatistics.pricePerMillion})</span>
+                            <input
+                                class="h-10 rounded-md border border-darkborderc bg-darkbutton px-3 text-sm text-textcolor focus:border-borderc focus:outline-hidden focus:ring-2 focus:ring-borderc"
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={rate.input}
+                                onchange={(event) => updateCustomPricing(model, 'input', event.currentTarget.valueAsNumber)}
+                            />
+                        </label>
+                        <label class="flex flex-col gap-1 text-xs text-textcolor2">
+                            <span>{language.apiUsageStatistics.output} ({language.apiUsageStatistics.pricePerMillion})</span>
+                            <input
+                                class="h-10 rounded-md border border-darkborderc bg-darkbutton px-3 text-sm text-textcolor focus:border-borderc focus:outline-hidden focus:ring-2 focus:ring-borderc"
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={rate.output}
+                                onchange={(event) => updateCustomPricing(model, 'output', event.currentTarget.valueAsNumber)}
+                            />
+                        </label>
+                        <button
+                            class="size-10 md:self-end inline-flex items-center justify-center rounded-md border border-borderc text-textcolor2 hover:bg-textcolor/10 hover:text-textcolor"
+                            type="button"
+                            title={language.apiUsageStatistics.deletePrice}
+                            aria-label={`${language.apiUsageStatistics.deletePrice}: ${model}`}
+                            onclick={() => deleteApiUsageCustomPricing(model)}
+                        >
+                            <TrashIcon size={17} />
+                        </button>
+                    </div>
+                {/each}
+            </div>
+        {/if}
+    </section>
 
     <section class="rounded-lg border border-borderc bg-darkbg/35 p-4">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
