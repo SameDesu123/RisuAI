@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LLMFlags, LLMFormat, LLMProvider, LLMTokenizer } from 'src/ts/model/types'
 import { fetchNative } from 'src/ts/globalApi.svelte'
 import { callTool } from '../../mcp/mcp'
-import { __testResponsesAPI, requestOpenAIResponseAPI } from './requests'
+import { __testResponsesAPI, requestOpenAI, requestOpenAIResponseAPI } from './requests'
 
 const mocks = vi.hoisted(() => ({
     db: {
@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
         nanogptRequestModel: 'nanogpt-model',
         nanogptUseSubscriptionEndpoint: false,
         openAIKey: 'openai-key',
+        openrouterKey: 'openrouter-key',
+        openrouterRequestModel: 'google/gemma-4-31b-it',
         proxyKey: 'proxy-key',
         requestRetrys: 0,
         reasoningEffort: 2,
@@ -178,7 +180,7 @@ function sseStream(events: string[]) {
     })
 }
 
-describe('OpenAI Responses API helpers', () => {
+describe('OpenAI request helpers', () => {
     beforeEach(() => {
         mocks.fetchNative.mockReset()
         mocks.globalFetch.mockReset()
@@ -190,6 +192,7 @@ describe('OpenAI Responses API helpers', () => {
         mocks.db.nanogptProvider = ''
         mocks.db.nanogptRequestModel = 'nanogpt-model'
         mocks.db.nanogptUseSubscriptionEndpoint = false
+        mocks.db.openrouterRequestModel = 'google/gemma-4-31b-it'
         mocks.db.simplifiedToolUse = false
         mocks.db.autofillRequestUrl = false
     })
@@ -428,10 +431,12 @@ describe('OpenAI Responses API helpers', () => {
 
     it('wires NanoGPT Responses endpoint, model, auth, and provider header', async () => {
         mocks.db.nanogptProvider = 'provider-a'
+        const onUsageModelResolved = vi.fn()
 
         const result = await requestOpenAIResponseAPI(baseArg({
             aiModel: 'nanogpt',
             previewBody: true,
+            onUsageModelResolved,
             modelInfo: {
                 ...baseArg().modelInfo,
                 internalID: 'nanogpt',
@@ -445,6 +450,47 @@ describe('OpenAI Responses API helpers', () => {
         expect(preview.body.model).toBe('nanogpt-model')
         expect(preview.headers.Authorization).toBe('Bearer nanogpt-key')
         expect(preview.headers['X-Provider']).toBe('provider-a')
+        expect(onUsageModelResolved).toHaveBeenCalledWith('nanogpt-model')
+    })
+
+    it('reports the exact OpenRouter request model to API usage tracking', async () => {
+        const onUsageModelResolved = vi.fn()
+        const result = await requestOpenAI(baseArg({
+            aiModel: 'openrouter',
+            previewBody: true,
+            useStreaming: false,
+            onUsageModelResolved,
+            formated: [{ role: 'user', content: 'Hello' }],
+            modelInfo: {
+                ...baseArg().modelInfo,
+                flags: [],
+                id: 'openrouter',
+                internalID: 'openrouter',
+                parameters: [],
+            },
+        }))
+
+        expect(result.type).toBe('success')
+        const preview = JSON.parse(result.result as string)
+        expect(preview.body.model).toBe('google/gemma-4-31b-it')
+        expect(onUsageModelResolved).toHaveBeenCalledWith('google/gemma-4-31b-it')
+    })
+
+    it('tracks a model overridden in the final custom Responses request body', async () => {
+        mocks.db.additionalParams = [['model', 'provider/custom-model']]
+        const onUsageModelResolved = vi.fn()
+
+        const result = await requestOpenAIResponseAPI(baseArg({
+            aiModel: 'reverse_proxy',
+            customURL: 'https://proxy.example/v1/responses',
+            previewBody: true,
+            onUsageModelResolved,
+        }))
+
+        expect(result.type).toBe('success')
+        const preview = JSON.parse(result.result as string)
+        expect(preview.body.model).toBe('provider/custom-model')
+        expect(onUsageModelResolved).toHaveBeenCalledWith('provider/custom-model')
     })
 
     it('applies reverse proxy Responses endpoint autofill and additional params', async () => {

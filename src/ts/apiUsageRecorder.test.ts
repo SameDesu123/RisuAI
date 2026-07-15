@@ -64,6 +64,7 @@ describe('API usage request recorder', () => {
     })
 
     it('records the provider-resolved model ID instead of the routing model', async () => {
+        DBState.db.apiUsage.customPricing['google/gemma-4-31b-it'] = { input: 1, output: 2 }
         const recorder = makeRecorder()
         recorder.resolveModel('google/gemma-4-31b-it')
         await recorder.finalizeResponse({ type: 'success', result: 'Done' })
@@ -76,6 +77,7 @@ describe('API usage request recorder', () => {
             },
         })
         expect(day.models['gpt-5.5']).toBeUndefined()
+        expect(day.estimatedCostUsd).toBe(0.00002)
     })
 
     it('keeps each provider attempt under the model resolved for that attempt', async () => {

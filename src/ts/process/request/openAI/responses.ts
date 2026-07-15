@@ -809,6 +809,8 @@ export async function requestOpenAIResponseAPI(arg:RequestDataArgumentExtended):
         body.stream = false
     }
 
+    arg.onUsageModelResolved?.(typeof body.model === 'string' ? body.model : undefined)
+
     const localNetworkOptions = getLocalNetworkRequestOptions(requestURL, db, false)
     const streamingLocalNetworkOptions = getLocalNetworkRequestOptions(requestURL, db, true)
 

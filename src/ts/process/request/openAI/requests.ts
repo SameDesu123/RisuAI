@@ -301,6 +301,8 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
             requestTimeoutMs: networkOptions.requestTimeoutMs
         } as const
 
+        arg.onUsageModelResolved?.(targs.body.model)
+
         if(arg.previewBody){
             return {
                 type: 'success',
@@ -580,6 +582,8 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
     if(!arg.useStreaming){
         body.stream = false
     }
+
+    arg.onUsageModelResolved?.(typeof body.model === 'string' ? body.model : undefined)
 
     const localNetworkOptions = getLocalNetworkRequestOptions(replacerURL, db, false)
     const streamingLocalNetworkOptions = getLocalNetworkRequestOptions(replacerURL, db, true)
@@ -948,6 +952,7 @@ export async function requestOpenAILegacyInstruct(arg:RequestDataArgumentExtende
     }
 
     body = applyAdditionalParameters(body, headers, getAdditionalParameters(arg.aiModel))
+    arg.onUsageModelResolved?.(typeof body.model === 'string' ? body.model : undefined)
 
     const response = await globalFetch(arg.customURL ?? "https://api.openai.com/v1/completions", {
         body: body,

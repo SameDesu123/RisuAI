@@ -429,6 +429,8 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
             ? "global." + arg.modelInfo.internalID 
             : "us." + arg.modelInfo.internalID;
 
+        arg.onUsageModelResolved?.(arg.modelInfo.internalID)
+
         const url = `https://${host}/model/${awsModel}/invoke${stream ? "-with-response-stream" : ""}`
 
         let params = {...body}
@@ -585,6 +587,8 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
     if(additionalParams.length > 0){
         body = applyAdditionalParameters(body, headers, additionalParams)
     }
+
+    arg.onUsageModelResolved?.(typeof body.model === 'string' ? body.model : undefined)
 
     let betas:string[] = []
 

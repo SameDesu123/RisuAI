@@ -891,6 +891,7 @@ async function requestPlugin(arg:RequestDataArgumentExtended):Promise<requestDat
         const bias = arg.biasString
         const model = isV3Model ? arg.aiModel.replace('pluginmodel:::', '') : db.currentPluginProvider
         const v2Function = pluginV2.providers.get(model)
+        arg.onUsageModelResolved?.(isV3Model ? arg.modelInfo.internalID || arg.aiModel : model)
 
         if(arg.previewBody){
             return {
@@ -1189,6 +1190,7 @@ async function requestOllama(arg:RequestDataArgumentExtended):Promise<requestDat
     }
 
     requestBody = applyAdditionalParameters(requestBody, customHeaders, getAdditionalParameters(arg.aiModel))
+    arg.onUsageModelResolved?.(typeof requestBody.model === 'string' ? requestBody.model : undefined)
 
     if(arg.previewBody){
         return {
