@@ -66,7 +66,47 @@ const pricingRules: PricingRule[] = [
         output: 10,
     },
     {
-        matches: (model) => /^claude-opus-4-(8|7|6)(-|$)/.test(model),
+        matches: (model) => model === 'gpt-5-mini' || model.startsWith('gpt-5-mini-'),
+        input: 0.25,
+        output: 2,
+    },
+    {
+        matches: (model) => model === 'gpt-5-nano' || model.startsWith('gpt-5-nano-'),
+        input: 0.05,
+        output: 0.4,
+    },
+    {
+        matches: (model) => model === 'gpt-5' || model.startsWith('gpt-5-2025-') || model === 'gpt-5-chat-latest',
+        input: 1.25,
+        output: 10,
+    },
+    {
+        matches: (model) => model === 'gpt-4.1-mini' || model.startsWith('gpt-4.1-mini-'),
+        input: 0.4,
+        output: 1.6,
+    },
+    {
+        matches: (model) => model === 'gpt-4.1-nano' || model.startsWith('gpt-4.1-nano-'),
+        input: 0.1,
+        output: 0.4,
+    },
+    {
+        matches: (model) => model === 'gpt-4.1' || model.startsWith('gpt-4.1-'),
+        input: 2,
+        output: 8,
+    },
+    {
+        matches: (model) => model === 'gpt-4o-mini' || model.startsWith('gpt-4o-mini-'),
+        input: 0.15,
+        output: 0.6,
+    },
+    {
+        matches: (model) => model === 'gpt-4o' || model.startsWith('gpt-4o-'),
+        input: 2.5,
+        output: 10,
+    },
+    {
+        matches: (model) => /^claude-opus-4-(8|7|6|5)(-|$)/.test(model),
         input: 5,
         output: 25,
     },
@@ -81,6 +121,31 @@ const pricingRules: PricingRule[] = [
         output: 5,
     },
     {
+        matches: (model) => /^claude-3-(7|5)-sonnet/.test(model),
+        input: 3,
+        output: 15,
+    },
+    {
+        matches: (model) => model.startsWith('claude-3-5-haiku'),
+        input: 0.8,
+        output: 4,
+    },
+    {
+        matches: (model) => model.startsWith('claude-3-opus'),
+        input: 15,
+        output: 75,
+    },
+    {
+        matches: (model) => model.startsWith('claude-3-sonnet'),
+        input: 3,
+        output: 15,
+    },
+    {
+        matches: (model) => model.startsWith('claude-3-haiku'),
+        input: 0.25,
+        output: 1.25,
+    },
+    {
         matches: (model) => model === 'gemini-3.1-pro-preview',
         input: 2,
         output: 12,
@@ -90,6 +155,33 @@ const pricingRules: PricingRule[] = [
         matches: (model) => model === 'gemini-3-flash-preview',
         input: 0.5,
         output: 3,
+    },
+    {
+        matches: (model) => model === 'gemini-3-pro-preview',
+        input: 2,
+        output: 12,
+        longContext: { threshold: 200_000, input: 4, output: 18 },
+    },
+    {
+        matches: (model) => model.startsWith('gemini-2.5-pro'),
+        input: 1.25,
+        output: 10,
+        longContext: { threshold: 200_000, input: 2.5, output: 15 },
+    },
+    {
+        matches: (model) => model.startsWith('gemini-2.5-flash-lite'),
+        input: 0.1,
+        output: 0.4,
+    },
+    {
+        matches: (model) => model.startsWith('gemini-2.5-flash'),
+        input: 0.3,
+        output: 2.5,
+    },
+    {
+        matches: (model) => model.startsWith('gemini-2.0-flash'),
+        input: 0.1,
+        output: 0.4,
     },
 ]
 
@@ -107,7 +199,26 @@ export function normalizeApiUsageStats(value: unknown): ApiUsageStats {
         return createEmptyApiUsageStats()
     }
 
-    return value as ApiUsageStats
+    const normalized = createEmptyApiUsageStats()
+    for (const [date, storedDay] of Object.entries(daily)) {
+        if (!storedDay || typeof storedDay !== 'object' || Array.isArray(storedDay)) {
+            continue
+        }
+
+        const day = normalizeStoredStats(storedDay)
+        const storedModels = (storedDay as Partial<ApiUsageDay>).models
+        const models: Record<string, ApiUsageModelStats> = {}
+        if (storedModels && typeof storedModels === 'object' && !Array.isArray(storedModels)) {
+            for (const [model, stats] of Object.entries(storedModels)) {
+                if (stats && typeof stats === 'object' && !Array.isArray(stats)) {
+                    models[model] = normalizeStoredStats(stats)
+                }
+            }
+        }
+        normalized.daily[date] = { ...day, models }
+    }
+
+    return normalized
 }
 
 export function getApiUsageDateKey(date = new Date()): string {
@@ -158,6 +269,20 @@ function createEmptyModelStats(): ApiUsageModelStats {
     }
 }
 
+function normalizeStoredStats(value: object): ApiUsageModelStats {
+    const stored = value as Partial<ApiUsageModelStats>
+    const numberOrZero = (candidate: unknown) => typeof candidate === 'number' && Number.isFinite(candidate)
+        ? Math.max(0, candidate)
+        : 0
+    return {
+        inputTokens: numberOrZero(stored.inputTokens),
+        outputTokens: numberOrZero(stored.outputTokens),
+        requestCount: numberOrZero(stored.requestCount),
+        estimatedCostUsd: numberOrZero(stored.estimatedCostUsd),
+        unpricedRequestCount: numberOrZero(stored.unpricedRequestCount),
+    }
+}
+
 function addRecord(target: ApiUsageModelStats, record: ApiUsageRecord, estimatedCost: number | null) {
     target.inputTokens += Math.max(0, Math.round(record.inputTokens))
     target.outputTokens += Math.max(0, Math.round(record.outputTokens))
@@ -171,15 +296,26 @@ function addRecord(target: ApiUsageModelStats, record: ApiUsageRecord, estimated
 }
 
 export function recordApiUsage(record: ApiUsageRecord) {
-    DBState.db.apiUsage = normalizeApiUsageStats(DBState.db.apiUsage)
+    if (!DBState.db.apiUsage?.daily || typeof DBState.db.apiUsage.daily !== 'object') {
+        DBState.db.apiUsage = createEmptyApiUsageStats()
+    }
 
     const dateKey = getApiUsageDateKey(record.date)
-    const day = DBState.db.apiUsage.daily[dateKey] ?? {
+    const storedDay = DBState.db.apiUsage.daily[dateKey]
+    const day = storedDay ? {
+        ...normalizeStoredStats(storedDay),
+        models: storedDay.models && typeof storedDay.models === 'object' ? storedDay.models : {},
+    } : {
         ...createEmptyModelStats(),
         models: {},
     }
-    const model = record.model || 'unknown'
-    const modelStats = day.models[model] ?? createEmptyModelStats()
+    const rawModel = record.model || 'unknown'
+    const model = ['__proto__', 'prototype', 'constructor'].includes(rawModel)
+        ? `model:${rawModel}`
+        : rawModel
+    const modelStats = day.models[model]
+        ? normalizeStoredStats(day.models[model])
+        : createEmptyModelStats()
     const estimatedCost = estimateApiUsageCost(record)
 
     addRecord(day, record, estimatedCost)

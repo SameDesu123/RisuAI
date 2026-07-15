@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { estimateApiUsageCost, getApiUsageDateKey } from './apiUsage'
+import { estimateApiUsageCost, getApiUsageDateKey, normalizeApiUsageStats, recordApiUsage } from './apiUsage'
+import { DBState } from './stores.svelte'
 
 vi.mock('./stores.svelte', () => ({
     DBState: { db: {} },
@@ -33,5 +34,43 @@ describe('API usage statistics', () => {
             inputTokens: 1_000,
             outputTokens: 1_000,
         })).toBeNull()
+    })
+
+    it('normalizes incomplete stored values before displaying them', () => {
+        expect(normalizeApiUsageStats({
+            daily: {
+                '2026-07-05': {
+                    inputTokens: 100,
+                    outputTokens: Number.NaN,
+                    requestCount: 1,
+                },
+            },
+        }).daily['2026-07-05']).toMatchObject({
+            inputTokens: 100,
+            outputTokens: 0,
+            requestCount: 1,
+            estimatedCostUsd: 0,
+            unpricedRequestCount: 0,
+            models: {},
+        })
+    })
+
+    it('aggregates successful requests by local day and model', () => {
+        DBState.db.apiUsage = { daily: {} }
+        recordApiUsage({
+            model: 'claude-3-5-sonnet-latest',
+            inputTokens: 1_000,
+            outputTokens: 200,
+            date: new Date(2026, 6, 5, 12),
+        })
+
+        const day = DBState.db.apiUsage.daily['2026-07-05']
+        expect(day).toMatchObject({
+            inputTokens: 1_000,
+            outputTokens: 200,
+            requestCount: 1,
+            unpricedRequestCount: 0,
+        })
+        expect(day.models['claude-3-5-sonnet-latest'].requestCount).toBe(1)
     })
 })

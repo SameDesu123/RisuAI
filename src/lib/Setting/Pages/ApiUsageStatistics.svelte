@@ -124,7 +124,9 @@
                 <CoinsIcon size={18} />
                 <span>{language.apiUsageStatistics.estimatedCost}</span>
             </div>
-            <div class="text-2xl font-semibold mt-2">{formatCost(yearTotals.estimatedCostUsd)}</div>
+            <div class="text-2xl font-semibold mt-2">
+                {formatCost(yearTotals.estimatedCostUsd)}{yearTotals.unpricedRequestCount > 0 ? '+' : ''}
+            </div>
             {#if yearTotals.unpricedRequestCount > 0}
                 <div class="text-xs text-textcolor2 mt-1">
                     {formatNumber(yearTotals.unpricedRequestCount)} {language.apiUsageStatistics.unpricedRequests}
