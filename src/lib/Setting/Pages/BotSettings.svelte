@@ -494,6 +494,10 @@
     {#if DBState.db.auxModelUnderModelSettings}
         <AuxModelSelectors />
     {/if}
+
+    {#if DBState.db.aiModel === 'vercel' || DBState.db.subModel === 'vercel'}
+        <VercelGatewaySettings />
+    {/if}
 {/if}
 
 {#if submenu === 1 || submenu === -1}
@@ -625,10 +629,6 @@
 
     {#if DBState.db.aiModel.startsWith('openrouter')}
         <OpenrouterSettings />
-    {/if}
-
-    {#if DBState.db.aiModel === 'vercel' || DBState.db.subModel === 'vercel'}
-        <VercelGatewaySettings />
     {/if}
 
     <!-- Separate Parameters - handled by custom component -->
