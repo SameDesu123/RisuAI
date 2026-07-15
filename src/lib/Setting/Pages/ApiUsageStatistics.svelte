@@ -5,6 +5,7 @@
         getApiUsageDateKey,
         getApiUsageSummary,
         type ApiUsageDay,
+        type ApiUsageModelStats,
         type ApiUsageSummaryRange,
     } from "src/ts/apiUsage";
     import { DBState } from "src/ts/stores.svelte";
@@ -61,6 +62,18 @@
 
     function getTotalTokens(stats?: Pick<ApiUsageDay, 'inputTokens'|'outputTokens'>) {
         return (stats?.inputTokens ?? 0) + (stats?.outputTokens ?? 0)
+    }
+
+    function getRequestStatusSummary(stats: ApiUsageModelStats) {
+        return `${language.apiUsageStatistics.succeeded} ${formatNumber(stats.successRequestCount)} · ${language.apiUsageStatistics.failed} ${formatNumber(stats.failedRequestCount)} · ${language.apiUsageStatistics.cancelled} ${formatNumber(stats.cancelledRequestCount)}`
+    }
+
+    function getRequestModeSummary(stats: ApiUsageModelStats) {
+        const auxiliaryRequests = stats.requestCountsByMode.submodel
+            + stats.requestCountsByMode.memory
+            + stats.requestCountsByMode.emotion
+            + stats.requestCountsByMode.otherAx
+        return `${language.apiUsageStatistics.chatRequests} ${formatNumber(stats.requestCountsByMode.model)} · ${language.apiUsageStatistics.translationRequests} ${formatNumber(stats.requestCountsByMode.translate)} · ${language.apiUsageStatistics.auxiliaryRequests} ${formatNumber(auxiliaryRequests)}`
     }
 
     function formatNumber(value: number) {
@@ -147,6 +160,8 @@
                 <span>{language.apiUsageStatistics.requestCount}</span>
             </div>
             <div class="text-2xl font-semibold mt-2">{formatNumber(summaryTotals.requestCount)}</div>
+            <div class="text-xs text-textcolor2 mt-1">{getRequestStatusSummary(summaryTotals)}</div>
+            <div class="text-xs text-textcolor2 mt-0.5">{getRequestModeSummary(summaryTotals)}</div>
         </div>
     </div>
 
@@ -189,7 +204,11 @@
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-sm">
                     <div><span class="text-textcolor2">{language.apiUsageStatistics.input}</span><br>{formatNumber(selectedStats.inputTokens)}</div>
                     <div><span class="text-textcolor2">{language.apiUsageStatistics.output}</span><br>{formatNumber(selectedStats.outputTokens)}</div>
-                    <div><span class="text-textcolor2">{language.apiUsageStatistics.requests}</span><br>{formatNumber(selectedStats.requestCount)}</div>
+                    <div>
+                        <span class="text-textcolor2">{language.apiUsageStatistics.requests}</span><br>{formatNumber(selectedStats.requestCount)}
+                        <div class="text-xs text-textcolor2 mt-1">{getRequestStatusSummary(selectedStats)}</div>
+                        <div class="text-xs text-textcolor2 mt-0.5">{getRequestModeSummary(selectedStats)}</div>
+                    </div>
                     <div>
                         <span class="text-textcolor2">{language.apiUsageStatistics.estimatedCost}</span><br>{formatCost(selectedStats.estimatedCostUsd)}
                         {#if selectedStats.unpricedRequestCount > 0}
