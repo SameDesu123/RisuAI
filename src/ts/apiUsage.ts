@@ -174,7 +174,7 @@ const pricingRules: PricingRule[] = [
         output: 0.4,
     },
     {
-        matches: (model) => model.startsWith('gemini-2.5-flash'),
+        matches: (model) => model.startsWith('gemini-2.5-flash') && !model.includes('image'),
         input: 0.3,
         output: 2.5,
     },
@@ -233,7 +233,17 @@ function normalizePricingModel(model: string): string | null {
         return null
     }
 
-    return model.replace(/-response-api$/, '').replace(/-vertex$/, '')
+    const normalized = model.replace(/-response-api$/, '').replace(/-vertex$/, '')
+    if (normalized === 'gpt41') return 'gpt-4.1'
+    if (normalized === 'gpt41-mini') return 'gpt-4.1-mini'
+    if (normalized === 'gpt41-nano') return 'gpt-4.1-nano'
+    if (normalized === 'gpt4o' || /^gpt4o-2024-/.test(normalized)) {
+        return normalized.replace('gpt4o', 'gpt-4o')
+    }
+    if (normalized === 'gpt4om' || normalized.startsWith('gpt4om-')) {
+        return normalized.replace('gpt4om', 'gpt-4o-mini')
+    }
+    return normalized
 }
 
 export function estimateApiUsageCost(record: ApiUsageRecord): number | null {

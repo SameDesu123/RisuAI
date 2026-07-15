@@ -34,6 +34,19 @@ describe('API usage statistics', () => {
             inputTokens: 1_000,
             outputTokens: 1_000,
         })).toBeNull()
+        expect(estimateApiUsageCost({
+            model: 'gemini-2.5-flash-image',
+            inputTokens: 1_000,
+            outputTokens: 1_000,
+        })).toBeNull()
+    })
+
+    it('resolves legacy model registry IDs to their API pricing names', () => {
+        expect(estimateApiUsageCost({
+            model: 'gpt41-mini-response-api',
+            inputTokens: 1_000_000,
+            outputTokens: 1_000_000,
+        })).toBe(2)
     })
 
     it('normalizes incomplete stored values before displaying them', () => {
