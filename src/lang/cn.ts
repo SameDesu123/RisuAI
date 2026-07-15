@@ -34,6 +34,11 @@ export const languageChinese = {
     },
     "showHelp": "显示帮助",
     "help": {
+        "vercelGatewayRouting": "优先顺序会先尝试指定的提供商，允许列表会将路由限制为列表中的提供商。排序应用于其余符合条件的提供商。",
+        "vercelServiceTier": "服务层级为尽力而为。若提供商不支持或没有 Priority/Flex 容量，将回退到默认层级。",
+        "vercelZeroDataRetention": "仅路由到具有经验证零数据保留协议的提供商。没有符合条件的提供商时请求会失败。",
+        "vercelDisallowPromptTraining": "仅路由到已验证不会使用提示词进行训练的提供商。",
+        "vercelAutomaticCaching": "在支持时由 AI Gateway 自动应用适合提供商的提示词缓存。",
         "model": "此模型是指聊天中使用的主控模型。",
         "submodel": "辅助模型是一个用于分析情感图像、产生自动建议等的模型，推荐使用 GPT-3.5。",
         "oaiapikey": "OpenAI 的 API 密钥（Key），可在 https://platform.openai.com/account/api-keys 获取。",

@@ -34,6 +34,11 @@ export const languageKorean = {
     },
     "showHelp": "도움말 보기",
     "help": {
+        "vercelGatewayRouting": "선호 순서는 지정한 제공자를 먼저 시도하며, 허용 목록은 요청에 사용할 제공자를 해당 목록으로 제한합니다. 정렬 기준은 남은 제공자에 적용됩니다.",
+        "vercelServiceTier": "서비스 티어는 최선형 옵션입니다. 제공자가 Priority 또는 Flex를 지원하지 않거나 용량이 없으면 기본 티어로 처리됩니다.",
+        "vercelZeroDataRetention": "검증된 ZDR 계약이 적용되는 제공자만 사용합니다. 사용할 수 있는 제공자가 없으면 요청이 실패합니다.",
+        "vercelDisallowPromptTraining": "프롬프트 학습 제외 조건이 검증된 제공자만 사용합니다.",
+        "vercelAutomaticCaching": "지원되는 경우 AI Gateway가 제공자에 맞는 프롬프트 캐싱을 자동으로 적용합니다.",
         "model": "채팅에서 사용되는 모델입니다.",
         "submodel": "보조 모델은 감정 이미지, 자동 제안등을 분석하는 데 사용되는 모델입니다. gpt3.5가 권장됩니다.",
         "oaiapikey": "OpenAI용 API 키입니다. https://platform.openai.com/account/api-keys에서 구하실 수 있습니다.",

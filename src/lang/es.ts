@@ -34,6 +34,11 @@ export const languageSpanish = {
     },
     "showHelp": "Mostrar Ayuda",
     "help": {
+        "vercelGatewayRouting": "El orden prueba primero los proveedores indicados, mientras que la lista permitida restringe el enrutamiento a esos proveedores. La ordenación se aplica a los proveedores restantes.",
+        "vercelServiceTier": "Los niveles de servicio son de mejor esfuerzo. Si Priority/Flex no está disponible o no es compatible, se usa el nivel predeterminado.",
+        "vercelZeroDataRetention": "Solo enruta a proveedores con un acuerdo verificado de retención cero de datos. La solicitud falla si no hay proveedores aptos.",
+        "vercelDisallowPromptTraining": "Solo enruta a proveedores con condiciones verificadas de exclusión del entrenamiento con prompts.",
+        "vercelAutomaticCaching": "Permite que AI Gateway aplique automáticamente el almacenamiento en caché adecuado cuando sea compatible.",
         "model": "La opción de modelo es el modelo principal usado en el chat.",
         "submodel": "El Modelo Auxiliar es un modelo que se utiliza para analizar imágenes de emociones, auto sugerencias, etc. Se recomienda GPT-3.5.",
         "oaiapikey": "Clave API para OpenAI. Puedes obtenerla en https://platform.openai.com/account/api-keys",

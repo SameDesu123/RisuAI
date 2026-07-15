@@ -34,6 +34,11 @@ export const languageVietnamese = {
     },
     "showHelp": "Hiển thị trợ giúp",
     "help": {
+        "vercelGatewayRouting": "Thứ tự ưu tiên thử các nhà cung cấp đã chọn trước, còn danh sách cho phép giới hạn định tuyến vào các nhà cung cấp đó. Việc sắp xếp áp dụng cho các nhà cung cấp hợp lệ còn lại.",
+        "vercelServiceTier": "Cấp dịch vụ hoạt động theo khả năng tốt nhất. Khi Priority/Flex không được hỗ trợ hoặc hết dung lượng, yêu cầu dùng cấp mặc định.",
+        "vercelZeroDataRetention": "Chỉ định tuyến tới nhà cung cấp có thỏa thuận không lưu giữ dữ liệu đã được xác minh. Yêu cầu thất bại nếu không có nhà cung cấp phù hợp.",
+        "vercelDisallowPromptTraining": "Chỉ định tuyến tới nhà cung cấp có điều khoản không dùng lời nhắc để huấn luyện đã được xác minh.",
+        "vercelAutomaticCaching": "Cho phép AI Gateway tự động áp dụng bộ nhớ đệm lời nhắc phù hợp khi được hỗ trợ.",
         "model": "Tùy chọn mô hình là mô hình chính được sử dụng trong trò chuyện.",
         "submodel": "Mô hình phụ trợ là mô hình được sử dụng để phân tích hình ảnh cảm xúc và đề xuất tự động, v.v. Nên sử dụng gpt3.5.",
         "oaiapikey": "Khóa Api cho OpenAI. bạn có thể lấy nó ở https://platform.openai.com/account/api-keys",

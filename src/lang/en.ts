@@ -35,6 +35,11 @@ export const languageEnglish = {
     },
     showHelp: "Show Help",
     help: {
+        vercelGatewayRouting: "Order promotes selected providers first, while Allowed Providers restricts routing to that list. Sorting applies to the remaining eligible providers.",
+        vercelServiceTier: "Service tiers are best-effort. Unsupported or unavailable Priority/Flex capacity falls back to the default tier.",
+        vercelZeroDataRetention: "Only route to providers covered by a verified Zero Data Retention agreement. The request fails when no eligible provider is available.",
+        vercelDisallowPromptTraining: "Only route to providers that have verified prompt-training opt-out terms.",
+        vercelAutomaticCaching: "Let AI Gateway apply provider-appropriate prompt caching automatically when supported.",
         model: "Model option is a main model used in chat.",
         submodel: "Auxiliary Model is a model that used in analyzing emotion images and auto suggestions and etc. gpt3.5 is recommended.",
         oaiapikey: "API key for OpenAI. you can get it in https://platform.openai.com/account/api-keys",

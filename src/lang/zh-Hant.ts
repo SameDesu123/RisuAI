@@ -34,6 +34,11 @@ export const languageChineseTraditional = {
     },
     "showHelp": "顯示幫助",
     "help": {
+        "vercelGatewayRouting": "偏好順序會先嘗試指定的提供商，允許清單會將路由限制為清單中的提供商。排序套用於其餘符合條件的提供商。",
+        "vercelServiceTier": "服務層級為盡力而為。若提供商不支援或沒有 Priority/Flex 容量，將回退到預設層級。",
+        "vercelZeroDataRetention": "僅路由到具有經驗證零資料保留協議的提供商。沒有符合條件的提供商時請求會失敗。",
+        "vercelDisallowPromptTraining": "僅路由到已驗證不會使用提示詞進行訓練的提供商。",
+        "vercelAutomaticCaching": "在支援時由 AI Gateway 自動套用適合提供商的提示詞快取。",
         "model": "此模型是指聊天時使用的主要模型。",
         "submodel": "輔助模型是一個用於分析情緒立繪、生成自動建議等的模型。",
         "oaiapikey": "OpenAI 的 API 金鑰，可在 https://platform.openai.com/account/api-keys 取得。",

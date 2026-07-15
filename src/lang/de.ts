@@ -34,6 +34,11 @@ export const languageGerman = {
     },
     "showHelp": "Hilfe anzeigen",
     "help": {
+        "vercelGatewayRouting": "Die Reihenfolge bevorzugt die angegebenen Anbieter, während die Zulassungsliste das Routing auf diese beschränkt. Die Sortierung gilt für die übrigen geeigneten Anbieter.",
+        "vercelServiceTier": "Servicestufen sind Best-Effort. Nicht unterstützte oder ausgelastete Priority-/Flex-Kapazität fällt auf die Standardstufe zurück.",
+        "vercelZeroDataRetention": "Nur an Anbieter mit verifizierter Zero-Data-Retention-Vereinbarung weiterleiten. Ohne geeigneten Anbieter schlägt die Anfrage fehl.",
+        "vercelDisallowPromptTraining": "Nur an Anbieter mit verifiziertem Ausschluss des Prompt-Trainings weiterleiten.",
+        "vercelAutomaticCaching": "AI Gateway wendet bei Unterstützung automatisch ein anbietergerechtes Prompt-Caching an.",
         "model": "Das Hauptmodell, das im Chat verwendet wird",
         "submodel": "Ein Hilfsmodell ist ein Modell, das zur Analyse von Emotionen und automatischen Vorschlägen usw. verwendet wird, um die die Konversation dynamischer zu gestalten. GPT-3.5 wird hier empfohlen.",
         "oaiapikey": "API-Schlüssel für OpenAI. Sie können sich unter platform.openai.com unter -> account -> api-keys einen API-Schlüssel erstellen",

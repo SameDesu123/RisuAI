@@ -1,6 +1,7 @@
 <script lang="ts">
     import { PlusIcon, TrashIcon } from '@lucide/svelte'
     import { language } from 'src/lang'
+    import Help from 'src/lib/Others/Help.svelte'
     import Accordion from 'src/lib/UI/Accordion.svelte'
     import CheckInput from 'src/lib/UI/GUI/CheckInput.svelte'
     import OptionInput from 'src/lib/UI/GUI/OptionInput.svelte'
@@ -36,7 +37,7 @@
         <OptionInput value="tps">{language.vercelSortTPS}</OptionInput>
     </SelectInput>
 
-    <span class="mt-4 text-textcolor">{language.vercelServiceTier}</span>
+    <span class="mt-4 text-textcolor">{language.vercelServiceTier} <Help key="vercelServiceTier" /></span>
     <SelectInput bind:value={DBState.db.vercelGateway.serviceTier}>
         <OptionInput value="default">{language.vercelTierDefault}</OptionInput>
         <OptionInput value="priority">{language.vercelTierPriority}</OptionInput>
@@ -44,15 +45,15 @@
     </SelectInput>
 
     <div class="mt-4 flex flex-col gap-3 text-textcolor">
-        <CheckInput bind:check={DBState.db.vercelGateway.zeroDataRetention} name={language.vercelZeroDataRetention} />
-        <CheckInput bind:check={DBState.db.vercelGateway.disallowPromptTraining} name={language.vercelDisallowPromptTraining} />
-        <CheckInput bind:check={DBState.db.vercelGateway.automaticCaching} name={language.vercelAutomaticCaching} />
+        <CheckInput bind:check={DBState.db.vercelGateway.zeroDataRetention} name={language.vercelZeroDataRetention}><Help key="vercelZeroDataRetention" /></CheckInput>
+        <CheckInput bind:check={DBState.db.vercelGateway.disallowPromptTraining} name={language.vercelDisallowPromptTraining}><Help key="vercelDisallowPromptTraining" /></CheckInput>
+        <CheckInput bind:check={DBState.db.vercelGateway.automaticCaching} name={language.vercelAutomaticCaching}><Help key="vercelAutomaticCaching" /></CheckInput>
     </div>
 
     {#await getVercelGatewayProviders(DBState.db.vercelRequestModel)}
         <p class="mt-4 text-textcolor2">{language.loading}...</p>
     {:then providers}
-        <Accordion name={language.vercelProviderOrder} styled>
+        <Accordion name={language.vercelProviderOrder} help="vercelGatewayRouting" styled>
             {#each DBState.db.vercelGateway.order as _, index}
                 <span class="mt-4 text-textcolor">{language.provider} {index + 1}</span>
                 <OpenrouterProviderList bind:value={DBState.db.vercelGateway.order[index]} options={providers} />
@@ -63,7 +64,7 @@
             </div>
         </Accordion>
 
-        <Accordion name={language.vercelProviderOnly} styled>
+        <Accordion name={language.vercelProviderOnly} help="vercelGatewayRouting" styled>
             {#each DBState.db.vercelGateway.only as _, index}
                 <span class="mt-4 text-textcolor">{language.provider} {index + 1}</span>
                 <OpenrouterProviderList bind:value={DBState.db.vercelGateway.only[index]} options={providers} />
