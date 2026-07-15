@@ -552,6 +552,7 @@ async function requestHTTPResponsesAPI(requestURL:string, body:any, headers:Reco
         let resRec:requestDataResponse
         let attempt = 0
         do{
+            await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed')
             attempt++
             resRec = await requestHTTPResponsesAPI(requestURL, body, headers, arg, networkOptions)
             if(resRec.type !== 'fail'){
@@ -756,6 +757,7 @@ function wrapResponsesToolStream(stream:ReadableStream<StreamResponseChunk>, bod
                 let attempt = 0
                 let ok = false
                 do{
+                    await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed')
                     attempt++
                     resRec = await fetchNative(requestURL, {
                         body: JSON.stringify(toExternalResponsesBody(body)),

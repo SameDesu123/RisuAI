@@ -922,6 +922,7 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
         let resRec
         let attempt = 0
         do {
+            await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed')
             attempt++
             resRec = await requestGoogle(url, body, headers, arg)
             
@@ -1236,6 +1237,7 @@ function wrapToolStream(
                         let errorFlag = true
                         
                         do {
+                            await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed')
                             attempt++
                             resRec = await fetchNative(url, {
                                 headers: headers,

@@ -4,6 +4,10 @@ export interface ApiUsageModelStats {
     inputTokens: number
     outputTokens: number
     requestCount: number
+    successRequestCount: number
+    failedRequestCount: number
+    cancelledRequestCount: number
+    requestCountsByMode: Record<ApiUsageRequestMode, number>
     estimatedCostUsd: number
     unpricedRequestCount: number
 }
@@ -17,6 +21,17 @@ export interface ApiUsageStats {
 }
 
 export type ApiUsageSummaryRange = 7 | 30 | 90 | 365 | 'all'
+export type ApiUsageRequestStatus = 'success' | 'failed' | 'cancelled'
+export type ApiUsageRequestMode = 'model' | 'submodel' | 'memory' | 'emotion' | 'otherAx' | 'translate'
+
+export const apiUsageRequestModes: ApiUsageRequestMode[] = [
+    'model',
+    'submodel',
+    'memory',
+    'emotion',
+    'otherAx',
+    'translate',
+]
 
 interface PricingRate {
     input: number
@@ -34,6 +49,8 @@ export interface ApiUsageRecord {
     outputTokens: number
     date?: Date
     flexProcessing?: boolean
+    status?: ApiUsageRequestStatus
+    mode?: ApiUsageRequestMode
 }
 
 // Standard first-party text-token prices in USD per 1M tokens.
@@ -276,9 +293,17 @@ function createEmptyModelStats(): ApiUsageModelStats {
         inputTokens: 0,
         outputTokens: 0,
         requestCount: 0,
+        successRequestCount: 0,
+        failedRequestCount: 0,
+        cancelledRequestCount: 0,
+        requestCountsByMode: createEmptyRequestCountsByMode(),
         estimatedCostUsd: 0,
         unpricedRequestCount: 0,
     }
+}
+
+function createEmptyRequestCountsByMode(): Record<ApiUsageRequestMode, number> {
+    return Object.fromEntries(apiUsageRequestModes.map((mode) => [mode, 0])) as Record<ApiUsageRequestMode, number>
 }
 
 export function getApiUsageSummary(
@@ -299,6 +324,12 @@ export function getApiUsageSummary(
             totals.inputTokens += day.inputTokens
             totals.outputTokens += day.outputTokens
             totals.requestCount += day.requestCount
+            totals.successRequestCount += day.successRequestCount
+            totals.failedRequestCount += day.failedRequestCount
+            totals.cancelledRequestCount += day.cancelledRequestCount
+            for (const mode of apiUsageRequestModes) {
+                totals.requestCountsByMode[mode] += day.requestCountsByMode[mode]
+            }
             totals.estimatedCostUsd += day.estimatedCostUsd
             totals.unpricedRequestCount += day.unpricedRequestCount
             return totals
@@ -310,10 +341,30 @@ function normalizeStoredStats(value: object): ApiUsageModelStats {
     const numberOrZero = (candidate: unknown) => typeof candidate === 'number' && Number.isFinite(candidate)
         ? Math.max(0, candidate)
         : 0
+    const storedRequestCount = numberOrZero(stored.requestCount)
+    const failedRequestCount = numberOrZero(stored.failedRequestCount)
+    const cancelledRequestCount = numberOrZero(stored.cancelledRequestCount)
+    const successRequestCount = typeof stored.successRequestCount === 'number'
+        ? numberOrZero(stored.successRequestCount)
+        : Math.max(0, storedRequestCount - failedRequestCount - cancelledRequestCount)
+    const requestCountsByMode = createEmptyRequestCountsByMode()
+    if (stored.requestCountsByMode && typeof stored.requestCountsByMode === 'object') {
+        for (const mode of apiUsageRequestModes) {
+            requestCountsByMode[mode] = numberOrZero(stored.requestCountsByMode[mode])
+        }
+    }
+    else {
+        requestCountsByMode.model = storedRequestCount
+    }
+    const categorizedRequestCount = successRequestCount + failedRequestCount + cancelledRequestCount
     return {
         inputTokens: numberOrZero(stored.inputTokens),
         outputTokens: numberOrZero(stored.outputTokens),
-        requestCount: numberOrZero(stored.requestCount),
+        requestCount: Math.max(storedRequestCount, categorizedRequestCount),
+        successRequestCount,
+        failedRequestCount,
+        cancelledRequestCount,
+        requestCountsByMode,
         estimatedCostUsd: numberOrZero(stored.estimatedCostUsd),
         unpricedRequestCount: numberOrZero(stored.unpricedRequestCount),
     }
@@ -323,6 +374,11 @@ function addRecord(target: ApiUsageModelStats, record: ApiUsageRecord, estimated
     target.inputTokens += Math.max(0, Math.round(record.inputTokens))
     target.outputTokens += Math.max(0, Math.round(record.outputTokens))
     target.requestCount += 1
+    const status = record.status ?? 'success'
+    if (status === 'success') target.successRequestCount += 1
+    else if (status === 'failed') target.failedRequestCount += 1
+    else target.cancelledRequestCount += 1
+    target.requestCountsByMode[record.mode ?? 'model'] += 1
     if (estimatedCost === null) {
         target.unpricedRequestCount += 1
     }

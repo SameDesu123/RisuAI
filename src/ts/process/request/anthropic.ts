@@ -998,6 +998,7 @@ async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:strin
                                     prevText = ''
                                     text = ''
                                     reader.cancel()
+                                    await arg.onUsageNextAttempt?.('failed')
                                     const res = await fetchNative(replacerURL, {
                                         body: JSON.stringify(body),
                                         headers: headers,

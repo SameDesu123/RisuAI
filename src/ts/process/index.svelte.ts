@@ -32,7 +32,6 @@ import { getModelInfo, LLMFlags } from "../model/modellist";
 import { hypaMemoryV3 } from "./memory/hypav3";
 import { getModuleAssets, getModuleToggles } from "./modules";
 import { readImage } from "../globalApi.svelte";
-import { recordApiUsage } from "../apiUsage";
 
 export interface OpenAIChat{
     role: 'system'|'user'|'assistant'|'function'
@@ -1743,13 +1742,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
     const resultTokens = currentOutputTokens + (arg.usedContinueTokens || 0)
     generationInfo.outputTokens = resultTokens
-    recordApiUsage({
-        model: generationInfo.model ?? generationModel,
-        inputTokens,
-        outputTokens: currentOutputTokens,
-        flexProcessing: DBState.db.openAIFlexProcessing
-            && !(generationInfo.model ?? generationModel).endsWith('-response-api'),
-    })
     if(DBState.db.autoContinueMinTokens > 0 && resultTokens < DBState.db.autoContinueMinTokens){
         needsAutoContinue = true
     }

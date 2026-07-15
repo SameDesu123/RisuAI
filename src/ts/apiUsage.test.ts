@@ -68,6 +68,12 @@ describe('API usage statistics', () => {
             inputTokens: 100,
             outputTokens: 0,
             requestCount: 1,
+            successRequestCount: 1,
+            failedRequestCount: 0,
+            cancelledRequestCount: 0,
+            requestCountsByMode: {
+                model: 1,
+            },
             estimatedCostUsd: 0,
             unpricedRequestCount: 0,
             models: {},
@@ -114,5 +120,36 @@ describe('API usage statistics', () => {
             unpricedRequestCount: 0,
         })
         expect(day.models['claude-3-5-sonnet-latest'].requestCount).toBe(1)
+    })
+
+    it('records failed, cancelled, translation, and auxiliary attempts separately', () => {
+        DBState.db.apiUsage = { daily: {} }
+        recordApiUsage({
+            model: 'gpt-5.5',
+            inputTokens: 100,
+            outputTokens: 0,
+            status: 'failed',
+            mode: 'translate',
+            date: new Date(2026, 6, 5, 12),
+        })
+        recordApiUsage({
+            model: 'gpt-5.5',
+            inputTokens: 100,
+            outputTokens: 20,
+            status: 'cancelled',
+            mode: 'otherAx',
+            date: new Date(2026, 6, 5, 12),
+        })
+
+        expect(DBState.db.apiUsage.daily['2026-07-05']).toMatchObject({
+            requestCount: 2,
+            successRequestCount: 0,
+            failedRequestCount: 1,
+            cancelledRequestCount: 1,
+            requestCountsByMode: {
+                translate: 1,
+                otherAx: 1,
+            },
+        })
     })
 })

@@ -819,6 +819,7 @@ export async function requestHTTPOpenAI(
                 let attempt = 0
                 
                 do {
+                    await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed')
                     attempt++
                     resRec = await requestHTTPOpenAI(replacerURL, body, headers, arg, networkOptions)
                     
@@ -1265,6 +1266,7 @@ function wrapToolStream(
                         let errorFlag = true
                         
                         do {
+                            await arg.onUsageNextAttempt?.(attempt === 0 ? 'success' : 'failed')
                             attempt++
                             resRec = await fetchNative(replacerURL, {
                                 body: JSON.stringify(body),

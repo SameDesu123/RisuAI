@@ -2,6 +2,7 @@ import { Ollama } from 'ollama/dist/browser.mjs';
 import { language } from "../../../lang";
 import { fetchNative, globalFetch } from "../../globalApi.svelte";
 import { getModelInfo, LLMFlags, LLMFormat, type LLMModel } from "../../model/modellist";
+import { createApiUsageRecorder } from "../../apiUsageRecorder";
 import { risuChatParser, risuEscape, risuUnescape } from "../../parser/parser.svelte";
 import { pluginProcess, pluginV2 } from "../../plugins/plugins.svelte";
 import { getCurrentCharacter, getCurrentChat, getDatabase, type character } from "../../storage/database.svelte";
@@ -63,6 +64,7 @@ export interface RequestDataArgumentExtended extends requestDataArgument{
     key?:string
     additionalOutput?:string
     saveSignatures?:boolean
+    onUsageNextAttempt?: (completedStatus: 'success' | 'failed') => Promise<void>
 }
 
 export type requestDataResponse = {
@@ -480,56 +482,73 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
     const format = targ.modelInfo.format
 
     targ.formated = reformater(targ.formated, targ.modelInfo)
+    const shouldTrackUsage = !arg.previewBody && format !== undefined && format !== LLMFormat.Echo
+    const usageRecorder = shouldTrackUsage ? createApiUsageRecorder({
+        formated: targ.formated,
+        mode: model,
+        model: targ.aiModel,
+        modelInfo: targ.modelInfo,
+        abortSignal,
+        flexProcessing: db.openAIFlexProcessing && !targ.aiModel.endsWith('-response-api'),
+    })
+    targ.onUsageNextAttempt = usageRecorder?.recordNextAttempt
 
-    switch(format){
-        case LLMFormat.OpenAICompatible:
-        case LLMFormat.Mistral:
-        case LLMFormat.NanoGPT:
-            return requestOpenAI(targ)
-        case LLMFormat.NanoGPTResponses:
-            return requestOpenAIResponseAPI(targ)
-        case LLMFormat.NanoGPTMessages:
-            return requestClaude(targ)
-        case LLMFormat.NanoGPTLegacy:
-            return requestOpenAILegacyInstruct(targ)
-        case LLMFormat.OpenAILegacyInstruct:
-            return requestOpenAILegacyInstruct(targ)
-        case LLMFormat.NovelAI:
-            return requestNovelAI(targ)
-        case LLMFormat.OobaLegacy:
-            return requestOobaLegacy(targ)
-        case LLMFormat.Plugin:
-            return requestPlugin(targ)
-        case LLMFormat.Ooba:
-            return requestOoba(targ)
-        case LLMFormat.VertexAIGemini:
-        case LLMFormat.GoogleCloud:
-            return requestGoogleCloudVertex(targ)
-        case LLMFormat.Kobold:
-            return requestKobold(targ)
-        case LLMFormat.NovelList:
-            return requestNovelList(targ)
-        case LLMFormat.Ollama:
-            return requestOllama(targ)
-        case LLMFormat.Cohere:
-            return requestCohere(targ)
-        case LLMFormat.Anthropic:
-        case LLMFormat.AnthropicLegacy:
-        case LLMFormat.AWSBedrockClaude:
-            return requestClaude(targ)
-        case LLMFormat.Horde:
-            return requestHorde(targ)
-        case LLMFormat.WebLLM:
-            return requestWebLLM(targ)
-        case LLMFormat.OpenAIResponseAPI:
-            return requestOpenAIResponseAPI(targ)
-        case LLMFormat.Echo:
-            return requestEcho(targ)
+    try {
+        let response: requestDataResponse
+        switch(format){
+            case LLMFormat.OpenAICompatible:
+            case LLMFormat.Mistral:
+            case LLMFormat.NanoGPT:
+                response = await requestOpenAI(targ); break
+            case LLMFormat.NanoGPTResponses:
+                response = await requestOpenAIResponseAPI(targ); break
+            case LLMFormat.NanoGPTMessages:
+                response = await requestClaude(targ); break
+            case LLMFormat.NanoGPTLegacy:
+            case LLMFormat.OpenAILegacyInstruct:
+                response = await requestOpenAILegacyInstruct(targ); break
+            case LLMFormat.NovelAI:
+                response = await requestNovelAI(targ); break
+            case LLMFormat.OobaLegacy:
+                response = await requestOobaLegacy(targ); break
+            case LLMFormat.Plugin:
+                response = await requestPlugin(targ); break
+            case LLMFormat.Ooba:
+                response = await requestOoba(targ); break
+            case LLMFormat.VertexAIGemini:
+            case LLMFormat.GoogleCloud:
+                response = await requestGoogleCloudVertex(targ); break
+            case LLMFormat.Kobold:
+                response = await requestKobold(targ); break
+            case LLMFormat.NovelList:
+                response = await requestNovelList(targ); break
+            case LLMFormat.Ollama:
+                response = await requestOllama(targ); break
+            case LLMFormat.Cohere:
+                response = await requestCohere(targ); break
+            case LLMFormat.Anthropic:
+            case LLMFormat.AnthropicLegacy:
+            case LLMFormat.AWSBedrockClaude:
+                response = await requestClaude(targ); break
+            case LLMFormat.Horde:
+                response = await requestHorde(targ); break
+            case LLMFormat.WebLLM:
+                response = await requestWebLLM(targ); break
+            case LLMFormat.OpenAIResponseAPI:
+                response = await requestOpenAIResponseAPI(targ); break
+            case LLMFormat.Echo:
+                response = await requestEcho(targ); break
+            default:
+                response = {
+                    type: 'fail',
+                    result: (language.errors.unknownModel)
+                }
+        }
+        return usageRecorder ? await usageRecorder.finalizeResponse(response) : response
     }
-
-    return {
-        type: 'fail',
-        result: (language.errors.unknownModel)
+    catch (error) {
+        await usageRecorder?.finalizeFailure()
+        throw error
     }
 }
 
