@@ -57,15 +57,17 @@ export function createApiUsageRecorder(options: ApiUsageRecorderOptions) {
         console.error('[API Usage] Failed to count input tokens', error)
         return 0
     })
+    let resolvedModel = options.modelInfo.internalID || options.model
     let finalized = false
 
     async function recordAttempt(status: ApiUsageRequestStatus, output: string[] = []) {
+        const attemptModel = resolvedModel
         const [inputTokens, outputTokens] = await Promise.all([
             inputTokensPromise,
             countOutputTokens(output, tokenizerOptions),
         ])
         recordApiUsage({
-            model: options.modelInfo.internalID || options.model,
+            model: attemptModel,
             inputTokens,
             outputTokens,
             flexProcessing: options.flexProcessing,
@@ -81,6 +83,10 @@ export function createApiUsageRecorder(options: ApiUsageRecorderOptions) {
     }
 
     return {
+        resolveModel(model: string | null | undefined) {
+            const normalizedModel = model?.trim()
+            if (normalizedModel) resolvedModel = normalizedModel
+        },
         async finalizeResponse(response: requestDataResponse): Promise<requestDataResponse> {
             if (response.type === 'success') {
                 await finalize('success', [response.result])

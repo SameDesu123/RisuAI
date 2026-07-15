@@ -63,6 +63,48 @@ describe('API usage request recorder', () => {
         })
     })
 
+    it('records the provider-resolved model ID instead of the routing model', async () => {
+        const recorder = makeRecorder()
+        recorder.resolveModel('google/gemma-4-31b-it')
+        await recorder.finalizeResponse({ type: 'success', result: 'Done' })
+
+        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        expect(day.models).toMatchObject({
+            'google/gemma-4-31b-it': {
+                requestCount: 1,
+                successRequestCount: 1,
+            },
+        })
+        expect(day.models['gpt-5.5']).toBeUndefined()
+    })
+
+    it('keeps each provider attempt under the model resolved for that attempt', async () => {
+        const recorder = makeRecorder()
+        recorder.resolveModel('provider/first-model')
+        await recorder.recordNextAttempt('failed')
+        recorder.resolveModel('provider/fallback-model')
+        await recorder.finalizeResponse({ type: 'success', result: 'Done' })
+
+        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        expect(day.models['provider/first-model']).toMatchObject({
+            requestCount: 1,
+            failedRequestCount: 1,
+        })
+        expect(day.models['provider/fallback-model']).toMatchObject({
+            requestCount: 1,
+            successRequestCount: 1,
+        })
+    })
+
+    it('ignores empty provider model IDs and keeps the routing fallback', async () => {
+        const recorder = makeRecorder()
+        recorder.resolveModel('   ')
+        await recorder.finalizeResponse({ type: 'success', result: 'Done' })
+
+        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        expect(day.models['gpt-5.5'].requestCount).toBe(1)
+    })
+
     it('records only the final cumulative streaming output', async () => {
         const source = new ReadableStream<StreamResponseChunk>({
             start(controller) {

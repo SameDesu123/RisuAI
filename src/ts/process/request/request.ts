@@ -65,6 +65,7 @@ export interface RequestDataArgumentExtended extends requestDataArgument{
     additionalOutput?:string
     saveSignatures?:boolean
     onUsageNextAttempt?: (completedStatus: 'success' | 'failed') => Promise<void>
+    onUsageModelResolved?: (model: string | null | undefined) => void
 }
 
 export type requestDataResponse = {
@@ -492,6 +493,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
         flexProcessing: db.openAIFlexProcessing && !targ.aiModel.endsWith('-response-api'),
     }) : null
     targ.onUsageNextAttempt = usageRecorder?.recordNextAttempt
+    targ.onUsageModelResolved = usageRecorder?.resolveModel
 
     try {
         let response: requestDataResponse
