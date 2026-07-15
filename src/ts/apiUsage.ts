@@ -16,6 +16,8 @@ export interface ApiUsageStats {
     daily: Record<string, ApiUsageDay>
 }
 
+export type ApiUsageSummaryRange = 7 | 30 | 90 | 365 | 'all'
+
 interface PricingRate {
     input: number
     output: number
@@ -277,6 +279,30 @@ function createEmptyModelStats(): ApiUsageModelStats {
         estimatedCostUsd: 0,
         unpricedRequestCount: 0,
     }
+}
+
+export function getApiUsageSummary(
+    stats: ApiUsageStats,
+    range: ApiUsageSummaryRange,
+    today = new Date(),
+): ApiUsageModelStats {
+    const todayKey = getApiUsageDateKey(today)
+    const cutoffKey = range === 'all' ? null : (() => {
+        const cutoff = new Date(today)
+        cutoff.setDate(cutoff.getDate() - (range - 1))
+        return getApiUsageDateKey(cutoff)
+    })()
+
+    return Object.entries(stats.daily)
+        .filter(([key]) => key <= todayKey && (cutoffKey === null || key >= cutoffKey))
+        .reduce((totals, [, day]) => {
+            totals.inputTokens += day.inputTokens
+            totals.outputTokens += day.outputTokens
+            totals.requestCount += day.requestCount
+            totals.estimatedCostUsd += day.estimatedCostUsd
+            totals.unpricedRequestCount += day.unpricedRequestCount
+            return totals
+        }, createEmptyModelStats())
 }
 
 function normalizeStoredStats(value: object): ApiUsageModelStats {

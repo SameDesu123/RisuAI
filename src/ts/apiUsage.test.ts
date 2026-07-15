@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { estimateApiUsageCost, getApiUsageDateKey, normalizeApiUsageStats, recordApiUsage } from './apiUsage'
+import {
+    estimateApiUsageCost,
+    getApiUsageDateKey,
+    getApiUsageSummary,
+    normalizeApiUsageStats,
+    recordApiUsage,
+} from './apiUsage'
 import { DBState } from './stores.svelte'
 
 vi.mock('./stores.svelte', () => ({
@@ -65,6 +71,29 @@ describe('API usage statistics', () => {
             estimatedCostUsd: 0,
             unpricedRequestCount: 0,
             models: {},
+        })
+    })
+
+    it('summarizes inclusive date ranges and excludes future records', () => {
+        const stats = normalizeApiUsageStats({
+            daily: {
+                '2026-07-08': { inputTokens: 100, requestCount: 1 },
+                '2026-07-09': { inputTokens: 200, requestCount: 2 },
+                '2026-07-15': { outputTokens: 50, requestCount: 1 },
+                '2026-07-16': { inputTokens: 1_000, requestCount: 1 },
+            },
+        })
+        const today = new Date(2026, 6, 15, 12)
+
+        expect(getApiUsageSummary(stats, 7, today)).toMatchObject({
+            inputTokens: 200,
+            outputTokens: 50,
+            requestCount: 3,
+        })
+        expect(getApiUsageSummary(stats, 'all', today)).toMatchObject({
+            inputTokens: 300,
+            outputTokens: 50,
+            requestCount: 4,
         })
     })
 

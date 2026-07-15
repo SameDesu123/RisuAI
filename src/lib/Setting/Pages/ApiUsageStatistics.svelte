@@ -1,7 +1,12 @@
 <script lang="ts">
     import { CalendarDaysIcon, ChartNoAxesCombinedIcon, CoinsIcon } from "@lucide/svelte";
     import { language } from "src/lang";
-    import { getApiUsageDateKey, type ApiUsageDay } from "src/ts/apiUsage";
+    import {
+        getApiUsageDateKey,
+        getApiUsageSummary,
+        type ApiUsageDay,
+        type ApiUsageSummaryRange,
+    } from "src/ts/apiUsage";
     import { DBState } from "src/ts/stores.svelte";
 
     interface HeatmapDay {
@@ -15,6 +20,15 @@
     const today = new Date()
     today.setHours(12, 0, 0, 0)
     let selectedDate = $state(getApiUsageDateKey(today))
+    let summaryRange = $state<ApiUsageSummaryRange>(365)
+
+    const summaryRangeOptions = $derived([
+        { value: 7 as const, label: language.apiUsageStatistics.last7Days },
+        { value: 30 as const, label: language.apiUsageStatistics.last30Days },
+        { value: 90 as const, label: language.apiUsageStatistics.last90Days },
+        { value: 365 as const, label: language.apiUsageStatistics.last365Days },
+        { value: 'all' as const, label: language.apiUsageStatistics.allTime },
+    ])
 
     const heatmapDays = $derived.by(() => {
         const start = new Date(today)
@@ -41,27 +55,7 @@
         })
     })
 
-    const yearTotals = $derived.by(() => {
-        const cutoff = new Date(today)
-        cutoff.setDate(today.getDate() - 364)
-        const cutoffKey = getApiUsageDateKey(cutoff)
-        return Object.entries(DBState.db.apiUsage.daily)
-            .filter(([key]) => key >= cutoffKey && key <= getApiUsageDateKey(today))
-            .reduce((totals, [, day]) => {
-                totals.inputTokens += day.inputTokens
-                totals.outputTokens += day.outputTokens
-                totals.requestCount += day.requestCount
-                totals.estimatedCostUsd += day.estimatedCostUsd
-                totals.unpricedRequestCount += day.unpricedRequestCount
-                return totals
-            }, {
-                inputTokens: 0,
-                outputTokens: 0,
-                requestCount: 0,
-                estimatedCostUsd: 0,
-                unpricedRequestCount: 0,
-            })
-    })
+    const summaryTotals = $derived(getApiUsageSummary(DBState.db.apiUsage, summaryRange, today))
 
     const selectedStats = $derived(DBState.db.apiUsage.daily[selectedDate])
 
@@ -102,9 +96,22 @@
 </script>
 
 <div class="flex flex-col gap-5 pb-6">
-    <div>
-        <h2 class="text-2xl font-bold mt-2">{language.apiUsageStatistics.title}</h2>
-        <p class="text-sm text-textcolor2 mt-1">{language.apiUsageStatistics.description}</p>
+    <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <h2 class="text-2xl font-bold mt-2">{language.apiUsageStatistics.title}</h2>
+            <p class="text-sm text-textcolor2 mt-1">{language.apiUsageStatistics.description}</p>
+        </div>
+        <label class="flex w-full sm:w-auto items-center justify-between sm:justify-start gap-2 text-sm">
+            <span class="text-textcolor2">{language.apiUsageStatistics.summaryPeriod}</span>
+            <select
+                class="rounded-md border border-darkborderc bg-darkbutton px-3 py-1.5 text-textcolor focus:border-borderc focus:outline-hidden focus:ring-2 focus:ring-borderc"
+                bind:value={summaryRange}
+            >
+                {#each summaryRangeOptions as option}
+                    <option class="bg-darkbg" value={option.value}>{option.label}</option>
+                {/each}
+            </select>
+        </label>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -113,9 +120,9 @@
                 <ChartNoAxesCombinedIcon size={18} />
                 <span>{language.apiUsageStatistics.totalTokens}</span>
             </div>
-            <div class="text-2xl font-semibold mt-2">{formatNumber(getTotalTokens(yearTotals))}</div>
+            <div class="text-2xl font-semibold mt-2">{formatNumber(getTotalTokens(summaryTotals))}</div>
             <div class="text-xs text-textcolor2 mt-1">
-                {language.apiUsageStatistics.input} {formatNumber(yearTotals.inputTokens)} · {language.apiUsageStatistics.output} {formatNumber(yearTotals.outputTokens)}
+                {language.apiUsageStatistics.input} {formatNumber(summaryTotals.inputTokens)} · {language.apiUsageStatistics.output} {formatNumber(summaryTotals.outputTokens)}
             </div>
         </div>
 
@@ -125,11 +132,11 @@
                 <span>{language.apiUsageStatistics.estimatedCost}</span>
             </div>
             <div class="text-2xl font-semibold mt-2">
-                {formatCost(yearTotals.estimatedCostUsd)}{yearTotals.unpricedRequestCount > 0 ? '+' : ''}
+                {formatCost(summaryTotals.estimatedCostUsd)}{summaryTotals.unpricedRequestCount > 0 ? '+' : ''}
             </div>
-            {#if yearTotals.unpricedRequestCount > 0}
+            {#if summaryTotals.unpricedRequestCount > 0}
                 <div class="text-xs text-textcolor2 mt-1">
-                    {formatNumber(yearTotals.unpricedRequestCount)} {language.apiUsageStatistics.unpricedRequests}
+                    {formatNumber(summaryTotals.unpricedRequestCount)} {language.apiUsageStatistics.unpricedRequests}
                 </div>
             {/if}
         </div>
@@ -139,8 +146,7 @@
                 <CalendarDaysIcon size={18} />
                 <span>{language.apiUsageStatistics.requestCount}</span>
             </div>
-            <div class="text-2xl font-semibold mt-2">{formatNumber(yearTotals.requestCount)}</div>
-            <div class="text-xs text-textcolor2 mt-1">{language.apiUsageStatistics.lastYear}</div>
+            <div class="text-2xl font-semibold mt-2">{formatNumber(summaryTotals.requestCount)}</div>
         </div>
     </div>
 
