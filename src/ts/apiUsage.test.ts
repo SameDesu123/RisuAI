@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+    createEmptyApiUsageStats,
+    deleteApiUsageCustomPricing,
     estimateApiUsageCost,
     getApiUsageDateKey,
     getApiUsageSummary,
     normalizeApiUsageStats,
     recordApiUsage,
+    setApiUsageCustomPricing,
 } from './apiUsage'
 import { DBState } from './stores.svelte'
 
@@ -47,6 +50,23 @@ describe('API usage statistics', () => {
         })).toBeNull()
     })
 
+    it('uses exact and normalized custom pricing before built-in pricing', () => {
+        expect(estimateApiUsageCost({
+            model: 'openrouter-openai/custom-model',
+            inputTokens: 1_000_000,
+            outputTokens: 1_000_000,
+        }, {
+            'openrouter-openai/custom-model': { input: 2, output: 4 },
+        })).toBe(6)
+        expect(estimateApiUsageCost({
+            model: 'gpt41-response-api',
+            inputTokens: 1_000_000,
+            outputTokens: 1_000_000,
+        }, {
+            'gpt-4.1': { input: 3, output: 9 },
+        })).toBe(12)
+    })
+
     it('resolves legacy model registry IDs to their API pricing names', () => {
         expect(estimateApiUsageCost({
             model: 'gpt41-mini-response-api',
@@ -80,6 +100,34 @@ describe('API usage statistics', () => {
         })
     })
 
+    it('normalizes only valid custom pricing entries', () => {
+        expect(normalizeApiUsageStats({
+            customPricing: {
+                'custom-model': { input: 1.5, output: 3 },
+                negative: { input: -1, output: 3 },
+                constructor: { input: 1, output: 1 },
+            },
+        }).customPricing).toEqual({
+            'custom-model': { input: 1.5, output: 3 },
+        })
+    })
+
+    it('stores and removes custom pricing without changing daily usage', () => {
+        DBState.db.apiUsage = normalizeApiUsageStats({
+            daily: {
+                '2026-07-05': { inputTokens: 100, requestCount: 1 },
+            },
+        })
+
+        expect(setApiUsageCustomPricing(' custom-model ', 2, 5)).toBe(true)
+        expect(setApiUsageCustomPricing('__proto__', 1, 1)).toBe(false)
+        expect(DBState.db.apiUsage.customPricing['custom-model']).toEqual({ input: 2, output: 5 })
+        expect(DBState.db.apiUsage.daily['2026-07-05'].requestCount).toBe(1)
+
+        deleteApiUsageCustomPricing('custom-model')
+        expect(DBState.db.apiUsage.customPricing).toEqual({})
+    })
+
     it('summarizes inclusive date ranges and excludes future records', () => {
         const stats = normalizeApiUsageStats({
             daily: {
@@ -104,7 +152,7 @@ describe('API usage statistics', () => {
     })
 
     it('aggregates successful requests by local day and model', () => {
-        DBState.db.apiUsage = { daily: {} }
+        DBState.db.apiUsage = createEmptyApiUsageStats()
         recordApiUsage({
             model: 'claude-3-5-sonnet-latest',
             inputTokens: 1_000,
@@ -123,7 +171,7 @@ describe('API usage statistics', () => {
     })
 
     it('records failed, cancelled, translation, and auxiliary attempts separately', () => {
-        DBState.db.apiUsage = { daily: {} }
+        DBState.db.apiUsage = createEmptyApiUsageStats()
         recordApiUsage({
             model: 'gpt-5.5',
             inputTokens: 100,

@@ -18,6 +18,12 @@ export interface ApiUsageDay extends ApiUsageModelStats {
 
 export interface ApiUsageStats {
     daily: Record<string, ApiUsageDay>
+    customPricing: Record<string, ApiUsageCustomPricing>
+}
+
+export interface ApiUsageCustomPricing {
+    input: number
+    output: number
 }
 
 export type ApiUsageSummaryRange = 7 | 30 | 90 | 365 | 'all'
@@ -205,7 +211,7 @@ const pricingRules: PricingRule[] = [
 ]
 
 export function createEmptyApiUsageStats(): ApiUsageStats {
-    return { daily: {} }
+    return { daily: {}, customPricing: {} }
 }
 
 export function normalizeApiUsageStats(value: unknown): ApiUsageStats {
@@ -213,31 +219,71 @@ export function normalizeApiUsageStats(value: unknown): ApiUsageStats {
         return createEmptyApiUsageStats()
     }
 
-    const daily = (value as Partial<ApiUsageStats>).daily
-    if (!daily || typeof daily !== 'object' || Array.isArray(daily)) {
-        return createEmptyApiUsageStats()
-    }
-
     const normalized = createEmptyApiUsageStats()
-    for (const [date, storedDay] of Object.entries(daily)) {
-        if (!storedDay || typeof storedDay !== 'object' || Array.isArray(storedDay)) {
-            continue
-        }
+    const stored = value as Partial<ApiUsageStats>
+    const daily = stored.daily
+    if (daily && typeof daily === 'object' && !Array.isArray(daily)) {
+        for (const [date, storedDay] of Object.entries(daily)) {
+            if (!storedDay || typeof storedDay !== 'object' || Array.isArray(storedDay)) {
+                continue
+            }
 
-        const day = normalizeStoredStats(storedDay)
-        const storedModels = (storedDay as Partial<ApiUsageDay>).models
-        const models: Record<string, ApiUsageModelStats> = {}
-        if (storedModels && typeof storedModels === 'object' && !Array.isArray(storedModels)) {
-            for (const [model, stats] of Object.entries(storedModels)) {
-                if (stats && typeof stats === 'object' && !Array.isArray(stats)) {
-                    models[model] = normalizeStoredStats(stats)
+            const day = normalizeStoredStats(storedDay)
+            const storedModels = (storedDay as Partial<ApiUsageDay>).models
+            const models: Record<string, ApiUsageModelStats> = {}
+            if (storedModels && typeof storedModels === 'object' && !Array.isArray(storedModels)) {
+                for (const [model, stats] of Object.entries(storedModels)) {
+                    if (stats && typeof stats === 'object' && !Array.isArray(stats)) {
+                        models[model] = normalizeStoredStats(stats)
+                    }
                 }
             }
+            normalized.daily[date] = { ...day, models }
         }
-        normalized.daily[date] = { ...day, models }
+    }
+
+    const customPricing = stored.customPricing
+    if (customPricing && typeof customPricing === 'object' && !Array.isArray(customPricing)) {
+        for (const [rawModel, rawRate] of Object.entries(customPricing)) {
+            const model = rawModel.trim()
+            if (!isSafePricingModel(model) || !rawRate || typeof rawRate !== 'object' || Array.isArray(rawRate)) {
+                continue
+            }
+            const rate = rawRate as Partial<ApiUsageCustomPricing>
+            if (isValidPrice(rate.input) && isValidPrice(rate.output)) {
+                normalized.customPricing[model] = { input: rate.input, output: rate.output }
+            }
+        }
     }
 
     return normalized
+}
+
+function isValidPrice(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
+function isSafePricingModel(model: string): boolean {
+    return model.length > 0 && !['__proto__', 'prototype', 'constructor'].includes(model)
+}
+
+export function setApiUsageCustomPricing(model: string, input: number, output: number): boolean {
+    const normalizedModel = model.trim()
+    if (!isSafePricingModel(normalizedModel) || !isValidPrice(input) || !isValidPrice(output)) {
+        return false
+    }
+
+    DBState.db.apiUsage.customPricing = {
+        ...(DBState.db.apiUsage.customPricing ?? {}),
+        [normalizedModel]: { input, output },
+    }
+    return true
+}
+
+export function deleteApiUsageCustomPricing(model: string) {
+    DBState.db.apiUsage.customPricing = Object.fromEntries(
+        Object.entries(DBState.db.apiUsage.customPricing ?? {}).filter(([storedModel]) => storedModel !== model),
+    )
 }
 
 export function getApiUsageDateKey(date = new Date()): string {
@@ -265,12 +311,22 @@ function normalizePricingModel(model: string): string | null {
     return normalized
 }
 
-export function estimateApiUsageCost(record: ApiUsageRecord): number | null {
+export function estimateApiUsageCost(
+    record: ApiUsageRecord,
+    customPricing: Record<string, ApiUsageCustomPricing> = {},
+): number | null {
     const model = normalizePricingModel(record.model)
-    if (!model) {
-        return null
+    const customRate = customPricing[record.model] ?? (model ? customPricing[model] : undefined)
+    if (customRate) {
+        const processingMultiplier = record.flexProcessing && model?.startsWith('gpt-') ? 0.5 : 1
+        return (
+            (record.inputTokens * customRate.input + record.outputTokens * customRate.output)
+            / 1_000_000
+            * processingMultiplier
+        )
     }
 
+    if (!model) return null
     const rule = pricingRules.find((candidate) => candidate.matches(model))
     if (!rule) {
         return null
@@ -391,6 +447,7 @@ export function recordApiUsage(record: ApiUsageRecord) {
     if (!DBState.db.apiUsage?.daily || typeof DBState.db.apiUsage.daily !== 'object') {
         DBState.db.apiUsage = createEmptyApiUsageStats()
     }
+    DBState.db.apiUsage.customPricing ??= {}
 
     const dateKey = getApiUsageDateKey(record.date)
     const storedDay = DBState.db.apiUsage.daily[dateKey]
@@ -408,7 +465,7 @@ export function recordApiUsage(record: ApiUsageRecord) {
     const modelStats = day.models[model]
         ? normalizeStoredStats(day.models[model])
         : createEmptyModelStats()
-    const estimatedCost = estimateApiUsageCost(record)
+    const estimatedCost = estimateApiUsageCost(record, DBState.db.apiUsage.customPricing)
 
     addRecord(day, record, estimatedCost)
     addRecord(modelStats, record, estimatedCost)

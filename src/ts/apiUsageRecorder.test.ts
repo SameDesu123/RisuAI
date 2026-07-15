@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApiUsageRecorder } from './apiUsageRecorder'
+import { createEmptyApiUsageStats } from './apiUsage'
 import type { StreamResponseChunk, requestDataResponse } from './process/request/request'
 import { DBState } from './stores.svelte'
 
@@ -31,7 +32,7 @@ function makeRecorder(options: {
 
 describe('API usage request recorder', () => {
     beforeEach(() => {
-        DBState.db.apiUsage = { daily: {} }
+        DBState.db.apiUsage = createEmptyApiUsageStats()
     })
 
     it('records successful translation requests', async () => {
