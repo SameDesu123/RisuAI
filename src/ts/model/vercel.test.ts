@@ -74,9 +74,26 @@ describe('Vercel AI Gateway model discovery', () => {
         ])
     })
 
+    it('caches provider catalogs for repeated requests', async () => {
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({
+                data: {
+                    endpoints: [{ provider_name: 'openai', status: 0 }],
+                },
+            }),
+        })
+        vi.stubGlobal('fetch', fetchMock)
+
+        await getVercelGatewayProviders('cached/model')
+        await getVercelGatewayProviders('cached/model')
+
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
     it('fails closed to an empty catalog', async () => {
         vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
         await expect(getVercelGatewayModels()).resolves.toEqual([])
-        await expect(getVercelGatewayProviders('openai/gpt-5')).resolves.toEqual([])
+        await expect(getVercelGatewayProviders('offline/model')).resolves.toEqual([])
     })
 })

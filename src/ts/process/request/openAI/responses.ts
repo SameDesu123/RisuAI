@@ -806,7 +806,15 @@ export async function requestOpenAIResponseAPI(arg:RequestDataArgumentExtended):
     const db = getDatabase()
     const aiModel = arg.aiModel
     let body = await buildResponsesBody(arg)
-    body = applyVercelGatewayOptions(body, aiModel)
+    try{
+        body = await applyVercelGatewayOptions(body, aiModel)
+    }
+    catch(error){
+        return {
+            type: 'fail',
+            result: error instanceof Error ? error.message : String(error),
+        }
+    }
     const { requestURL, risuIdentify } = getResponsesRequestURL(arg)
     const headers = buildResponsesHeaders(arg, risuIdentify)
 

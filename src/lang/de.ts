@@ -34,7 +34,7 @@ export const languageGerman = {
     },
     "showHelp": "Hilfe anzeigen",
     "help": {
-        "vercelGatewayRouting": "Die Reihenfolge bevorzugt die angegebenen Anbieter, während die Zulassungsliste das Routing auf diese beschränkt. Die Sortierung gilt für die übrigen geeigneten Anbieter.",
+        "vercelGatewayRouting": "Die Reihenfolge bevorzugt die angegebenen Anbieter, während ausgeschlossene Anbieter aus dem Routing entfernt werden. Die Sortierung gilt für die übrigen geeigneten Anbieter.",
         "vercelServiceTier": "Servicestufen sind Best-Effort. Nicht unterstützte oder ausgelastete Priority-/Flex-Kapazität fällt auf die Standardstufe zurück.",
         "vercelZeroDataRetention": "Nur an Anbieter mit verifizierter Zero-Data-Retention-Vereinbarung weiterleiten. Ohne geeigneten Anbieter schlägt die Anfrage fehl.",
         "vercelDisallowPromptTraining": "Nur an Anbieter mit verifiziertem Ausschluss des Prompt-Trainings weiterleiten.",
@@ -946,7 +946,7 @@ export const languageGerman = {
     "vercelChatCompletions": "Chat Completions",
     "vercelResponsesAPI": "Responses API",
     "vercelProviderOrder": "Anbieter-Prioritätsreihenfolge",
-    "vercelProviderOnly": "Zulässige Anbieter",
+    "vercelProviderExcluded": "Ausgeschlossene Anbieter",
     "vercelProviderSort": "Anbietersortierung",
     "vercelSortAuto": "Automatisch",
     "vercelSortCost": "Niedrigste Kosten",

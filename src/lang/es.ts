@@ -34,7 +34,7 @@ export const languageSpanish = {
     },
     "showHelp": "Mostrar Ayuda",
     "help": {
-        "vercelGatewayRouting": "El orden prueba primero los proveedores indicados, mientras que la lista permitida restringe el enrutamiento a esos proveedores. La ordenación se aplica a los proveedores restantes.",
+        "vercelGatewayRouting": "El orden prueba primero los proveedores indicados, mientras que los proveedores excluidos se eliminan del enrutamiento. La ordenación se aplica a los proveedores restantes.",
         "vercelServiceTier": "Los niveles de servicio son de mejor esfuerzo. Si Priority/Flex no está disponible o no es compatible, se usa el nivel predeterminado.",
         "vercelZeroDataRetention": "Solo enruta a proveedores con un acuerdo verificado de retención cero de datos. La solicitud falla si no hay proveedores aptos.",
         "vercelDisallowPromptTraining": "Solo enruta a proveedores con condiciones verificadas de exclusión del entrenamiento con prompts.",
@@ -946,7 +946,7 @@ export const languageSpanish = {
     "vercelChatCompletions": "Chat Completions",
     "vercelResponsesAPI": "Responses API",
     "vercelProviderOrder": "Orden de preferencia de proveedores",
-    "vercelProviderOnly": "Proveedores permitidos",
+    "vercelProviderExcluded": "Proveedores excluidos",
     "vercelProviderSort": "Ordenación de proveedores",
     "vercelSortAuto": "Automático",
     "vercelSortCost": "Menor coste",

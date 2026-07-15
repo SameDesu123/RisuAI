@@ -1,3 +1,4 @@
+import { getVercelGatewayProviders } from 'src/ts/model/vercel'
 import { getDatabase } from 'src/ts/storage/database.svelte'
 
 export function isVercelGatewayModel(aiModel?: string): boolean {
@@ -9,17 +10,34 @@ function normalizeProviderList(providers: string[]): string[] {
     return [...new Set(normalized)]
 }
 
-export function applyVercelGatewayOptions<T extends Record<string, any>>(body: T, aiModel?: string): T {
+export async function applyVercelGatewayOptions<T extends Record<string, any>>(body: T, aiModel?: string): Promise<T> {
     if(!isVercelGatewayModel(aiModel)) return body
 
-    const config = getDatabase().vercelGateway
+    const db = getDatabase()
+    const config = db.vercelGateway
     const requestBody = body as Record<string, any>
     const gateway: Record<string, any> = {}
-    const order = normalizeProviderList(config.order ?? [])
-    const only = normalizeProviderList(config.only ?? [])
+    const excluded = normalizeProviderList(config.excluded ?? [])
+    const excludedSet = new Set(excluded)
+    const order = normalizeProviderList(config.order ?? []).filter((provider) => !excludedSet.has(provider))
+    const legacyOnly = normalizeProviderList(config.only ?? [])
 
     if(order.length > 0) gateway.order = order
-    if(only.length > 0) gateway.only = only
+    if(excluded.length > 0){
+        const model = typeof requestBody.model === 'string' ? requestBody.model : db.vercelRequestModel
+        const providers = normalizeProviderList((await getVercelGatewayProviders(model)).map((provider) => provider.slug))
+        if(providers.length === 0) throw new Error('Could not load providers for the selected Vercel AI Gateway model.')
+
+        const activeExcluded = providers.filter((provider) => excludedSet.has(provider))
+        if(activeExcluded.length > 0){
+            const only = providers.filter((provider) => !excludedSet.has(provider))
+            if(only.length === 0) throw new Error('At least one Vercel AI Gateway provider must remain enabled.')
+            gateway.only = only
+        }
+    }
+    else if(legacyOnly.length > 0){
+        gateway.only = legacyOnly
+    }
     if(config.sort && config.sort !== 'auto') gateway.sort = config.sort
     if(config.serviceTier && config.serviceTier !== 'default') gateway.serviceTier = config.serviceTier
     if(config.zeroDataRetention) gateway.zeroDataRetention = true

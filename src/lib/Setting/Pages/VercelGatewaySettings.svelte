@@ -11,12 +11,32 @@
     import { LLMFormat } from 'src/ts/model/modellist'
     import { DBState } from 'src/ts/stores.svelte'
 
-    function addProvider(target: 'order' | 'only') {
-        DBState.db.vercelGateway[target] = [...DBState.db.vercelGateway[target], '']
+    function addProvider() {
+        DBState.db.vercelGateway.order = [...DBState.db.vercelGateway.order, '']
     }
 
-    function removeProvider(target: 'order' | 'only') {
-        DBState.db.vercelGateway[target] = DBState.db.vercelGateway[target].slice(0, -1)
+    function removeProvider() {
+        DBState.db.vercelGateway.order = DBState.db.vercelGateway.order.slice(0, -1)
+    }
+
+    function isProviderExcluded(provider: string): boolean {
+        const excluded = DBState.db.vercelGateway.excluded ?? []
+        if(excluded.length > 0) return excluded.includes(provider)
+
+        const legacyOnly = DBState.db.vercelGateway.only ?? []
+        return legacyOnly.length > 0 && !legacyOnly.includes(provider)
+    }
+
+    function setProviderExcluded(provider: string, shouldExclude: boolean, providers: { slug: string }[]) {
+        const excluded = providers
+            .filter((item) => isProviderExcluded(item.slug))
+            .map((item) => item.slug)
+        const next = shouldExclude
+            ? [...excluded, provider]
+            : excluded.filter((item) => item !== provider)
+
+        DBState.db.vercelGateway.excluded = [...new Set(next)]
+        DBState.db.vercelGateway.only = []
     }
 </script>
 
@@ -59,20 +79,22 @@
                 <OpenrouterProviderList bind:value={DBState.db.vercelGateway.order[index]} options={providers} />
             {/each}
             <div class="flex gap-2">
-                <button class="rounded-md bg-selected p-2 text-textcolor" onclick={() => addProvider('order')}><PlusIcon /></button>
-                <button class="rounded-md bg-red-500 p-2 text-white" onclick={() => removeProvider('order')}><TrashIcon /></button>
+                <button class="rounded-md bg-selected p-2 text-textcolor" onclick={addProvider}><PlusIcon /></button>
+                <button class="rounded-md bg-red-500 p-2 text-white" onclick={removeProvider}><TrashIcon /></button>
             </div>
         </Accordion>
 
-        <Accordion name={language.vercelProviderOnly} help="vercelGatewayRouting" styled>
-            {#each DBState.db.vercelGateway.only as _, index}
-                <span class="mt-4 text-textcolor">{language.provider} {index + 1}</span>
-                <OpenrouterProviderList bind:value={DBState.db.vercelGateway.only[index]} options={providers} />
-            {/each}
-            <div class="flex gap-2">
-                <button class="rounded-md bg-selected p-2 text-textcolor" onclick={() => addProvider('only')}><PlusIcon /></button>
-                <button class="rounded-md bg-red-500 p-2 text-white" onclick={() => removeProvider('only')}><TrashIcon /></button>
+        <div class="mt-4 flex flex-col gap-2 rounded-md border border-selected p-3">
+            <span class="text-lg text-textcolor">{language.vercelProviderExcluded} <Help key="vercelGatewayRouting" /></span>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {#each providers as provider}
+                    <CheckInput
+                        check={isProviderExcluded(provider.slug)}
+                        name={provider.name}
+                        onChange={(excluded) => setProviderExcluded(provider.slug, excluded, providers)}
+                    />
+                {/each}
             </div>
-        </Accordion>
+        </div>
     {/await}
 </Accordion>

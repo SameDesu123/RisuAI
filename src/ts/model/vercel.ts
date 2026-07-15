@@ -20,6 +20,11 @@ type VercelGatewayEndpoint = {
     status: number
 }
 
+export type VercelGatewayProvider = { name: string, slug: string }
+
+const VERCEL_PROVIDER_CACHE_TTL = 5 * 60 * 1000
+const vercelProviderCache = new Map<string, { providers: VercelGatewayProvider[], expiresAt: number }>()
+
 function toPricePerMillion(raw?: string): number | undefined {
     if(raw === undefined || raw === null || raw === '') return undefined
     const price = Number(raw)
@@ -38,22 +43,27 @@ export async function getVercelGatewayModels(): Promise<VercelGatewayModel[]> {
     }
 }
 
-export async function getVercelGatewayProviders(modelId: string): Promise<{ name: string, slug: string }[]> {
+export async function getVercelGatewayProviders(modelId: string): Promise<VercelGatewayProvider[]> {
     if(!modelId) return []
+
+    const cached = vercelProviderCache.get(modelId)
+    if(cached && cached.expiresAt > Date.now()) return cached.providers
 
     try{
         const response = await fetch(getVercelModelEndpointsURL(modelId))
-        if(!response.ok) return []
+        if(!response.ok) return cached?.providers ?? []
         const data = await response.json()
         const providers = (data?.data?.endpoints ?? []) as VercelGatewayEndpoint[]
-        return providers
+        const result = providers
             .filter((endpoint) => endpoint.status === 0 && endpoint.provider_name)
             .map((endpoint) => ({ name: endpoint.provider_name, slug: endpoint.provider_name }))
             .filter((provider, index, all) => all.findIndex((item) => item.slug === provider.slug) === index)
             .sort((a, b) => a.name.localeCompare(b.name))
+        vercelProviderCache.set(modelId, { providers: result, expiresAt: Date.now() + VERCEL_PROVIDER_CACHE_TTL })
+        return result
     }
     catch{
-        return []
+        return cached?.providers ?? []
     }
 }
 

@@ -35,7 +35,7 @@ const mocks = vi.hoisted(() => ({
         vercelRequestModel: 'anthropic/claude-sonnet-4.6',
         vercelGateway: {
             order: ['bedrock'],
-            only: ['bedrock', 'anthropic'],
+            excluded: ['vertex'],
             sort: 'cost',
             serviceTier: 'priority',
             zeroDataRetention: true,
@@ -49,6 +49,14 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('src/ts/storage/database.svelte', () => ({
     getDatabase: () => mocks.db,
+}))
+
+vi.mock('src/ts/model/vercel', () => ({
+    getVercelGatewayProviders: vi.fn().mockResolvedValue([
+        { name: 'anthropic', slug: 'anthropic' },
+        { name: 'bedrock', slug: 'bedrock' },
+        { name: 'vertex', slug: 'vertex' },
+    ]),
 }))
 
 vi.mock('src/ts/globalApi.svelte', () => ({
@@ -476,7 +484,7 @@ describe('OpenAI Responses API helpers', () => {
         expect(preview.headers.Authorization).toBe('Bearer vercel-key')
         expect(preview.body.providerOptions.gateway).toEqual({
             order: ['bedrock'],
-            only: ['bedrock', 'anthropic'],
+            only: ['anthropic', 'bedrock'],
             sort: 'cost',
             serviceTier: 'priority',
             zeroDataRetention: true,

@@ -35,7 +35,7 @@ export const languageEnglish = {
     },
     showHelp: "Show Help",
     help: {
-        vercelGatewayRouting: "Order promotes selected providers first, while Allowed Providers restricts routing to that list. Sorting applies to the remaining eligible providers.",
+        vercelGatewayRouting: "Order promotes selected providers first, while Excluded Providers removes selected providers from routing. Sorting applies to the remaining eligible providers.",
         vercelServiceTier: "Service tiers are best-effort. Unsupported or unavailable Priority/Flex capacity falls back to the default tier.",
         vercelZeroDataRetention: "Only route to providers covered by a verified Zero Data Retention agreement. The request fails when no eligible provider is available.",
         vercelDisallowPromptTraining: "Only route to providers that have verified prompt-training opt-out terms.",
@@ -1100,7 +1100,7 @@ export const languageEnglish = {
     vercelChatCompletions: "Chat Completions",
     vercelResponsesAPI: "Responses API",
     vercelProviderOrder: "Provider Preference Order",
-    vercelProviderOnly: "Allowed Providers",
+    vercelProviderExcluded: "Excluded Providers",
     vercelProviderSort: "Provider Sorting",
     vercelSortAuto: "Automatic",
     vercelSortCost: "Lowest Cost",

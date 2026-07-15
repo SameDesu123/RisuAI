@@ -34,7 +34,7 @@ export const languageChineseTraditional = {
     },
     "showHelp": "顯示幫助",
     "help": {
-        "vercelGatewayRouting": "偏好順序會先嘗試指定的提供商，允許清單會將路由限制為清單中的提供商。排序套用於其餘符合條件的提供商。",
+        "vercelGatewayRouting": "偏好順序會先嘗試指定的提供商，排除的提供商會從路由中移除所選提供商。排序套用於其餘符合條件的提供商。",
         "vercelServiceTier": "服務層級為盡力而為。若提供商不支援或沒有 Priority/Flex 容量，將回退到預設層級。",
         "vercelZeroDataRetention": "僅路由到具有經驗證零資料保留協議的提供商。沒有符合條件的提供商時請求會失敗。",
         "vercelDisallowPromptTraining": "僅路由到已驗證不會使用提示詞進行訓練的提供商。",
@@ -948,7 +948,7 @@ export const languageChineseTraditional = {
     "vercelChatCompletions": "Chat Completions",
     "vercelResponsesAPI": "Responses API",
     "vercelProviderOrder": "提供商偏好順序",
-    "vercelProviderOnly": "允許的提供商",
+    "vercelProviderExcluded": "排除的提供商",
     "vercelProviderSort": "提供商排序",
     "vercelSortAuto": "自動",
     "vercelSortCost": "最低成本",

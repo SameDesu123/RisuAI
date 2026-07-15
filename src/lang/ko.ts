@@ -34,7 +34,7 @@ export const languageKorean = {
     },
     "showHelp": "도움말 보기",
     "help": {
-        "vercelGatewayRouting": "선호 순서는 지정한 제공자를 먼저 시도하며, 허용 목록은 요청에 사용할 제공자를 해당 목록으로 제한합니다. 정렬 기준은 남은 제공자에 적용됩니다.",
+        "vercelGatewayRouting": "선호 순서는 지정한 제공자를 먼저 시도하며, 제외할 제공자는 선택한 제공자를 라우팅에서 제거합니다. 정렬 기준은 남은 제공자에 적용됩니다.",
         "vercelServiceTier": "서비스 티어는 최선형 옵션입니다. 제공자가 Priority 또는 Flex를 지원하지 않거나 용량이 없으면 기본 티어로 처리됩니다.",
         "vercelZeroDataRetention": "검증된 ZDR 계약이 적용되는 제공자만 사용합니다. 사용할 수 있는 제공자가 없으면 요청이 실패합니다.",
         "vercelDisallowPromptTraining": "프롬프트 학습 제외 조건이 검증된 제공자만 사용합니다.",
@@ -967,7 +967,7 @@ export const languageKorean = {
     "vercelChatCompletions": "Chat Completions",
     "vercelResponsesAPI": "Responses API",
     "vercelProviderOrder": "제공자 선호 순서",
-    "vercelProviderOnly": "허용할 제공자",
+    "vercelProviderExcluded": "제외할 제공자",
     "vercelProviderSort": "제공자 정렬",
     "vercelSortAuto": "자동",
     "vercelSortCost": "최저 비용",

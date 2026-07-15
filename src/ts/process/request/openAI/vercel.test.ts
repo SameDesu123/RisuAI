@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { applyVercelGatewayOptions } from './vercel'
 
+const getVercelGatewayProviders = vi.hoisted(() => vi.fn())
+
 const db = vi.hoisted(() => ({
     vercelGateway: {
         order: [] as string[],
+        excluded: [] as string[],
         only: [] as string[],
         sort: 'auto' as 'auto' | 'cost' | 'ttft' | 'tps',
         serviceTier: 'default' as 'default' | 'priority' | 'flex',
@@ -18,10 +21,21 @@ vi.mock('src/ts/storage/database.svelte', () => ({
     getDatabase: () => db,
 }))
 
+vi.mock('src/ts/model/vercel', () => ({
+    getVercelGatewayProviders,
+}))
+
 describe('Vercel AI Gateway request options', () => {
     beforeEach(() => {
+        getVercelGatewayProviders.mockReset()
+        getVercelGatewayProviders.mockResolvedValue([
+            { name: 'anthropic', slug: 'anthropic' },
+            { name: 'azure', slug: 'azure' },
+            { name: 'openai', slug: 'openai' },
+        ])
         db.vercelGateway = {
             order: [],
+            excluded: [],
             only: [],
             sort: 'auto',
             serviceTier: 'default',
@@ -31,14 +45,16 @@ describe('Vercel AI Gateway request options', () => {
         }
     })
 
-    it('omits providerOptions when all settings use defaults', () => {
-        expect(applyVercelGatewayOptions({ model: 'openai/gpt-5' }, 'vercel')).toEqual({ model: 'openai/gpt-5' })
+    it('omits providerOptions when all settings use defaults', async () => {
+        await expect(applyVercelGatewayOptions({ model: 'openai/gpt-5' }, 'vercel')).resolves.toEqual({ model: 'openai/gpt-5' })
+        expect(getVercelGatewayProviders).not.toHaveBeenCalled()
     })
 
-    it('normalizes routing lists and emits all enabled options', () => {
+    it('turns excluded providers into the supported Vercel only list', async () => {
         db.vercelGateway = {
             order: [' azure ', '', 'openai', 'azure'],
-            only: ['openai', ' azure '],
+            excluded: [' azure ', '', 'azure'],
+            only: [],
             sort: 'cost',
             serviceTier: 'priority',
             zeroDataRetention: true,
@@ -46,12 +62,12 @@ describe('Vercel AI Gateway request options', () => {
             automaticCaching: true,
         }
 
-        expect(applyVercelGatewayOptions({ model: 'openai/gpt-5' }, 'vercel')).toEqual({
+        await expect(applyVercelGatewayOptions({ model: 'openai/gpt-5' }, 'vercel')).resolves.toEqual({
             model: 'openai/gpt-5',
             providerOptions: {
                 gateway: {
-                    order: ['azure', 'openai'],
-                    only: ['openai', 'azure'],
+                    order: ['openai'],
+                    only: ['anthropic', 'openai'],
                     sort: 'cost',
                     serviceTier: 'priority',
                     zeroDataRetention: true,
@@ -60,12 +76,33 @@ describe('Vercel AI Gateway request options', () => {
                 },
             },
         })
+        expect(getVercelGatewayProviders).toHaveBeenCalledWith('openai/gpt-5')
     })
 
-    it('does not alter other providers', () => {
+    it('keeps legacy only lists for existing saved settings', async () => {
+        db.vercelGateway.only = ['openai', ' azure ', 'openai']
+
+        await expect(applyVercelGatewayOptions({ model: 'openai/gpt-5' }, 'vercel')).resolves.toEqual({
+            model: 'openai/gpt-5',
+            providerOptions: {
+                gateway: {
+                    only: ['openai', 'azure'],
+                },
+            },
+        })
+    })
+
+    it('rejects excluding every provider available for the model', async () => {
+        db.vercelGateway.excluded = ['anthropic', 'azure', 'openai']
+
+        await expect(applyVercelGatewayOptions({ model: 'openai/gpt-5' }, 'vercel'))
+            .rejects.toThrow('At least one Vercel AI Gateway provider must remain enabled.')
+    })
+
+    it('does not alter other providers', async () => {
         db.vercelGateway.zeroDataRetention = true
         const body = { model: 'gpt-5' }
-        expect(applyVercelGatewayOptions(body, 'gpt-5')).toBe(body)
+        expect(await applyVercelGatewayOptions(body, 'gpt-5')).toBe(body)
         expect(body).toEqual({ model: 'gpt-5' })
     })
 })

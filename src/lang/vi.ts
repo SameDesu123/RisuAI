@@ -34,7 +34,7 @@ export const languageVietnamese = {
     },
     "showHelp": "Hiển thị trợ giúp",
     "help": {
-        "vercelGatewayRouting": "Thứ tự ưu tiên thử các nhà cung cấp đã chọn trước, còn danh sách cho phép giới hạn định tuyến vào các nhà cung cấp đó. Việc sắp xếp áp dụng cho các nhà cung cấp hợp lệ còn lại.",
+        "vercelGatewayRouting": "Thứ tự ưu tiên thử các nhà cung cấp đã chọn trước, còn Nhà cung cấp bị loại trừ sẽ xóa các nhà cung cấp đã chọn khỏi định tuyến. Việc sắp xếp áp dụng cho các nhà cung cấp hợp lệ còn lại.",
         "vercelServiceTier": "Cấp dịch vụ hoạt động theo khả năng tốt nhất. Khi Priority/Flex không được hỗ trợ hoặc hết dung lượng, yêu cầu dùng cấp mặc định.",
         "vercelZeroDataRetention": "Chỉ định tuyến tới nhà cung cấp có thỏa thuận không lưu giữ dữ liệu đã được xác minh. Yêu cầu thất bại nếu không có nhà cung cấp phù hợp.",
         "vercelDisallowPromptTraining": "Chỉ định tuyến tới nhà cung cấp có điều khoản không dùng lời nhắc để huấn luyện đã được xác minh.",
@@ -946,7 +946,7 @@ export const languageVietnamese = {
     "vercelChatCompletions": "Chat Completions",
     "vercelResponsesAPI": "Responses API",
     "vercelProviderOrder": "Thứ tự ưu tiên nhà cung cấp",
-    "vercelProviderOnly": "Nhà cung cấp được phép",
+    "vercelProviderExcluded": "Nhà cung cấp bị loại trừ",
     "vercelProviderSort": "Sắp xếp nhà cung cấp",
     "vercelSortAuto": "Tự động",
     "vercelSortCost": "Chi phí thấp nhất",

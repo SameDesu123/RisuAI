@@ -581,7 +581,15 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
         body.n = db.genTime
     }
     
-    body = applyVercelGatewayOptions(body, aiModel)
+    try{
+        body = await applyVercelGatewayOptions(body, aiModel)
+    }
+    catch(error){
+        return {
+            type: 'fail',
+            result: error instanceof Error ? error.message : String(error),
+        }
+    }
     body = applyAdditionalParameters(body, headers, getAdditionalParameters(aiModel))
 
     // Some aux flows are intentionally non-streaming (e.g. memory/translate).

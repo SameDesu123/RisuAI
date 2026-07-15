@@ -379,7 +379,7 @@ export function setDatabase(data:Database){
     data.vercelRequestFormat ??= LLMFormat.OpenAICompatible
     data.vercelGateway ??= {} as VercelGatewaySettings
     data.vercelGateway.order ??= []
-    data.vercelGateway.only ??= []
+    data.vercelGateway.excluded ??= []
     data.vercelGateway.sort ??= 'auto'
     data.vercelGateway.serviceTier ??= 'default'
     data.vercelGateway.zeroDataRetention ??= false
@@ -792,7 +792,9 @@ export interface DynamicOutput {
 
 export interface VercelGatewaySettings {
     order: string[]
-    only: string[]
+    excluded: string[]
+    /** Legacy allowlist retained for existing saved settings. */
+    only?: string[]
     sort: 'auto' | 'cost' | 'ttft' | 'tps'
     serviceTier: 'default' | 'priority' | 'flex'
     zeroDataRetention: boolean
