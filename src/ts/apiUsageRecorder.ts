@@ -15,6 +15,7 @@ interface ApiUsageRecorderOptions {
     modelInfo: LLMModel
     abortSignal?: AbortSignal | null
     flexProcessing?: boolean
+    useBuiltInPricing?: boolean
 }
 
 function getTokenizerOptions(model: string, modelInfo: LLMModel): TokenizerEncodeOptions {
@@ -73,6 +74,7 @@ export function createApiUsageRecorder(options: ApiUsageRecorderOptions) {
             flexProcessing: options.flexProcessing,
             status,
             mode: options.mode,
+            useBuiltInPricing: options.useBuiltInPricing,
         })
     }
 
@@ -145,6 +147,9 @@ export function createApiUsageRecorder(options: ApiUsageRecorderOptions) {
         },
         async finalizeFailure() {
             await finalize(options.abortSignal?.aborted ? 'cancelled' : 'failed')
+        },
+        async finalizeAttempt(completedStatus: 'success' | 'failed') {
+            await finalize(completedStatus)
         },
         async recordNextAttempt(completedStatus: 'success' | 'failed') {
             if (finalized) return

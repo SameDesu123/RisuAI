@@ -20,6 +20,7 @@ vi.mock('./tokenizer', () => ({
 function makeRecorder(options: {
     mode?: 'model' | 'translate' | 'otherAx'
     abortSignal?: AbortSignal
+    useBuiltInPricing?: boolean
 } = {}) {
     return createApiUsageRecorder({
         formated: [{ role: 'user', content: 'Hello' }],
@@ -27,6 +28,7 @@ function makeRecorder(options: {
         model: 'gpt-5.5',
         modelInfo: { internalID: 'gpt-5.5' } as never,
         abortSignal: options.abortSignal,
+        useBuiltInPricing: options.useBuiltInPricing,
     })
 }
 
@@ -105,6 +107,33 @@ describe('API usage request recorder', () => {
 
         const day = Object.values(DBState.db.apiUsage.daily)[0]
         expect(day.models['gpt-5.5'].requestCount).toBe(1)
+    })
+
+    it('keeps intermediary model IDs while leaving them unpriced', async () => {
+        const recorder = makeRecorder({ useBuiltInPricing: false })
+        recorder.resolveModel('gpt-5.5')
+        await recorder.finalizeResponse({ type: 'success', result: 'Done' })
+
+        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        expect(day.models['gpt-5.5']).toMatchObject({
+            requestCount: 1,
+            unpricedRequestCount: 1,
+        })
+        expect(day.estimatedCostUsd).toBe(0)
+    })
+
+    it('does not turn a finalized failed follow-up into a successful attempt', async () => {
+        const recorder = makeRecorder()
+        await recorder.recordNextAttempt('success')
+        await recorder.finalizeAttempt('failed')
+        await recorder.finalizeResponse({ type: 'success', result: 'Partial tool output' })
+
+        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        expect(day).toMatchObject({
+            requestCount: 2,
+            successRequestCount: 1,
+            failedRequestCount: 1,
+        })
     })
 
     it('records only the final cumulative streaming output', async () => {

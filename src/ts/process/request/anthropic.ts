@@ -1013,6 +1013,7 @@ async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:strin
                                     })
                             
                                     if(res.status !== 200){
+                                        await arg.onUsageFinalAttempt?.('failed')
                                         controller.enqueue({
                                             "0": await textifyReadableStream(res.body)
                                         })

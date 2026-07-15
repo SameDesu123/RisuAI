@@ -50,6 +50,20 @@ describe('API usage statistics', () => {
         })).toBeNull()
     })
 
+    it('does not apply built-in pricing to intermediary requests', () => {
+        const record = {
+            model: 'gpt-5.5',
+            inputTokens: 1_000_000,
+            outputTokens: 1_000_000,
+            useBuiltInPricing: false,
+        }
+
+        expect(estimateApiUsageCost(record)).toBeNull()
+        expect(estimateApiUsageCost(record, {
+            'gpt-5.5': { input: 2, output: 4 },
+        })).toBe(6)
+    })
+
     it('uses exact and normalized custom pricing before built-in pricing', () => {
         expect(estimateApiUsageCost({
             model: 'openrouter-openai/custom-model',

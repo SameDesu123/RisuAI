@@ -838,6 +838,7 @@ export async function requestHTTPOpenAI(
                 const result = (db.simplifiedToolUse ? '' : (processTextResponse(dat) ?? '') + '\n\n') + callCode
                         
                 if(resRec.type === 'fail') {
+                    await arg.onUsageFinalAttempt?.('failed')
                     alertError(`Failed to fetch model response after tool execution`)
                     return {
                         type: 'success',
@@ -1299,6 +1300,7 @@ function wrapToolStream(
                         } while (attempt <= db.requestRetrys) // Retry up to db.requestRetrys times
                         
                         if(errorFlag){
+                            await arg.onUsageFinalAttempt?.('failed')
                             alertError(`Failed to fetch model response after tool execution`)
                             return controller.close()
                         }

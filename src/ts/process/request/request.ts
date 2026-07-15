@@ -1,7 +1,7 @@
 import { Ollama } from 'ollama/dist/browser.mjs';
 import { language } from "../../../lang";
 import { fetchNative, globalFetch } from "../../globalApi.svelte";
-import { getModelInfo, LLMFlags, LLMFormat, type LLMModel } from "../../model/modellist";
+import { getModelInfo, LLMFlags, LLMFormat, LLMProvider, type LLMModel } from "../../model/modellist";
 import { createApiUsageRecorder } from "../../apiUsageRecorder";
 import { risuChatParser, risuEscape, risuUnescape } from "../../parser/parser.svelte";
 import { pluginProcess, pluginV2 } from "../../plugins/plugins.svelte";
@@ -65,6 +65,7 @@ export interface RequestDataArgumentExtended extends requestDataArgument{
     additionalOutput?:string
     saveSignatures?:boolean
     onUsageNextAttempt?: (completedStatus: 'success' | 'failed') => Promise<void>
+    onUsageFinalAttempt?: (completedStatus: 'success' | 'failed') => Promise<void>
     onUsageModelResolved?: (model: string | null | undefined) => void
 }
 
@@ -481,6 +482,9 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
     }
 
     const format = targ.modelInfo.format
+    const useBuiltInPricing = targ.modelInfo.provider === LLMProvider.OpenAI
+        || targ.modelInfo.provider === LLMProvider.Anthropic
+        || targ.modelInfo.provider === LLMProvider.GoogleCloud
 
     targ.formated = reformater(targ.formated, targ.modelInfo)
     const shouldTrackUsage = !arg.previewBody && format !== undefined && format !== LLMFormat.Echo
@@ -490,9 +494,13 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
         model: targ.aiModel,
         modelInfo: targ.modelInfo,
         abortSignal,
-        flexProcessing: db.openAIFlexProcessing && !targ.aiModel.endsWith('-response-api'),
+        flexProcessing: targ.modelInfo.provider === LLMProvider.OpenAI
+            && db.openAIFlexProcessing
+            && !targ.aiModel.endsWith('-response-api'),
+        useBuiltInPricing,
     }) : null
     targ.onUsageNextAttempt = usageRecorder?.recordNextAttempt
+    targ.onUsageFinalAttempt = usageRecorder?.finalizeAttempt
     targ.onUsageModelResolved = usageRecorder?.resolveModel
 
     try {

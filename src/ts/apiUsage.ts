@@ -57,6 +57,7 @@ export interface ApiUsageRecord {
     flexProcessing?: boolean
     status?: ApiUsageRequestStatus
     mode?: ApiUsageRequestMode
+    useBuiltInPricing?: boolean
 }
 
 // Standard first-party text-token prices in USD per 1M tokens.
@@ -326,6 +327,7 @@ export function estimateApiUsageCost(
         )
     }
 
+    if (record.useBuiltInPricing === false) return null
     if (!model) return null
     const rule = pricingRules.find((candidate) => candidate.matches(model))
     if (!rule) {

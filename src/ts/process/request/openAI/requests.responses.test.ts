@@ -637,6 +637,37 @@ describe('OpenAI request helpers', () => {
         expect(followupBody.input.find((item:any) => item.type === 'function_call')).not.toHaveProperty('id')
     })
 
+    it('finalizes a failed streaming tool follow-up as a failed API attempt', async () => {
+        vi.mocked(callTool).mockResolvedValueOnce([{ type: 'text', text: 'stream tool result' }] as any)
+        vi.mocked(fetchNative)
+            .mockResolvedValueOnce({
+                status: 200,
+                headers: { get: () => 'text/event-stream' },
+                body: sseStream([
+                    'data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_stream_2","name":"lookup","arguments":"{}","status":"completed"}]}}\n\n',
+                ]),
+            } as any)
+            .mockResolvedValueOnce({
+                status: 500,
+                headers: { get: () => 'application/json' },
+                body: null,
+            } as any)
+        const onUsageNextAttempt = vi.fn(async () => {})
+        const onUsageFinalAttempt = vi.fn(async () => {})
+
+        const result = await requestOpenAIResponseAPI(baseArg({
+            useStreaming: true,
+            tools: [{ name: 'lookup', description: 'Lookup data', inputSchema: { type: 'object' } }],
+            onUsageNextAttempt,
+            onUsageFinalAttempt,
+        }))
+
+        expect(result.type).toBe('streaming')
+        await collectStream(result.result as ReadableStream<Record<string, string>>)
+        expect(onUsageNextAttempt).toHaveBeenCalledWith('success')
+        expect(onUsageFinalAttempt).toHaveBeenCalledWith('failed')
+    })
+
     it('parses split CRLF SSE chunks, final unterminated events, text deltas, and function call deltas', async () => {
         const stream = __testResponsesAPI.getResponsesTranStream(baseArg())
         const chunksPromise = collectStream(stream.readable)

@@ -773,6 +773,7 @@ function wrapResponsesToolStream(stream:ReadableStream<StreamResponseChunk>, bod
                 } while(!ok && attempt <= db.requestRetrys)
 
                 if(!ok){
+                    await arg.onUsageFinalAttempt?.('failed')
                     alertError(`Failed to fetch model response after tool execution`)
                     controller.close()
                     return

@@ -937,6 +937,7 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
 
         // If the next request fails, only the responses so far are returned
         if(resRec.type === 'fail'){
+            await arg.onUsageFinalAttempt?.('failed')
             alertError(`Failed to fetch model response after tool execution`)
             return {
                 type: 'success',
@@ -1264,6 +1265,7 @@ function wrapToolStream(
                         } while (attempt <= db.requestRetrys) // Retry up to db.requestRetrys times
 
                         if(errorFlag){
+                            await arg.onUsageFinalAttempt?.('failed')
                             alertError(`Failed to fetch model response after tool execution`)
                             return controller.close()
                         }
