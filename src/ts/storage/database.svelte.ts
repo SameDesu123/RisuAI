@@ -20,6 +20,7 @@ import {
     DEFAULT_CHAT_LOAD_INITIAL_PAGES,
     normalizeChatLoadPages,
 } from '../chatLoadPages';
+import { normalizeApiUsageStats, type ApiUsageStats } from '../apiUsage';
 
 //APP_VERSION_POINT is to locate the app version in the database file for version bumping
 export let appVer = "2026.6.214" //<APP_VERSION_POINT>
@@ -703,6 +704,7 @@ export function setDatabase(data:Database){
     data.keepSessionAlive ??= 'off'
     data.loadouts ??= []
     data.longPressToPopupEditor ??= false
+    data.apiUsage = normalizeApiUsageStats(data.apiUsage)
     data.customSidebarItems ??= []
     data.moveInsteadOfCopyOnCMPConvert ??= false
     data.skipSavingAssetsOnWebSync ??= true
@@ -1083,6 +1085,7 @@ export interface Database{
         messages: number
         imports: number
     }
+    apiUsage: ApiUsageStats
     customQuotes:boolean
     customQuotesData?:[string, string, string, string]
     groupTemplate?:string

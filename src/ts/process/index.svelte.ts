@@ -32,6 +32,7 @@ import { getModelInfo, LLMFlags } from "../model/modellist";
 import { hypaMemoryV3 } from "./memory/hypav3";
 import { getModuleAssets, getModuleToggles } from "./modules";
 import { readImage } from "../globalApi.svelte";
+import { recordApiUsage } from "../apiUsage";
 
 export interface OpenAIChat{
     role: 'system'|'user'|'assistant'|'function'
@@ -1546,6 +1547,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
 
     let result = ''
+    let responseTexts:string[] = []
     let emoChanged = false
     let resendChat = false
     
@@ -1628,6 +1630,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             return false
         }
 
+        responseTexts = Object.entries(lastResponseChunk)
+            .filter(([key]) => !key.startsWith('__'))
+            .map(([, text]) => text)
         addRerolls(generationId, Object.values(lastResponseChunk))
 
         DBState.db.characters[selectedChar].chats[selectedChat] = runCurrentChatFunction(DBState.db.characters[selectedChar].chats[selectedChat])
@@ -1655,6 +1660,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         const msgs = (req.type === 'success') ? [['char',req.result]] as const 
                     : (req.type === 'multiline') ? req.result
                     : []
+        responseTexts = msgs.map((message) => message[1])
         let mrerolls:string[] = []
         for(let i=0;i<msgs.length;i++){
             let msg = msgs[i]
@@ -1731,7 +1737,19 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
 
     let needsAutoContinue = false
-    const resultTokens = await tokenize(result) + (arg.usedContinueTokens || 0)
+    let currentOutputTokens = 0
+    for(const responseText of responseTexts){
+        currentOutputTokens += await tokenize(responseText)
+    }
+    const resultTokens = currentOutputTokens + (arg.usedContinueTokens || 0)
+    generationInfo.outputTokens = resultTokens
+    recordApiUsage({
+        model: generationInfo.model ?? generationModel,
+        inputTokens,
+        outputTokens: currentOutputTokens,
+        flexProcessing: DBState.db.openAIFlexProcessing
+            && !(generationInfo.model ?? generationModel).endsWith('-response-api'),
+    })
     if(DBState.db.autoContinueMinTokens > 0 && resultTokens < DBState.db.autoContinueMinTokens){
         needsAutoContinue = true
     }
