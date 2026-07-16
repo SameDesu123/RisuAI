@@ -719,7 +719,8 @@ async function readCardExportImage(image?: string) {
             if(img?.length){
                 return img
             }
-        } catch {
+        } catch (e) {
+            console.warn('readCardExportImage: failed to read character image, falling back to none.webp', e)
         }
     }
 
