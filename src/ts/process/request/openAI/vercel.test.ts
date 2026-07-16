@@ -79,6 +79,28 @@ describe('Vercel AI Gateway request options', () => {
         expect(getVercelGatewayProviders).toHaveBeenCalledWith('openai/gpt-5')
     })
 
+    it('drops provider order entries that are unavailable for the selected model', async () => {
+        db.vercelGateway.order = ['azure', 'stale-provider', 'openai']
+
+        await expect(applyVercelGatewayOptions({ model: 'openai/gpt-5' }, 'vercel')).resolves.toEqual({
+            model: 'openai/gpt-5',
+            providerOptions: {
+                gateway: {
+                    order: ['azure', 'openai'],
+                },
+            },
+        })
+        expect(getVercelGatewayProviders).toHaveBeenCalledWith('openai/gpt-5')
+    })
+
+    it('omits provider order when every saved entry is unavailable for the selected model', async () => {
+        db.vercelGateway.order = ['stale-provider']
+
+        await expect(applyVercelGatewayOptions({ model: 'openai/gpt-5' }, 'vercel')).resolves.toEqual({
+            model: 'openai/gpt-5',
+        })
+    })
+
     it('keeps legacy only lists for existing saved settings', async () => {
         db.vercelGateway.only = ['openai', ' azure ', 'openai']
 

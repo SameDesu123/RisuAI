@@ -19,15 +19,20 @@ export async function applyVercelGatewayOptions<T extends Record<string, any>>(b
     const gateway: Record<string, any> = {}
     const excluded = normalizeProviderList(config.excluded ?? [])
     const excludedSet = new Set(excluded)
-    const order = normalizeProviderList(config.order ?? []).filter((provider) => !excludedSet.has(provider))
+    const configuredOrder = normalizeProviderList(config.order ?? [])
     const legacyOnly = normalizeProviderList(config.only ?? [])
+    let providers: string[] = []
 
+    if(configuredOrder.length > 0 || excluded.length > 0){
+        const model = typeof requestBody.model === 'string' ? requestBody.model : db.vercelRequestModel
+        providers = normalizeProviderList((await getVercelGatewayProviders(model)).map((provider) => provider.slug))
+        if(providers.length === 0) throw new Error('Could not load providers for the selected Vercel AI Gateway model.')
+    }
+
+    const providerSet = new Set(providers)
+    const order = configuredOrder.filter((provider) => providerSet.has(provider) && !excludedSet.has(provider))
     if(order.length > 0) gateway.order = order
     if(excluded.length > 0){
-        const model = typeof requestBody.model === 'string' ? requestBody.model : db.vercelRequestModel
-        const providers = normalizeProviderList((await getVercelGatewayProviders(model)).map((provider) => provider.slug))
-        if(providers.length === 0) throw new Error('Could not load providers for the selected Vercel AI Gateway model.')
-
         const activeExcluded = providers.filter((provider) => excludedSet.has(provider))
         if(activeExcluded.length > 0){
             const only = providers.filter((provider) => !excludedSet.has(provider))
