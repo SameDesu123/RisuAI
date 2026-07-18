@@ -94,6 +94,9 @@ jobs:
   build-installable:
     name: Build installable ARM64 debug APK
     needs: validate
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      (!inputs.run_emulator_smoke && !inputs.build_full_release)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
