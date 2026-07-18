@@ -14,6 +14,24 @@
     }
 
     let { openedData = $bindable() }: Props = $props();
+    let importing = $state(false)
+
+    async function importOpenedCharacter(event: MouseEvent) {
+        event.stopPropagation()
+        if(importing){
+            return
+        }
+        importing = true
+        try {
+            const importedIndex = await downloadRisuHub(openedData.id)
+            if(importedIndex !== null){
+                openedData = null
+            }
+        }
+        finally {
+            importing = false
+        }
+    }
 
 </script>
 
@@ -120,10 +138,11 @@
             })}>
                 <PaperclipIcon />
             </button>
-            <button class="bg-selected hover:ring-3 grow p-2 font-bold rounded-md mr-2" onclick={() => {
-                downloadRisuHub(openedData.id)
-                openedData = null
-            }}>
+            <button
+                class="bg-selected hover:ring-3 grow p-2 font-bold rounded-md mr-2 disabled:opacity-60 disabled:cursor-wait"
+                disabled={importing}
+                onclick={importOpenedCharacter}
+            >
                 Chat
             </button>
             

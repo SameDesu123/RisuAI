@@ -17,6 +17,20 @@
     let search = $state('')
     let menuOpen = $state(false)
     let nsfw = $state(false)
+    let realmImporting = $state(false)
+
+    async function importRealmCharacter(id:string) {
+        if(realmImporting){
+            return null
+        }
+        realmImporting = true
+        try {
+            return await downloadRisuHub(id)
+        }
+        finally {
+            realmImporting = false
+        }
+    }
 
     async function getHub(){
         charas = await getRisuHub({
@@ -193,7 +207,7 @@
                 </button>
             </h1>
             <div class=" mt-2 w-full border-t-2 border-t-bgcolor"></div>
-            <button class="w-full hover:bg-selected p-4" onclick={(async (e) => {
+            <button class="w-full hover:bg-selected p-4 disabled:opacity-60 disabled:cursor-wait" disabled={realmImporting} onclick={(async (e) => {
                 e.stopPropagation()
                 menuOpen = false
                 const input = await alertInput('Input URL or ID')
@@ -201,12 +215,14 @@
                     const url = new URL(input)
                     const id = url.searchParams.get("realm") ?? url.searchParams.get("code") ?? input.split("/").at(-1)
                     if(id){
-                        downloadRisuHub(id)
+                        await importRealmCharacter(id)
                         return
                     }
                 }
                 const id = input.split("?").at(-1)
-                downloadRisuHub(id)
+                if(id){
+                    await importRealmCharacter(id)
+                }
 
             })}>Import Character from URL or ID</button>
         </div>

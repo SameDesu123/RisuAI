@@ -21,6 +21,8 @@ import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { basename } from '@tauri-apps/api/path';
 import { AccountStorage } from "./storage/accountStorage"
 import { BoundedTaskQueue, decodeBase64Ascii } from "./characterCardImportUtils"
+import { classifyRealmCharacterResponse, getRealmResponseError, getResponseStreamOrBytes, isPendingRealmUpload } from "./realmImportUtils"
+import { findReferencedExcludedCharXAssets } from "./process/charXImportLimits"
 
 
 const EXTERNAL_HUB_URL = 'https://sv.risuai.xyz';
@@ -108,6 +110,7 @@ export async function importCharacterProcess<T extends boolean = false>(f:{
             importer.hashSignal = signal
         }
         await importer.parse(f.data)
+        await importer.done()
         const cardData = importer.cardData
         if(!cardData){
             alertError(language.errors.noData)
@@ -117,6 +120,10 @@ export async function importCharacterProcess<T extends boolean = false>(f:{
         if(card.spec !== 'chara_card_v3'){
             alertError(language.errors.noData)
             return
+        }
+        const excludedReferencedAssets = findReferencedExcludedCharXAssets(importer.excludedFiles, card.data.assets)
+        if(excludedReferencedAssets.length > 0){
+            throw new Error(`CharX assets exceed the 50 MB import limit: ${excludedReferencedAssets.join(', ')}`)
         }
         let lorebook:loreBook[] = null
         if(importer.moduleData){
@@ -129,7 +136,6 @@ export async function importCharacterProcess<T extends boolean = false>(f:{
                 lorebook = md.lorebook
             }
         }
-        await importer.done()
         let v = await importCharacterCardSpec(card, undefined, 'normal', importer.assets, lorebook, f.returnCharacter)
         if(v === false){
             return null
@@ -1769,76 +1775,99 @@ export async function getRisuHub(arg:{
     }
 }
 
+let realmImportInProgress = false
+
 export async function downloadRisuHub(id:string, arg:{
     forceRedirect?: boolean
-} = {}) {
+} = {}):Promise<number|null> {
+    if(realmImportInProgress){
+        return null
+    }
+    realmImportInProgress = true
     try {
         if(!arg.forceRedirect){
             if(!(await alertTOS())){
-                return
+                return null
             }
             alertStore.set({
                 type: "wait",
                 msg: "Downloading..."
             })
         }
-        const res = await fetch("https://realm.risuai.net/api/v1/download/dynamic/" + id + '?cors=true', {
-            headers: {
-                "x-risu-api-version": "4"
+
+        let res:Response|undefined
+        for(let attempt = 0; attempt < 2; attempt++){
+            const response = await fetch("https://realm.risuai.net/api/v1/download/dynamic/" + id + '?cors=true', {
+                headers: {
+                    "x-risu-api-version": "4"
+                }
+            })
+            if(response.status === 200){
+                res = response
+                break
             }
-        })
-        if(res.status !== 200){
-            alertError(await res.text())
-            return
+            const errorMessage = getRealmResponseError(response.status, await response.text())
+            if(attempt === 0 && isPendingRealmUpload(response.status, errorMessage)){
+                await sleep(500)
+                continue
+            }
+            throw new Error(errorMessage)
+        }
+        if(!res){
+            throw new Error('Realm download failed')
         }
 
-        if(res.headers.get('content-type') === 'image/png' || res.headers.get('content-type') === 'application/zip' || res.headers.get('content-type') === 'application/charx'){
-            let db = getDatabase()
-            if(res.headers.get('content-type') === 'application/zip' || res.headers.get('content-type') === 'application/charx'){
-                await importCharacterProcess({
-                    name: 'realm.charx',
-                    data: new Uint8Array(await res.arrayBuffer()),
-                    lightningRealmImport: db.lightningRealmImport,
-                })
-            }
-            else{
-                await importCharacterProcess({
-                    name: 'realm.png',
-                    data: res.body,
-                    lightningRealmImport: db.lightningRealmImport,
-                })
-            }
-            checkCharOrder()
-            db = getDatabase()
-            if(db.characters[db.characters.length-1] && (db.goCharacterOnImport || arg.forceRedirect)){
-                const index = db.characters.length-1
-                changeChar(index)
-            }   
-            return
+        const responseKind = classifyRealmCharacterResponse(res.headers.get('content-type'))
+        if(responseKind === 'png' || responseKind === 'charx'){
+            const db = getDatabase()
+            const importedIndex = await importCharacterProcess({
+                name: responseKind === 'charx' ? 'realm.charx' : 'realm.png',
+                data: await getResponseStreamOrBytes(res),
+                lightningRealmImport: db.lightningRealmImport,
+            })
+            return finishRealmCharacterImport(importedIndex, arg.forceRedirect)
         }
     
         const result = await res.json()
         const data:CharacterCardV3 = result.card
         const img:string = result.img
 
+        data.data.extensions ??= {}
         data.data.extensions.risuRealmImportId = id
     
-        await importCharacterCardSpec(data, await getHubResources(img), 'hub')
-        checkCharOrder()
-        let db = getDatabase()
-        if(db.characters[db.characters.length-1] && (db.goCharacterOnImport || arg.forceRedirect)){
-            const index = db.characters.length-1
-            changeChar(index)
-            alertStore.set({
-                type: 'none',
-                msg: ''
-            })
+        const imported = await importCharacterCardSpec(data, await getHubResources(img), 'hub')
+        if(!imported){
+            return null
         }
+        return finishRealmCharacterImport(getDatabase().characters.length - 1, arg.forceRedirect)
     } catch (error) {
         console.error(error)
-        console.log(error.stack)
-        alertError("Error while importing")
+        alertError(error instanceof Error ? error.message : String(error))
+        return null
+    } finally {
+        realmImportInProgress = false
     }
+}
+
+function finishRealmCharacterImport(importedIndex:number|null, forceRedirect = false):number|null {
+    if(importedIndex === null || importedIndex < 0){
+        return null
+    }
+    let db = getDatabase()
+    const importedId = db.characters[importedIndex]?.chaId
+    if(!importedId){
+        return null
+    }
+    checkCharOrder()
+    db = getDatabase()
+    const currentIndex = db.characters.findIndex((character) => character.chaId === importedId)
+    if(currentIndex < 0){
+        return null
+    }
+    if(db.goCharacterOnImport || forceRedirect){
+        changeChar(currentIndex)
+    }
+    return currentIndex
 }
 
 export async function getHubResources(id:string) {

@@ -4,9 +4,13 @@ import { asBuffer, Semaphore, sleep } from "../util";
 import { alertStore } from "../alert";
 import { hasher } from "../parser/parser.svelte";
 import { hubURL } from "../characterCards";
+import {
+    CharXEntrySizeGuard,
+    createCharXMetadataSizeError,
+    isKnownCharXEntryTooLarge
+} from "./charXImportLimits";
 
 // File size and chunk size constants
-const MAX_ASSET_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
 const CHUNK_SIZE_BYTES = 1024 * 1024; // 1MB
 
 // Queue management constants
@@ -174,6 +178,7 @@ export class CharXImporter{
     private completionSettled: boolean = false
     private errors: Error[] = []
     private onProgress?: (done: number, total: number) => void
+    private metadataSizeError?: Error
 
     // Results: filename -> saved asset ID mapping
     assets:{[key:string]:string} = {}
@@ -240,15 +245,25 @@ export class CharXImporter{
         const stream = this.#toStream(data)
 
         const reader = stream.getReader()
-        while(true){
-            const {done, value} = await reader.read()
-            if(value){
-                await this.#feedChunk(value, false)
+        try {
+            while(true){
+                const {done, value} = await reader.read()
+                if(value){
+                    await this.#feedChunk(value, false)
+                }
+                if(done){
+                    await this.#feedChunk(new Uint8Array(0), true)
+                    break
+                }
             }
-            if(done){
-                await this.#feedChunk(new Uint8Array(0), true)
-                break
+        }
+        catch(error){
+            await reader.cancel(error).catch(() => {})
+            if(this.metadataSizeError){
+                await this.#finalizeAfterMetadataSizeError()
+                throw this.metadataSizeError
             }
+            throw error
         }
     }
 
@@ -258,6 +273,10 @@ export class CharXImporter{
      */
     async #feedChunk(data:Uint8Array, final:boolean = false){
         this.unzip.push(data, final)
+
+        if(this.metadataSizeError){
+            throw this.metadataSizeError
+        }
 
         if(final){
             await this.#finalize()
@@ -269,6 +288,9 @@ export class CharXImporter{
      * Must be called after parse() has been invoked.
      */
     async done(){
+        if(this.metadataSizeError){
+            throw this.metadataSizeError
+        }
         if (!this.completionPromise) {
             throw new Error('parse() must be called before done()')
         }
@@ -333,26 +355,57 @@ export class CharXImporter{
      * Sets up streaming handlers and starts processing if file size is acceptable.
      */
     #handleFile(file: fflate.UnzipFile) {
-        const assetIndex = file.name
-        this.assetBuffers[assetIndex] = new AppendableBuffer()
+        const fileName = file.name
 
-        file.ondata = (_err, dat, final) => this.#handleFileData(assetIndex, dat, final)
-
-        // Only process files smaller than MAX_ASSET_SIZE_BYTES (50MB)
-        if(file.originalSize ?? 0 < MAX_ASSET_SIZE_BYTES){
-            file.start()
+        if(isKnownCharXEntryTooLarge(file.originalSize)){
+            this.#excludeFile(fileName)
+            return
         }
+
+        const sizeGuard = new CharXEntrySizeGuard()
+        this.assetBuffers[fileName] = new AppendableBuffer()
+        file.ondata = (_err, dat, final) => this.#handleFileData(file, sizeGuard, dat, final)
+        file.start()
     }
 
     /**
      * Called for each chunk of file data as it streams in.
      * Accumulates chunks into buffer until file is complete.
      */
-    #handleFileData(fileName: string, data: Uint8Array, final: boolean) {
-        this.assetBuffers[fileName].append(data)
+    #handleFileData(file: fflate.UnzipFile, sizeGuard: CharXEntrySizeGuard, data: Uint8Array, final: boolean) {
+        const fileName = file.name
+        if(!sizeGuard.tryAccept(data.byteLength)){
+            this.#excludeFile(fileName)
+            file.terminate()
+            return
+        }
+
+        const buffer = this.assetBuffers[fileName]
+        if(!buffer){
+            return
+        }
+
+        buffer.append(data)
         if(final){
             this.#handleFileComplete(fileName)
         }
+    }
+
+    #excludeFile(fileName: string) {
+        if(!this.excludedFiles.includes(fileName)){
+            this.excludedFiles.push(fileName)
+        }
+        delete this.assetBuffers[fileName]
+
+        if((fileName === 'card.json' || fileName === 'module.risum') && !this.metadataSizeError){
+            this.metadataSizeError = createCharXMetadataSizeError(fileName)
+        }
+    }
+
+    async #finalizeAfterMetadataSizeError() {
+        this.isFinalized = true
+        this.#checkCompletion()
+        await this.completionPromise?.catch(() => {})
     }
 
     /**
@@ -362,10 +415,7 @@ export class CharXImporter{
     #handleFileComplete(fileName: string) {
         const assetData = this.assetBuffers[fileName].buffer
 
-        if(assetData.byteLength > MAX_ASSET_SIZE_BYTES){
-            this.excludedFiles.push(fileName)
-        }
-        else if(fileName === 'card.json'){
+        if(fileName === 'card.json'){
             this.cardData = new TextDecoder().decode(assetData)
         }
         else if(fileName === 'module.risum'){
