@@ -161,10 +161,18 @@ export async function initAndroidRuntime() {
             history.back()
             return
         }
-        await Promise.race([
-            flushDbNow({ forceFull: true }),
-            new Promise<void>((resolve) => setTimeout(resolve, 2500)),
-        ])
-        await exit(0)
+        try {
+            const didFlush = await Promise.race([
+                flushDbNow({ forceFull: true }).then(() => true),
+                new Promise<false>((resolve) => setTimeout(() => resolve(false), 10_000)),
+            ])
+            if (didFlush) {
+                await exit(0)
+            } else {
+                console.error('Android exit was cancelled because the database flush did not finish')
+            }
+        } catch (error) {
+            console.error('Failed to flush the database before Android exit:', error)
+        }
     })
 }

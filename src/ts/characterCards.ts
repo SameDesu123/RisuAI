@@ -575,13 +575,13 @@ export async function characterURLImport() {
             }
         }
 
+        await onOpenUrl((urls) => {
+            void handleDeepLinks(urls)
+        })
         const currentUrls = await getCurrent()
         if(currentUrls?.length){
             await handleDeepLinks(currentUrls)
         }
-        await onOpenUrl((urls) => {
-            void handleDeepLinks(urls)
-        })
     }
 
     async function importFile(name:string, data:Uint8Array) {

@@ -303,10 +303,16 @@ type DbFlushWaiter = {
 }
 
 let requestDbFlush: ((forceFull: boolean) => Promise<void>) | null = null
+let resolveDbFlushReady: (() => void) | null = null
+const dbFlushReady = new Promise<void>((resolve) => {
+    resolveDbFlushReady = resolve
+})
 
 export async function flushDbNow(options: { forceFull?: boolean } = {}) {
-    if (!requestDbFlush) return
-    await requestDbFlush(options.forceFull ?? true)
+    if (!requestDbFlush) {
+        await dbFlushReady
+    }
+    await requestDbFlush?.(options.forceFull ?? true)
 }
 
 /**
@@ -377,6 +383,8 @@ export async function saveDb() {
             })
         })
     }
+    resolveDbFlushReady?.()
+    resolveDbFlushReady = null
 
     const flushForLifecycle = () => {
         void flushDbNow({ forceFull: true }).catch((error) => {

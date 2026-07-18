@@ -44,7 +44,7 @@ import {
 } from "./globalApi.svelte";
 import { isTauri, isTauriAndroid } from "./platform";
 import { registerModelDynamic } from "./model/modellist";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
@@ -58,13 +58,7 @@ export async function loadData() {
         try {
             if (isTauri) {
                 LoadingStatusState.text = "Checking Files..."
-                if (isTauriAndroid) {
-                    try {
-                        await invoke('set_android_webview_debugging', { enabled: true })
-                    } catch (error) {
-                        console.warn("Failed to configure Android WebView debugging:", error)
-                    }
-                } else {
+                if (!isTauriAndroid) {
                     await appWindow.maximize()
                 }
                 if (!await exists('', { baseDir: BaseDirectory.AppData })) {
@@ -210,9 +204,11 @@ export async function loadData() {
                 else {
                     setUsingSw(false)
                 }
-                if (getDatabase().didFirstSetup) {
-                    characterURLImport()
-                }
+            }
+            if (getDatabase().didFirstSetup) {
+                void characterURLImport().catch((error) => {
+                    console.error('Failed to initialize URL imports:', error)
+                })
             }
             LoadingStatusState.text = "Loading Plugins..."
             try {

@@ -5,6 +5,9 @@ import strip from '@rollup/plugin-strip';
 import tailwindcss from '@tailwindcss/vite'
 // https://vitejs.dev/config/
 export default defineConfig(({command, mode}) => {
+  const isTauriDebug = process.env.TAURI_ENV_DEBUG === 'true'
+  const isLightweightAndroidBuild = process.env.VITE_ANDROID_CI_LIGHT === 'true'
+
   return {
     plugins: [
       svelte({
@@ -39,12 +42,12 @@ export default defineConfig(({command, mode}) => {
     build: {
       target:'baseline-widely-available',
       // don't minify for debug builds
-      minify: process.env.TAURI_ENV_DEBUG === 'true' ? false : 'oxc',
+      minify: isTauriDebug && !isLightweightAndroidBuild ? false : 'oxc',
       // Lightning CSS currently reports valid Custom Highlight selectors as
       // unknown. esbuild preserves and minifies those selectors correctly.
       cssMinify: 'esbuild',
       // produce sourcemaps for debug builds
-      sourcemap: process.env.TAURI_ENV_DEBUG === 'true',
+      sourcemap: isTauriDebug && !isLightweightAndroidBuild,
       chunkSizeWarningLimit: 2000,
     },
     

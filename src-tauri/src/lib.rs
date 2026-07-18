@@ -4,7 +4,9 @@ fn greet(name: &str) -> String {
 }
 
 use base64::{engine::general_purpose, Engine as _};
+#[cfg(desktop)]
 use oauth2::basic::BasicClient;
+#[cfg(desktop)]
 use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge, RedirectUrl,
     Scope, TokenResponse, TokenUrl,
@@ -13,17 +15,31 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
+#[cfg(desktop)]
 use std::io::Write;
+#[cfg(desktop)]
+use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::{path::Path, time::Duration};
+use std::time::Duration;
+#[cfg(desktop)]
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter};
+#[cfg(desktop)]
 use tauri::{Listener, Manager};
 use tokio_util::sync::CancellationToken;
 
-#[derive(Default)]
 struct StreamedFetchState {
     cancellations: Arc<Mutex<HashMap<String, CancellationToken>>>,
+    client: reqwest::Client,
+}
+
+impl Default for StreamedFetchState {
+    fn default() -> Self {
+        Self {
+            cancellations: Arc::new(Mutex::new(HashMap::new())),
+            client: reqwest::Client::new(),
+        }
+    }
 }
 
 struct StreamedFetchGuard {
@@ -40,7 +56,13 @@ impl Drop for StreamedFetchGuard {
 }
 
 #[tauri::command]
-async fn native_request(url: String, body: String, header: String, method: String) -> String {
+async fn native_request(
+    state: tauri::State<'_, StreamedFetchState>,
+    url: String,
+    body: String,
+    header: String,
+    method: String,
+) -> String {
     let headers_json: Value = match serde_json::from_str(&header) {
         Ok(h) => h,
         Err(e) => return format!(r#"{{"success":false,"body":"{}"}}"#, e.to_string()),
@@ -64,7 +86,7 @@ async fn native_request(url: String, body: String, header: String, method: Strin
         return format!(r#"{{"success":false,"body":"Invalid header JSON"}}"#);
     }
 
-    let client = reqwest::Client::new();
+    let client = state.client.clone();
     let response: Result<reqwest::Response, reqwest::Error>;
 
     if method == "POST" {
@@ -108,14 +130,17 @@ async fn native_request(url: String, body: String, header: String, method: Strin
     }
 }
 
+#[cfg(desktop)]
 use oauth2::{
     EmptyExtraTokenFields, EndpointNotSet, EndpointSet, RevocationErrorResponseType,
     StandardErrorResponse, StandardRevocableToken, StandardTokenIntrospectionResponse,
     StandardTokenResponse,
 };
 
+#[cfg(desktop)]
 use oauth2::basic::{BasicErrorResponseType, BasicTokenType};
 
+#[cfg(desktop)]
 fn get_oauth_client() -> oauth2::Client<
     StandardErrorResponse<BasicErrorResponseType>,
     StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>,
@@ -141,6 +166,7 @@ fn get_oauth_client() -> oauth2::Client<
     return client;
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 async fn oauth_login(app: AppHandle) -> Result<String, String> {
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
@@ -218,45 +244,6 @@ fn set_android_fullscreen(webview: tauri::Webview, enabled: bool) -> Result<(), 
 #[tauri::command]
 fn set_android_fullscreen(enabled: bool) -> Result<(), String> {
     let _ = enabled;
-    Ok(())
-}
-
-#[cfg(target_os = "android")]
-#[tauri::command]
-fn set_android_webview_debugging(webview: tauri::Webview, enabled: bool) -> Result<(), String> {
-    let enabled = enabled && cfg!(debug_assertions);
-    webview
-        .with_webview(move |webview| {
-            webview.jni_handle().exec(move |env, _activity, _webview| {
-                if let Err(error) = set_android_webview_debugging_enabled(env, enabled) {
-                    eprintln!("Failed to set Android WebView debugging: {error}");
-                }
-            });
-        })
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(not(target_os = "android"))]
-#[tauri::command]
-fn set_android_webview_debugging(enabled: bool) -> Result<(), String> {
-    let _ = enabled;
-    Ok(())
-}
-
-#[cfg(target_os = "android")]
-fn set_android_webview_debugging_enabled(
-    env: &mut jni::JNIEnv,
-    enabled: bool,
-) -> Result<(), jni::errors::Error> {
-    use jni::objects::JValue;
-
-    let webview_class = env.find_class("android/webkit/WebView")?;
-    env.call_static_method(
-        webview_class,
-        "setWebContentsDebuggingEnabled",
-        "(Z)V",
-        &[JValue::Bool(if enabled { 1 } else { 0 })],
-    )?;
     Ok(())
 }
 
@@ -444,6 +431,7 @@ fn set_android_cutout_mode(
     Ok(())
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn check_auth(fpath: String, auth: String) -> bool {
     //check file exists
@@ -486,6 +474,7 @@ fn check_auth(fpath: String, auth: String) -> bool {
     }
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 async fn install_python(path: String) -> bool {
     //get python embeddable depending on os
@@ -553,6 +542,7 @@ async fn install_python(path: String) -> bool {
     }
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 async fn install_pip(path: String) -> bool {
     let py_path = Path::new(&path).join("python");
@@ -585,8 +575,10 @@ async fn install_pip(path: String) -> bool {
     }
 }
 
+#[cfg(desktop)]
 use std::process::Command;
 
+#[cfg(desktop)]
 #[tauri::command]
 fn check_requirements_local() -> String {
     let mut py = Command::new("python");
@@ -624,6 +616,7 @@ fn check_requirements_local() -> String {
     return "success".to_string();
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn post_py_install(path: String) {
     let py_path = Path::new(&path).join("python");
@@ -638,6 +631,7 @@ fn post_py_install(path: String) {
     std::fs::write(&completed_path, "python311").unwrap();
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn install_py_dependencies(path: String, dependency: String) -> Result<(), String> {
     println!("installing {}", dependency);
@@ -663,6 +657,7 @@ fn install_py_dependencies(path: String, dependency: String) -> Result<(), Strin
     }
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn run_py_server(handle: tauri::AppHandle, py_path: String) {
     let py_exec_path = Path::new(&py_path).join("python").join("python.exe");
@@ -691,6 +686,7 @@ fn run_py_server(handle: tauri::AppHandle, py_path: String) {
 
 #[tauri::command]
 async fn streamed_fetch(
+    state: tauri::State<'_, StreamedFetchState>,
     id: String,
     url: String,
     headers: String,
@@ -722,7 +718,7 @@ async fn streamed_fetch(
         return format!(r#"{{"success":false,"body":"Invalid header JSON"}}"#);
     }
 
-    let client = reqwest::Client::new();
+    let client = state.client.clone();
     let timeout_secs = timeout_secs.unwrap_or(240);
     let builder: reqwest::RequestBuilder;
     if method == "POST" {
@@ -759,7 +755,7 @@ async fn streamed_fetch(
     }
 
     let cancellation = CancellationToken::new();
-    let cancellations = Arc::clone(&app.state::<StreamedFetchState>().cancellations);
+    let cancellations = Arc::clone(&state.cancellations);
     {
         let mut active = match cancellations.lock() {
             Ok(active) => active,
@@ -868,7 +864,7 @@ pub fn run() {
     #[cfg(mobile)]
     let builder = tauri::Builder::default();
 
-    builder
+    let builder = builder
         .manage(StreamedFetchState::default())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_deep_link::init())
@@ -877,23 +873,35 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![
-            greet,
-            native_request,
-            check_auth,
-            check_requirements_local,
-            install_python,
-            install_pip,
-            post_py_install,
-            run_py_server,
-            install_py_dependencies,
-            streamed_fetch,
-            cancel_streamed_fetch,
-            set_android_fullscreen,
-            set_android_webview_debugging,
-            oauth_login
-        ])
+        .plugin(tauri_plugin_notification::init());
+
+    #[cfg(desktop)]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        greet,
+        native_request,
+        check_auth,
+        check_requirements_local,
+        install_python,
+        install_pip,
+        post_py_install,
+        run_py_server,
+        install_py_dependencies,
+        streamed_fetch,
+        cancel_streamed_fetch,
+        set_android_fullscreen,
+        oauth_login
+    ]);
+
+    #[cfg(mobile)]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        greet,
+        native_request,
+        streamed_fetch,
+        cancel_streamed_fetch,
+        set_android_fullscreen
+    ]);
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application")
 }
