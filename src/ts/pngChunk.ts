@@ -128,8 +128,8 @@ export const PngChunk = {
         return chunks
     },
 
-    readGenerator: async function*(data:File|Uint8Array|ReadableStream<Uint8Array>, arg:{checkCrc?:boolean,returnTrimed?:boolean} = {}):AsyncGenerator<
-        {key:string,value:string}|AppendableBuffer,null
+    readGenerator: async function*(data:File|Uint8Array|ReadableStream<Uint8Array>, arg:{checkCrc?:boolean,returnTrimed?:boolean,rawText?:boolean} = {}):AsyncGenerator<
+        {key:string,value:string,rawValue?:Uint8Array}|AppendableBuffer,null
     >{
         if (data instanceof File) {
             if (typeof data.stream === 'function') {
@@ -199,14 +199,20 @@ export const PngChunk = {
                 const chunkData = await slice(pos+8,pos+8+len)
                 let key=''
                 let value=''
+                let rawValue:Uint8Array|undefined
                 for(let i=0;i<70;i++){
                     if(chunkData[i] === 0){
                         key = new TextDecoder().decode(chunkData.slice(0,i))
-                        value = new TextDecoder().decode(chunkData.slice(i+1))
+                        if(arg.rawText){
+                            rawValue = chunkData.subarray(i+1)
+                        }
+                        else{
+                            value = new TextDecoder().decode(chunkData.slice(i+1))
+                        }
                         break
                     }
                 }
-                yield {key,value}
+                yield {key,value,rawValue}
             }
             else{
                 await appendTrimed(await slice(pos,pos+12+len))

@@ -20,10 +20,12 @@ import { readFile } from "@tauri-apps/plugin-fs"
 import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { basename } from '@tauri-apps/api/path';
 import { AccountStorage } from "./storage/accountStorage"
+import { BoundedTaskQueue, decodeBase64Ascii } from "./characterCardImportUtils"
 
 
 const EXTERNAL_HUB_URL = 'https://sv.risuai.xyz';
 const NIGHTLY_HUB_URL = 'https://nightly.sv.risuai.xyz'
+const MAX_CONCURRENT_PNG_ASSET_SAVES = 3
 export const hubURL = isNodeServer
     ? '/hub-proxy'
     : (window.location.hostname === 'nightly.risuai.xyz' || window.localStorage?.getItem('hub') === 'nightly')
@@ -56,7 +58,8 @@ export async function importCharacterProcess<T extends boolean = false>(f:{
     lightningRealmImport?:boolean
     returnCharacter?:T //note That this option only works with v3 charx
 }):Promise<T extends true ? character | number | null : number | null>{
-    if(f.name.endsWith('json')){
+    const normalizedName = f.name.toLowerCase()
+    if(normalizedName.endsWith('json')){
         if(f.data instanceof ReadableStream){
             return null
         }
@@ -79,7 +82,7 @@ export async function importCharacterProcess<T extends boolean = false>(f:{
     let db = getDatabase()
     db.statics.imports += 1
 
-    if(f.name.endsWith('charx') || f.name.endsWith('jpg') || f.name.endsWith('jpeg')){
+    if(normalizedName.endsWith('charx') || normalizedName.endsWith('jpg') || normalizedName.endsWith('jpeg')){
         console.log('reading charx')
         alertStore.set({
             type: 'wait',
@@ -88,43 +91,12 @@ export async function importCharacterProcess<T extends boolean = false>(f:{
 
         let charXMode:'normal'|'skippable'|'signal' = 'normal'
         let signal = ''
-        if(forageStorage.realStorage instanceof AccountStorage){
-
-            if(f.data instanceof ReadableStream){
-                const tee = f.data.tee()
-                const reader =tee[0].getReader()
-                f.data = tee[1]
-                const chunks:Uint8Array[] = []
-                let done = false
-                let readedBytes = 0
-                while(!done){
-                    const r = await reader.read()
-                    readedBytes += r.value ? r.value.length : 0
-                    if(r.done){
-                        done = true
-                    }
-                    else{
-                        chunks.push(r.value)
-                    }
-                    alertWait(`Loading... (Reading) ${readedBytes} Bytes`)
-                }
-                let offset = 0
-                const uint8 = new Uint8Array(readedBytes)
-                for(const chunk of chunks){
-                    uint8.set(chunk, offset)
-                    offset += chunk.length
-                }
-                const v = await CharXSkippableChecker(uint8)
-                signal = v.hash
-                charXMode = v.success ? 'skippable' : 'signal'
-            }
-            else{
-                const rsp = new Response(f.data as any)
-                f.data = new Uint8Array(await rsp.arrayBuffer())
-                const v = await CharXSkippableChecker(f.data)
-                signal = v.hash
-                charXMode = v.success ? 'skippable' : 'signal'
-            }
+        if(forageStorage.realStorage instanceof AccountStorage && !(f.data instanceof ReadableStream)){
+            const rsp = new Response(f.data as any)
+            f.data = new Uint8Array(await rsp.arrayBuffer())
+            const v = await CharXSkippableChecker(f.data)
+            signal = v.hash
+            charXMode = v.success ? 'skippable' : 'signal'
         }
         
         const importer = new CharXImporter()
@@ -159,6 +131,9 @@ export async function importCharacterProcess<T extends boolean = false>(f:{
         }
         await importer.done()
         let v = await importCharacterCardSpec(card, undefined, 'normal', importer.assets, lorebook, f.returnCharacter)
+        if(v === false){
+            return null
+        }
         if(f.returnCharacter){
             return v as any
         }
@@ -166,7 +141,7 @@ export async function importCharacterProcess<T extends boolean = false>(f:{
         return db.characters.length - 1
     }
 
-    if(!f.name.endsWith('png')){
+    if(!normalizedName.endsWith('png')){
         alertError(language.errors.noData)
         return
     }
@@ -182,110 +157,87 @@ export async function importCharacterProcess<T extends boolean = false>(f:{
     let readedChara = ''
     let readedCCv3 = ''
     let img:Uint8Array
-    let pngChunks = 0
     let readedPngChunks = 0
 
-    {
-
-        let readData:File | Uint8Array | ReadableStream<Uint8Array>
-        if(f.data instanceof ReadableStream){
-            const tee = f.data.tee()
-            f.data = tee[0]
-            readData = tee[1]
-        }
-        else{
-            readData = f.data
-        }
-
-        const prereader = PngChunk.readGenerator(readData, {
-
-        })
-
-        for await(const chunk of prereader){
-            if(chunk instanceof AppendableBuffer){
-                break
-            }
-            if(chunk.key.startsWith('chara-ext-asset_')){
-                pngChunks++
-            }
-        }
-    }
-
-
     const readGenerator = PngChunk.readGenerator(f.data, {
-        returnTrimed: true
+        returnTrimed: true,
+        rawText: true
     })
     const assets:{[key:string]:string} = {}
     let queueFetch:Promise<Response>[] = []
     let queueFetchKey:string[] = []
-    let queueFetchData:Buffer[] = []
-    for await (const chunk of readGenerator){
-        if(!chunk){
-            continue
-        }
-        if(chunk instanceof AppendableBuffer){
-            img = chunk.buffer
-            break
-        }
-        if(chunk.key === 'chara'){
-            //For memory reason, limit to 5MB
-            if(readedChara.length < 5 * 1024 * 1024){
-                readedChara = chunk.value
+    let queueFetchData:Uint8Array[] = []
+    let lastAssetProgressUpdate = Number.NEGATIVE_INFINITY
+    const pngAssetSaveQueue = new BoundedTaskQueue(MAX_CONCURRENT_PNG_ASSET_SAVES)
+    let pngImportFailure:{ cause:unknown }|undefined
+    try {
+        for await (const chunk of readGenerator){
+            if(!chunk){
+                continue
             }
-            continue
-        }
-        if(chunk.key === 'ccv3'){
-            if(readedCCv3.length < 5 * 1024 * 1024){
-                readedCCv3 = chunk.value
+            if(chunk instanceof AppendableBuffer){
+                img = chunk.buffer
+                break
             }
-            continue
-        }
-        if(chunk.key.startsWith('chara-ext-asset_')){
-            const assetIndex = chunk.key.replace('chara-ext-asset_:', '').replace('chara-ext-asset_', '')
-            const assetData = Buffer.from(chunk.value, 'base64')
-            if(pngChunks === 0){
-                alertWait('Loading... (Loaded ' + readedPngChunks + ' Assets)')
-            }
-            else{
-                alertStore.set({
-                    type: 'progress',
-                    msg: 'Loading... (Loading Assets)',
-                    submsg: (readedPngChunks / pngChunks * 100).toFixed(2)
-                })
-            }
-
-            readedPngChunks++
-
-            if(db.account?.useSync && f.lightningRealmImport){
-                const id = await hasher(assetData)
-                const xid = 'assets/' + id + '.png'
-                queueFetchKey.push(assetIndex)
-                queueFetchData.push(assetData)
-                queueFetch.push(fetch('https://sv.risuai.xyz/rs/' + xid))
-                assets[assetIndex] =  'xid:' + xid
-                if(queueFetch.length > 10){
-                    const res = await Promise.all(queueFetch)
-                    for(let i=0;i<res.length;i++){
-                        if(res[i].status !== 200){
-                            const assetId = await saveAsset(queueFetchData[i])
-                            assets[queueFetchKey[i]] = assetId
-                        }
-                        else{
-                            assets[queueFetchKey[i]] = assets[queueFetchKey[i]].replace('xid:', '')
-                        }
-                    }
-                    queueFetch = []
-                    queueFetchKey = []
-                    queueFetchData = []
+            if(chunk.key === 'chara'){
+                //For memory reason, limit to 5MB
+                if(readedChara.length < 5 * 1024 * 1024){
+                    readedChara = chunk.rawValue ? new TextDecoder().decode(chunk.rawValue) : chunk.value
                 }
                 continue
             }
+            if(chunk.key === 'ccv3'){
+                if(readedCCv3.length < 5 * 1024 * 1024){
+                    readedCCv3 = chunk.rawValue ? new TextDecoder().decode(chunk.rawValue) : chunk.value
+                }
+                continue
+            }
+            if(chunk.key.startsWith('chara-ext-asset_')){
+                const assetIndex = chunk.key.replace('chara-ext-asset_:', '').replace('chara-ext-asset_', '')
+                const assetData = chunk.rawValue ? decodeBase64Ascii(chunk.rawValue) : Buffer.from(chunk.value, 'base64')
+                readedPngChunks++
+                const now = performance.now()
+                if(now - lastAssetProgressUpdate > 250){
+                    alertWait('Loading... (Loaded ' + readedPngChunks + ' Assets)')
+                    lastAssetProgressUpdate = now
+                }
 
+                if(db.account?.useSync && f.lightningRealmImport){
+                    const id = await hasher(assetData)
+                    const xid = 'assets/' + id + '.png'
+                    queueFetchKey.push(assetIndex)
+                    queueFetchData.push(assetData)
+                    queueFetch.push(fetch('https://sv.risuai.xyz/rs/' + xid))
+                    assets[assetIndex] =  'xid:' + xid
+                    if(queueFetch.length > 10){
+                        const res = await Promise.all(queueFetch)
+                        for(let i=0;i<res.length;i++){
+                            if(res[i].status !== 200){
+                                const assetId = await saveAsset(queueFetchData[i])
+                                assets[queueFetchKey[i]] = assetId
+                            }
+                            else{
+                                assets[queueFetchKey[i]] = assets[queueFetchKey[i]].replace('xid:', '')
+                            }
+                        }
+                        queueFetch = []
+                        queueFetchKey = []
+                        queueFetchData = []
+                    }
+                    continue
+                }
 
-            const assetId = await saveAsset(assetData)
-            assets[assetIndex] = assetId
+                await pngAssetSaveQueue.push(async () => {
+                    const assetId = await saveAsset(assetData)
+                    assets[assetIndex] = assetId
+                })
+            }
         }
+    } catch (cause) {
+        pngImportFailure = { cause }
     }
+
+    await pngAssetSaveQueue.done(pngImportFailure)
 
     if(queueFetch.length > 0){
         const res = await Promise.all(queueFetch)
@@ -383,7 +335,10 @@ export async function importCharacterProcess<T extends boolean = false>(f:{
         alertNormal(language.importedCharacter)
         return DBState.db.characters.length - 1
     }
-    await importCharacterCardSpec(parsed, img, "normal", assets)
+    const imported = await importCharacterCardSpec(parsed, img, "normal", assets)
+    if(!imported){
+        return null
+    }
     
     return DBState.db.characters.length - 1
     
