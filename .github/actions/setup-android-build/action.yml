@@ -58,9 +58,6 @@ runs:
         key: android
         cache-targets: false
 
-    - name: Setup Rust compiler cache
-      uses: mozilla-actions/sccache-action@v0.0.10
-
     - name: Install frontend dependencies
       shell: bash
       run: pnpm install --frozen-lockfile

@@ -3,10 +3,15 @@ name: Android Build
 on:
   workflow_dispatch:
     inputs:
-      build_release:
-        description: Build unsigned release APK and AAB artifacts
+      run_emulator_smoke:
+        description: Build x86_64 and run the Android emulator smoke test
         required: true
-        default: true
+        default: false
+        type: boolean
+      build_full_release:
+        description: Build signed ARM64 APK and multi-ABI AAB (requires Android signing secrets)
+        required: true
+        default: false
         type: boolean
   push:
     branches:
@@ -14,6 +19,7 @@ on:
       - 'feat/android-*'
     paths:
       - '.github/actions/setup-android-build/**'
+      - '.github/scripts/android-*'
       - '.github/scripts/configure-android.mjs'
       - '.github/workflows/android-build.yml'
       - 'package.json'
@@ -28,6 +34,7 @@ on:
       - main
     paths:
       - '.github/actions/setup-android-build/**'
+      - '.github/scripts/android-*'
       - '.github/scripts/configure-android.mjs'
       - '.github/workflows/android-build.yml'
       - 'package.json'
@@ -50,6 +57,7 @@ env:
   VITE_RISU_LEGAL_CONFIGURED: 'TRUE'
   ANDROID_NDK_VERSION: '28.2.13676358'
   ANDROID_BUILD_TOOLS_VERSION: '36.0.0'
+  ANDROID_MIN_TARGET_SDK: '35'
 
 jobs:
   validate:
@@ -83,13 +91,17 @@ jobs:
         env:
           NODE_OPTIONS: --no-experimental-webstorage
 
-  build-debug:
-    name: Build debug APK
+  build-installable:
+    name: Build installable ARM64 debug APK
+    needs: validate
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     env:
-      SCCACHE_GHA_ENABLED: 'true'
-      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_DEV_OPT_LEVEL: '1'
+      CARGO_PROFILE_DEV_STRIP: symbols
+      VITE_ANDROID_CI_LIGHT: 'true'
 
     steps:
       - name: Checkout repository
@@ -98,105 +110,75 @@ jobs:
       - name: Setup Android build
         uses: ./.github/actions/setup-android-build
         with:
-          rust-targets: aarch64-linux-android,x86_64-linux-android
+          rust-targets: aarch64-linux-android
 
-      - name: Build installable debug APK
-        run: pnpm tauri android build --debug --apk --target aarch64 x86_64 --ci
+      - name: Build ARM64 debug APK
+        run: pnpm tauri android build --debug --apk --target aarch64 --split-per-abi --ci
 
-      - name: Verify debug APK
+      - name: Verify and measure installable APK
         shell: bash
+        env:
+          ANDROID_EXPECTED_ABI: arm64-v8a
+          ANDROID_MAX_APK_BYTES: '167772160'
+          ANDROID_SIZE_REPORT: android-arm64-size.txt
         run: |
-          debug_apk="$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*debug*.apk' -print -quit)"
-          test -n "$debug_apk"
-          test -s "$debug_apk"
-          unzip -t "$debug_apk" >/dev/null
-          "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION/aapt" dump badging "$debug_apk" | tee android-debug-badging.txt
-          grep -Eq "targetSdkVersion:'(3[5-9]|[4-9][0-9])'" android-debug-badging.txt
-          "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION/apksigner" verify --verbose "$debug_apk"
-          "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" -c -P 16 -v 4 "$debug_apk"
+          mkdir -p android-output
+          apk="$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*debug*.apk' -print -quit)"
+          test -n "$apk"
+          cp "$apk" android-output/RisuAI-Android-arm64-debug.apk
+          bash .github/scripts/android-artifact-report.sh android-output/RisuAI-Android-arm64-debug.apk
 
       - name: Read application version
         id: app-version
         shell: bash
         run: echo "value=$(jq -r '.version' version.json)" >> "$GITHUB_OUTPUT"
 
-      - name: Upload debug APK
+      - name: Upload installable ARM64 APK
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: RisuAI-Android-debug-v${{ steps.app-version.outputs.value }}
+          name: RisuAI-Android-installable-arm64-v${{ steps.app-version.outputs.value }}
           path: |
-            src-tauri/gen/android/app/build/outputs/apk/**/*debug*.apk
-            android-debug-badging.txt
+            android-output/RisuAI-Android-arm64-debug.apk
+            android-arm64-size.txt
           if-no-files-found: error
-          compression-level: 0
-          retention-days: 30
-
-  build-release:
-    name: Build unsigned release APK and AAB
-    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_release)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    env:
-      SCCACHE_GHA_ENABLED: 'true'
-      RUSTC_WRAPPER: sccache
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7.0.0
-
-      - name: Setup Android build
-        uses: ./.github/actions/setup-android-build
-        with:
-          rust-targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
-
-      - name: Build unsigned release APK and AAB
-        run: pnpm tauri android build --apk --aab --ci
-
-      - name: Verify unsigned release artifacts
-        shell: bash
-        run: |
-          release_apk="$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*release*.apk' -print -quit)"
-          release_aab="$(find src-tauri/gen/android/app/build/outputs/bundle -type f -name '*.aab' -print -quit)"
-          test -n "$release_apk"
-          test -n "$release_aab"
-          test -s "$release_apk"
-          test -s "$release_aab"
-          unzip -t "$release_apk" >/dev/null
-          unzip -t "$release_aab" >/dev/null
-          "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION/zipalign" -c -P 16 -v 4 "$release_apk"
-
-      - name: Read application version
-        id: app-version
-        shell: bash
-        run: echo "value=$(jq -r '.version' version.json)" >> "$GITHUB_OUTPUT"
-
-      - name: Upload unsigned release APK and AAB
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: RisuAI-Android-unsigned-v${{ steps.app-version.outputs.value }}
-          path: |
-            src-tauri/gen/android/app/build/outputs/apk/**/*release*.apk
-            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
-          if-no-files-found: error
-          compression-level: 0
+          compression-level: 6
           retention-days: 30
 
   android-smoke:
-    name: Android emulator smoke test
-    needs: build-debug
+    name: Build x86_64 and run emulator smoke test
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && inputs.run_emulator_smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_DEV_OPT_LEVEL: '1'
+      CARGO_PROFILE_DEV_STRIP: symbols
+      VITE_ANDROID_CI_LIGHT: 'true'
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.0
 
-      - name: Download debug APK
-        uses: actions/download-artifact@v8.0.1
+      - name: Setup Android build
+        uses: ./.github/actions/setup-android-build
         with:
-          pattern: RisuAI-Android-debug-*
-          path: android-artifacts
-          merge-multiple: true
+          rust-targets: x86_64-linux-android
+
+      - name: Build x86_64 smoke APK
+        run: pnpm tauri android build --debug --apk --target x86_64 --split-per-abi --ci
+
+      - name: Verify and measure smoke APK
+        shell: bash
+        env:
+          ANDROID_EXPECTED_ABI: x86_64
+          ANDROID_MAX_APK_BYTES: '167772160'
+          ANDROID_SIZE_REPORT: android-x86_64-size.txt
+        run: |
+          apk="$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*debug*.apk' -print -quit)"
+          test -n "$apk"
+          bash .github/scripts/android-artifact-report.sh "$apk"
 
       - name: Setup Android emulator SDK
         uses: android-actions/setup-android@v4.0.1
@@ -207,10 +189,6 @@ jobs:
             emulator
             platforms;android-35
             system-images;android-35;google_apis;x86_64
-
-      - name: Select current Android command-line tools
-        shell: bash
-        run: echo "$ANDROID_HOME/cmdline-tools/20.0/bin" >> "$GITHUB_PATH"
 
       - name: Enable KVM access
         shell: bash
@@ -229,38 +207,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
-          script: |
-            set -eu
-            collect_diagnostics() {
-              adb exec-out screencap -p > android-smoke.png 2>/dev/null || true
-              adb logcat -d -v threadtime > android-logcat.txt 2>/dev/null || true
-            }
-            trap collect_diagnostics EXIT
-            apk="$(find android-artifacts -type f -name '*debug*.apk' -print -quit)"
-            test -n "$apk"
-            adb install -r "$apk"
-            adb logcat -c
-            adb shell monkey -p co.aiclient.risu -c android.intent.category.LAUNCHER 1
-            for attempt in $(seq 1 30); do
-              pid="$(adb shell pidof co.aiclient.risu | tr -d '\r')"
-              if [ -n "$pid" ]; then break; fi
-              sleep 1
-            done
-            test -n "${pid:-}"
-            sleep 10
-            database_path="$(adb shell run-as co.aiclient.risu find . -name database.bin -type f | tr -d '\r' | head -n 1)"
-            test -n "$database_path"
-            adb shell run-as co.aiclient.risu test -s "$database_path"
-            adb shell am force-stop co.aiclient.risu
-            adb shell monkey -p co.aiclient.risu -c android.intent.category.LAUNCHER 1
-            sleep 5
-            adb shell run-as co.aiclient.risu test -s "$database_path"
-            adb shell am start -W -a android.intent.action.VIEW -d 'risuailocal://noop/smoke' -p co.aiclient.risu
-            collect_diagnostics
-            if grep -Eq 'Process: co\.aiclient\.risu|ANR in co\.aiclient\.risu' android-logcat.txt; then
-              exit 1
-            fi
-            trap - EXIT
+          script: bash .github/scripts/android-smoke.sh
 
       - name: Upload emulator diagnostics
         if: always()
@@ -268,7 +215,121 @@ jobs:
         with:
           name: RisuAI-Android-emulator-diagnostics
           path: |
-            android-smoke.png
+            android-activity.txt
+            android-deep-link.txt
+            android-install.txt
+            android-launch.txt
             android-logcat.txt
+            android-package.txt
+            android-relaunch.txt
+            android-smoke.png
+            android-x86_64-size.txt
           if-no-files-found: warn
           retention-days: 14
+
+  build-full-release:
+    name: Build signed ARM64 APK and multi-ABI AAB
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && inputs.build_full_release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_KEY_STORE_PASSWORD: ${{ secrets.ANDROID_KEY_STORE_PASSWORD || secrets.ANDROID_KEY_PASSWORD }}
+      CARGO_INCREMENTAL: '0'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.0
+
+      - name: Setup Android build
+        uses: ./.github/actions/setup-android-build
+        with:
+          rust-targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Require Android signing secrets
+        shell: bash
+        run: |
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_BASE64"
+          test -n "$ANDROID_KEY_PASSWORD"
+          test -n "$ANDROID_KEY_STORE_PASSWORD"
+          printf '%s' "$ANDROID_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/android-release.jks"
+
+      - name: Build ARM64 release APK
+        run: pnpm tauri android build --apk --target aarch64 --split-per-abi --ci
+
+      - name: Stage unsigned ARM64 APK
+        shell: bash
+        run: |
+          mkdir -p android-output
+          apk="$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*release*.apk' -print -quit)"
+          test -n "$apk"
+          cp "$apk" android-output/RisuAI-Android-arm64-release-unsigned.apk
+
+      - name: Build multi-ABI release AAB
+        run: pnpm tauri android build --aab --ci
+
+      - name: Sign release APK and AAB
+        shell: bash
+        run: |
+          build_tools="$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS_VERSION"
+          unsigned_apk=android-output/RisuAI-Android-arm64-release-unsigned.apk
+          aligned_apk=android-output/RisuAI-Android-arm64-release-aligned.apk
+          signed_apk=android-output/RisuAI-Android-arm64-release.apk
+          aab="$(find src-tauri/gen/android/app/build/outputs/bundle -type f -name '*.aab' -print -quit)"
+          test -n "$aab"
+          "$build_tools/zipalign" -P 16 -f 4 "$unsigned_apk" "$aligned_apk"
+          "$build_tools/apksigner" sign \
+            --ks "$RUNNER_TEMP/android-release.jks" \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass env:ANDROID_KEY_STORE_PASSWORD \
+            --key-pass env:ANDROID_KEY_PASSWORD \
+            --out "$signed_apk" \
+            "$aligned_apk"
+          cp "$aab" android-output/RisuAI-Android-release.aab
+          jarsigner \
+            -keystore "$RUNNER_TEMP/android-release.jks" \
+            -storepass "$ANDROID_KEY_STORE_PASSWORD" \
+            -keypass "$ANDROID_KEY_PASSWORD" \
+            android-output/RisuAI-Android-release.aab \
+            "$ANDROID_KEY_ALIAS"
+          rm "$unsigned_apk" "$aligned_apk"
+
+      - name: Verify and measure signed release artifacts
+        shell: bash
+        env:
+          ANDROID_EXPECTED_ABI: arm64-v8a
+          ANDROID_MAX_APK_BYTES: '134217728'
+          ANDROID_SIZE_REPORT: android-release-size.txt
+        run: |
+          bash .github/scripts/android-artifact-report.sh \
+            android-output/RisuAI-Android-arm64-release.apk \
+            android-output/RisuAI-Android-release.aab
+
+      - name: Read application version
+        id: app-version
+        shell: bash
+        run: echo "value=$(jq -r '.version' version.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload signed ARM64 APK
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: RisuAI-Android-release-arm64-v${{ steps.app-version.outputs.value }}
+          path: |
+            android-output/RisuAI-Android-arm64-release.apk
+            android-release-size.txt
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30
+
+      - name: Upload signed multi-ABI AAB
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: RisuAI-Android-release-aab-v${{ steps.app-version.outputs.value }}
+          path: android-output/RisuAI-Android-release.aab
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30

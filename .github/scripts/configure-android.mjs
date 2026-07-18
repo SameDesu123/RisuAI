@@ -47,7 +47,12 @@ writeFileSync(manifestPath, manifest)
 const gradle = readFileSync(gradlePath, 'utf8')
 const compileSdk = Number(gradle.match(/compileSdk\s*=\s*(\d+)/)?.[1])
 const targetSdk = Number(gradle.match(/targetSdk\s*=\s*(\d+)/)?.[1])
-if (compileSdk < 35 || targetSdk < 35) {
+if (
+    !Number.isFinite(compileSdk) ||
+    !Number.isFinite(targetSdk) ||
+    compileSdk < 35 ||
+    targetSdk < 35
+) {
     throw new Error(`Android SDK level is too old: compileSdk=${compileSdk}, targetSdk=${targetSdk}`)
 }
 

@@ -1,51 +1,70 @@
 # Android port
 
-RisuAI's Android app uses Tauri 2 and keeps its primary database, assets, remote blocks, and cold-storage records in the application's private `AppData` directory. Android builds are intentionally produced only by GitHub Actions; a local Android SDK, NDK, Gradle, or emulator is not required for normal development.
+RisuAI's Android app uses Tauri 2 and keeps the existing RisuSave format. The main database, assets, remote character blocks, and cold-storage records remain in the application's private Tauri `AppData` directory. Android compilation and emulator work run only in GitHub Actions; normal development does not require a local Android SDK, NDK, Gradle installation, or emulator.
 
-## Build artifacts
+## GitHub Actions profiles
 
-The `Android Build` workflow runs on pushes to `production` and Android feature branches, on relevant pull requests, and by manual dispatch.
+The `Android Build` workflow keeps the default path intentionally small:
 
-It publishes:
+1. Run `pnpm check` and `pnpm test`.
+2. Build one ARM64 debug APK.
+3. Strip Rust debug symbols, omit Android CI source maps, verify the signature/alignment/ABI, and enforce a 160 MiB APK budget.
+4. Upload `RisuAI-Android-installable-arm64-v<version>` with a size report.
 
-- `RisuAI-Android-debug-v<version>`: an installable arm64/x86_64 debug APK signed with the runner's disposable debug key.
-- `RisuAI-Android-unsigned-v<version>`: unsigned release APK and AAB files for all Tauri Android ABIs.
-- `RisuAI-Android-emulator-diagnostics`: a startup screenshot and logcat output from the API 35 emulator smoke test.
+The default job does not build x86_64, ARMv7, x86, or an AAB. Manual dispatch exposes two independent options:
 
-The unsigned release files are suitable for build validation and later signing. Google Play and normal release APK installation require a persistent release/upload key, which is deliberately not configured here.
+- `run_emulator_smoke`: build one stripped x86_64 debug APK and test it directly in an API 35 emulator. The emulator APK is not uploaded as a user-facing artifact.
+- `build_full_release`: build a signed ARM64 release APK and signed multi-ABI AAB. This runs only when requested and requires the signing secrets below.
 
-## CI build flow
+The old `feat/android-port` workflow built a two-ABI debug APK and a four-ABI APK/AAB on every push. Its debug APK was 586,828,093 bytes and its combined unsigned release artifact was 507,815,844 bytes. The older MVP appeared smaller mainly because it built only ARM64 and let GitHub recompress the artifact. The new workflow reports every APK/AAB and native-library size separately so ABI or symbol regressions are visible.
 
-1. Install Node 24, pnpm 10.34.1, Java 17, Rust 1.93.0, Android SDK 36, and NDK 28.2.
-2. Install dependencies with the frozen pnpm and Cargo lockfiles.
-3. Run `pnpm check`.
-4. Generate `src-tauri/gen/android` with `pnpm tauri android init --ci`.
-5. Add microphone permissions, keyboard resize behavior, and verify the generated target SDK.
-6. Build and validate the debug APK, including its signature, target SDK, ZIP integrity, and 16 KB page alignment.
-7. Build and validate unsigned release APK/AAB artifacts.
-8. Install the x86_64 debug APK in an API 35 emulator, launch and restart it, verify `database.bin` survives, exercise the custom deep link, and fail on startup crashes or ANRs.
+## Installation and signing
+
+The default ARM64 debug APK is signed by Android's CI debug key and is suitable for a clean ARM64 Android 7+ device. A build signed by a different key cannot update an existing `co.aiclient.risu` installation. Back up the app data and uninstall the previous build if Android reports `INSTALL_FAILED_UPDATE_INCOMPATIBLE`.
+
+Stable updates and release distribution require a persistent keystore. Configure these repository secrets before requesting `build_full_release`:
+
+- `ANDROID_KEY_BASE64`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+- `ANDROID_KEY_STORE_PASSWORD` (optional when it matches `ANDROID_KEY_PASSWORD`)
+
+The release job decodes the keystore only on the runner, signs the ARM64 APK with `apksigner`, signs the AAB with `jarsigner`, and verifies both before upload. An AAB is a Play-distribution bundle and cannot be installed directly on a phone.
 
 ## Android behavior
 
 - Android starts in the mobile UI automatically.
-- System bars, display cutouts, dynamic viewport height, and keyboard resizing are handled separately from desktop window behavior.
-- The Android Back button closes the focused input, modal, settings layer, sidebar, or active chat before exiting.
-- Database writes are flushed when the app is backgrounded and use a temporary file plus atomic replacement.
-- Imports use Android document/content URIs. Exports use the system save-document dialog instead of writing directly to a hidden app-specific Downloads folder.
-- Native notifications request Android notification permission when the user enables them.
-- Custom `risuailocal://` links work at cold start and while the app is already running.
-- Native streaming requests honor AbortSignal cancellation.
+- System bars, display cutouts, dynamic viewport height, keyboard resizing, and the Back button are handled separately from desktop window behavior.
+- Back closes the active input, modal, settings layer, sidebar, or chat first. At the root it requests a full database flush and exits only after it succeeds; a stalled flush leaves the app open instead of forcing a potentially lossy exit.
+- Database writes preserve the existing RisuSave layout. The main `database.bin` uses a temporary file and rename on Android; remote blocks and cold storage keep their established paths and formats.
+- Imports use Android document/content URIs. Exports use the system save-document dialog.
+- After initial setup, custom `risuailocal://` links are registered at cold start and while the app is running.
+- Native notifications request Android permission when enabled.
+- Streaming Tauri requests share a native Rust HTTP client and support cancellation.
 
-Desktop-only process features remain deliberately unavailable on Android: embedded Python/GGUF execution and stdio MCP servers. Remote APIs, HTTP MCP servers, and LAN model servers remain supported.
+Desktop-only process features remain unavailable on Android: embedded Python/GGUF execution and stdio MCP servers. Remote APIs, HTTP MCP servers, and LAN model servers remain supported.
+
+## Emulator coverage
+
+The manual smoke profile performs the following checks against the x86_64 debug APK:
+
+1. Verify APK signature, page alignment, target SDK, ABI, and size.
+2. Install with `adb install --no-streaming -r` and require `Success`.
+3. Resolve and launch the real launcher activity, then require a live process.
+4. Confirm `database.bin` exists, force-stop the app, relaunch it, and confirm the file remains.
+5. Exercise the `risuailocal://` intent filter.
+6. Fail on app-process crashes or ANRs and upload logcat, screenshot, package, and activity diagnostics.
+
+This smoke test proves packaging, installation, bootstrap, and basic persistence. It does not replace real-device acceptance testing.
 
 ## Device acceptance checklist
 
-Before publishing a signed release, test at least one phone and one tablet:
+Before publishing a release, test at least one ARM64 phone and one tablet:
 
 1. Complete first setup, create a character, send a chat, background the app immediately, and confirm the message remains after force-stop/relaunch.
-2. Import and export `.risum`, `.risup`, `.charx`, PNG cards, and a full backup through the Android document picker.
-3. Restore the backup and confirm assets, chats, cold storage, plugins, and settings survive.
+2. Import and export `.risum`, `.risup`, `.charx`, PNG cards, and a full backup through Android's document picker.
+3. Restore the backup and confirm assets, chats, remote blocks, cold storage, plugins, and settings survive.
 4. Open and cancel generation against a cloud provider and a LAN provider.
-5. Verify the soft keyboard, rotation, gesture navigation, a display cutout, immersive fullscreen, and every Back-button layer.
+5. Verify the soft keyboard, rotation, gesture navigation, display cutouts, fullscreen, and every Back-button layer.
 6. Grant and deny microphone and notification permissions, confirming both paths fail safely.
 7. Open a `risuailocal://realm/<id>` link from both a stopped app and a running app.
