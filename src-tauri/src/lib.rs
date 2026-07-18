@@ -267,9 +267,9 @@ fn set_android_fullscreen(enabled: bool) -> Result<serde_json::Value, String> {
 }
 
 #[cfg(target_os = "android")]
-fn apply_android_fullscreen<'local>(
+fn apply_android_fullscreen<'local, 'activity>(
     env: &mut jni::JNIEnv<'local>,
-    activity: &jni::objects::JObject<'local>,
+    activity: &jni::objects::JObject<'activity>,
     enabled: bool,
 ) -> Result<(jni::objects::JObject<'local>, i32), jni::errors::Error> {
     use jni::objects::JValue;
