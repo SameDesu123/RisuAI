@@ -368,6 +368,18 @@ body {
   padding-left: var(--risu-safe-area-left);
 }
 
+.risu-mobile-sidebar {
+  top: var(--risu-safe-area-top);
+  right: var(--risu-safe-area-right);
+  bottom: var(--risu-safe-area-bottom);
+  left: var(--risu-safe-area-left);
+}
+
+.risu-save-popup-icon {
+  top: calc(var(--risu-safe-area-top) + 0.75rem);
+  right: calc(var(--risu-safe-area-right) + 0.75rem);
+}
+
 .bgc {
   border-top: 1px solid rgba(98, 114, 164, 0.7);
 }

@@ -228,31 +228,50 @@ async fn oauth_login(app: AppHandle) -> Result<String, String> {
 
 #[cfg(target_os = "android")]
 #[tauri::command]
-fn set_android_fullscreen(webview: tauri::Webview, enabled: bool) -> Result<(), String> {
+async fn set_android_fullscreen(
+    webview: tauri::Webview,
+    enabled: bool,
+) -> Result<serde_json::Value, String> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+
     webview
         .with_webview(move |webview| {
             webview.jni_handle().exec(move |env, activity, _webview| {
-                if let Err(error) = apply_android_fullscreen(env, activity, enabled) {
-                    eprintln!("Failed to set Android fullscreen: {error}");
-                }
+                let result = apply_android_fullscreen(env, activity, enabled)
+                    .and_then(|(decor_view, sdk)| {
+                        read_android_safe_area(env, &decor_view, sdk, enabled)
+                    })
+                    .map_err(|error| error.to_string());
+                let _ = sender.send(result);
             });
         })
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+
+    tokio::time::timeout(Duration::from_secs(2), receiver)
+        .await
+        .map_err(|_| "Android window update timed out".to_string())?
+        .map_err(|_| "Android window update was cancelled".to_string())?
 }
 
 #[cfg(not(target_os = "android"))]
 #[tauri::command]
-fn set_android_fullscreen(enabled: bool) -> Result<(), String> {
+fn set_android_fullscreen(enabled: bool) -> Result<serde_json::Value, String> {
     let _ = enabled;
-    Ok(())
+    Ok(json!({
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0,
+        "fullscreen": false,
+    }))
 }
 
 #[cfg(target_os = "android")]
-fn apply_android_fullscreen(
-    env: &mut jni::JNIEnv,
-    activity: &jni::objects::JObject,
+fn apply_android_fullscreen<'local>(
+    env: &mut jni::JNIEnv<'local>,
+    activity: &jni::objects::JObject<'local>,
     enabled: bool,
-) -> Result<(), jni::errors::Error> {
+) -> Result<(jni::objects::JObject<'local>, i32), jni::errors::Error> {
     use jni::objects::JValue;
 
     const FLAG_FULLSCREEN: i32 = 0x00000400;
@@ -262,6 +281,7 @@ fn apply_android_fullscreen(
     const SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION: i32 = 0x00000200;
     const SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN: i32 = 0x00000400;
     const SYSTEM_UI_FLAG_IMMERSIVE_STICKY: i32 = 0x00001000;
+    const BEHAVIOR_DEFAULT: i32 = 1;
     const BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE: i32 = 2;
     const CUTOUT_MODE_DEFAULT: i32 = 0;
     const CUTOUT_MODE_SHORT_EDGES: i32 = 1;
@@ -274,14 +294,36 @@ fn apply_android_fullscreen(
         .l()?;
     let sdk = android_sdk_version(env)?;
 
-    if enabled {
+    if sdk >= 30 {
+        // Android 11+ uses WindowInsetsController exclusively. Keeping the old
+        // system-ui flags active at the same time leaves stale stable insets on
+        // recent Android versions.
+        set_android_decor_fits_system_windows(env, &window, false)?;
+        if sdk >= 28 {
+            set_android_cutout_mode(
+                env,
+                &window,
+                if enabled {
+                    CUTOUT_MODE_SHORT_EDGES
+                } else {
+                    CUTOUT_MODE_DEFAULT
+                },
+            )?;
+        }
+        set_android_system_bars_visibility(env, &window, !enabled)?;
+        set_android_system_bars_behavior(
+            env,
+            &window,
+            if enabled {
+                BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                BEHAVIOR_DEFAULT
+            },
+        )?;
+    } else if enabled {
         env.call_method(&window, "addFlags", "(I)V", &[JValue::Int(FLAG_FULLSCREEN)])?;
         if sdk >= 28 {
             set_android_cutout_mode(env, &window, CUTOUT_MODE_SHORT_EDGES)?;
-        }
-        if sdk >= 30 {
-            set_android_decor_fits_system_windows(env, &window, false)?;
-            set_android_system_bars_visibility(env, &window, false)?;
         }
         env.call_method(
             &decor_view,
@@ -297,10 +339,6 @@ fn apply_android_fullscreen(
             )],
         )?;
     } else {
-        if sdk >= 30 {
-            set_android_system_bars_visibility(env, &window, true)?;
-            set_android_decor_fits_system_windows(env, &window, true)?;
-        }
         if sdk >= 28 {
             set_android_cutout_mode(env, &window, CUTOUT_MODE_DEFAULT)?;
         }
@@ -318,26 +356,92 @@ fn apply_android_fullscreen(
         )?;
     }
 
-    if sdk >= 30 && enabled {
-        let controller = env
-            .call_method(
-                &window,
-                "getInsetsController",
-                "()Landroid/view/WindowInsetsController;",
-                &[],
-            )?
-            .l()?;
-        if !controller.is_null() {
-            env.call_method(
-                &controller,
-                "setSystemBarsBehavior",
-                "(I)V",
-                &[JValue::Int(BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE)],
-            )?;
-        }
+    env.call_method(&decor_view, "requestApplyInsets", "()V", &[])?;
+
+    Ok((decor_view, sdk))
+}
+
+#[cfg(target_os = "android")]
+fn read_android_safe_area(
+    env: &mut jni::JNIEnv,
+    decor_view: &jni::objects::JObject,
+    sdk: i32,
+    fullscreen: bool,
+) -> Result<serde_json::Value, jni::errors::Error> {
+    use jni::objects::JValue;
+
+    // Legacy fullscreen changes the actual decor bounds. It therefore needs no
+    // extra web padding. In immersive mode the system bars are hidden and the
+    // app intentionally uses the complete display, including short cutout edges.
+    if sdk < 30 || fullscreen {
+        return Ok(json!({
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0,
+            "fullscreen": fullscreen,
+        }));
     }
 
-    Ok(())
+    let root_insets = env
+        .call_method(
+            decor_view,
+            "getRootWindowInsets",
+            "()Landroid/view/WindowInsets;",
+            &[],
+        )?
+        .l()?;
+    if root_insets.is_null() {
+        return Err(jni::errors::Error::NullPtr("root window insets"));
+    }
+
+    let insets_type = env.find_class("android/view/WindowInsets$Type")?;
+    let system_bars = env
+        .call_static_method(&insets_type, "systemBars", "()I", &[])?
+        .i()?;
+    let display_cutout = env
+        .call_static_method(&insets_type, "displayCutout", "()I", &[])?
+        .i()?;
+    let safe_insets = env
+        .call_method(
+            &root_insets,
+            "getInsetsIgnoringVisibility",
+            "(I)Landroid/graphics/Insets;",
+            &[JValue::Int(system_bars | display_cutout)],
+        )?
+        .l()?;
+
+    let resources = env
+        .call_method(
+            decor_view,
+            "getResources",
+            "()Landroid/content/res/Resources;",
+            &[],
+        )?
+        .l()?;
+    let display_metrics = env
+        .call_method(
+            &resources,
+            "getDisplayMetrics",
+            "()Landroid/util/DisplayMetrics;",
+            &[],
+        )?
+        .l()?;
+    let density = env.get_field(&display_metrics, "density", "F")?.f()?;
+    let density = if density > 0.0 { density } else { 1.0 };
+
+    let left = env.get_field(&safe_insets, "left", "I")?.i()? as f32 / density;
+    let top = env.get_field(&safe_insets, "top", "I")?.i()? as f32 / density;
+    let right = env.get_field(&safe_insets, "right", "I")?.i()? as f32 / density;
+    let bottom = env.get_field(&safe_insets, "bottom", "I")?.i()? as f32 / density;
+
+    Ok(json!({
+        "top": top,
+        "right": right,
+        "bottom": bottom,
+        "left": left,
+        "fullscreen": fullscreen,
+    }))
 }
 
 #[cfg(target_os = "android")]
@@ -394,6 +498,35 @@ fn set_android_system_bars_visibility(
             if visible { "show" } else { "hide" },
             "(I)V",
             &[JValue::Int(system_bars)],
+        )?;
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn set_android_system_bars_behavior(
+    env: &mut jni::JNIEnv,
+    window: &jni::objects::JObject,
+    behavior: i32,
+) -> Result<(), jni::errors::Error> {
+    use jni::objects::JValue;
+
+    let controller = env
+        .call_method(
+            window,
+            "getInsetsController",
+            "()Landroid/view/WindowInsetsController;",
+            &[],
+        )?
+        .l()?;
+
+    if !controller.is_null() {
+        env.call_method(
+            &controller,
+            "setSystemBarsBehavior",
+            "(I)V",
+            &[JValue::Int(behavior)],
         )?;
     }
 

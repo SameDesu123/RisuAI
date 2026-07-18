@@ -229,11 +229,74 @@ function readFileAsUint8Array(file: File) {
     });
 }
 
+interface AndroidWindowState {
+    top: number
+    right: number
+    bottom: number
+    left: number
+    fullscreen: boolean
+}
+
+let androidWindowSyncInitialized = false
+let androidWindowSyncTimer: ReturnType<typeof setTimeout> | undefined
+let androidWindowSyncRequest = 0
+
+function applyAndroidWindowState(state: AndroidWindowState) {
+    const root = document.documentElement
+    const insets = {
+        top: state.top,
+        right: state.right,
+        bottom: state.bottom,
+        left: state.left,
+    }
+
+    for (const [side, rawValue] of Object.entries(insets)) {
+        const value = Number.isFinite(rawValue) ? Math.max(0, rawValue) : 0
+        root.style.setProperty(`--risu-safe-area-${side}`, `${value}px`)
+    }
+    root.dataset.risuAndroidFullscreen = state.fullscreen ? 'true' : 'false'
+}
+
+function scheduleAndroidWindowSync(delay = 100) {
+    if (!isTauriAndroid) {
+        return
+    }
+    if (androidWindowSyncTimer) {
+        clearTimeout(androidWindowSyncTimer)
+    }
+    androidWindowSyncTimer = setTimeout(() => {
+        androidWindowSyncTimer = undefined
+        void changeFullscreen()
+    }, delay)
+}
+
+function initializeAndroidWindowSync() {
+    if (!isTauriAndroid || androidWindowSyncInitialized) {
+        return
+    }
+    androidWindowSyncInitialized = true
+
+    window.addEventListener('focus', () => scheduleAndroidWindowSync(50))
+    window.addEventListener('resize', () => scheduleAndroidWindowSync())
+    window.addEventListener('orientationchange', () => scheduleAndroidWindowSync(150))
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            scheduleAndroidWindowSync(50)
+        }
+    })
+}
+
 export async function changeFullscreen(){
     const db = getDatabase()
     try {
         if(isTauriAndroid){
-            await invoke('set_android_fullscreen', { enabled: !!db.fullScreen })
+            initializeAndroidWindowSync()
+            const enabled = !!db.fullScreen
+            const request = ++androidWindowSyncRequest
+            const state = await invoke<AndroidWindowState>('set_android_fullscreen', { enabled })
+            if (request === androidWindowSyncRequest) {
+                applyAndroidWindowState(state)
+            }
             return
         }
         if(isTauri && appWindow){

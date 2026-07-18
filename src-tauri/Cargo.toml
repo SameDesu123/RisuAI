@@ -25,7 +25,7 @@ tauri-plugin-shell = "=2.3.5"
 tauri-plugin-http = "=2.5.9"
 tauri-plugin-deep-link = "=2.4.9"
 tauri-plugin-notification = "=2.3.3"
-tokio = { version = "1.47.1", features = ["macros", "time"] }
+tokio = { version = "1.47.1", features = ["macros", "sync", "time"] }
 tokio-util = { version = "=0.7.18", features = ["rt"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
