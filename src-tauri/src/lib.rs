@@ -23,9 +23,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 #[cfg(desktop)]
 use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Emitter};
 #[cfg(desktop)]
-use tauri::{Listener, Manager};
+use tauri::Listener;
+use tauri::{AppHandle, Emitter, Manager};
 use tokio_util::sync::CancellationToken;
 
 struct StreamedFetchState {
@@ -57,7 +57,7 @@ impl Drop for StreamedFetchGuard {
 
 #[tauri::command]
 async fn native_request(
-    state: tauri::State<'_, StreamedFetchState>,
+    app: AppHandle,
     url: String,
     body: String,
     header: String,
@@ -86,7 +86,7 @@ async fn native_request(
         return format!(r#"{{"success":false,"body":"Invalid header JSON"}}"#);
     }
 
-    let client = state.client.clone();
+    let client = app.state::<StreamedFetchState>().client.clone();
     let response: Result<reqwest::Response, reqwest::Error>;
 
     if method == "POST" {
@@ -686,7 +686,6 @@ fn run_py_server(handle: tauri::AppHandle, py_path: String) {
 
 #[tauri::command]
 async fn streamed_fetch(
-    state: tauri::State<'_, StreamedFetchState>,
     id: String,
     url: String,
     headers: String,
@@ -718,7 +717,10 @@ async fn streamed_fetch(
         return format!(r#"{{"success":false,"body":"Invalid header JSON"}}"#);
     }
 
-    let client = state.client.clone();
+    let (client, cancellations) = {
+        let state = app.state::<StreamedFetchState>();
+        (state.client.clone(), Arc::clone(&state.cancellations))
+    };
     let timeout_secs = timeout_secs.unwrap_or(240);
     let builder: reqwest::RequestBuilder;
     if method == "POST" {
@@ -755,7 +757,6 @@ async fn streamed_fetch(
     }
 
     let cancellation = CancellationToken::new();
-    let cancellations = Arc::clone(&state.cancellations);
     {
         let mut active = match cancellations.lock() {
             Ok(active) => active,
