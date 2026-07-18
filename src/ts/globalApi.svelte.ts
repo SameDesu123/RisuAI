@@ -1572,7 +1572,7 @@ export class AppendableBuffer {
      * @returns {Uint8Array} - The sliced buffer.
      */
     slice(start: number, end: number) {
-        return this.buffer.slice(start - this.deapended, end - this.deapended)
+        return this.#buffer.slice(start - this.deapended, end - this.deapended)
     }
 
     /**
