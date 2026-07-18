@@ -14,10 +14,10 @@ import { appDataDir, join } from "@tauri-apps/api/path";
 import { get } from "svelte/store";
 import { open } from '@tauri-apps/plugin-shell'
 import streamSaver from 'streamsaver';
-import { setDatabase, type Database, defaultSdDataFunc, getDatabase, appVer, getCurrentCharacter, type character, type groupChat } from "./storage/database.svelte";
+import { setDatabase, type Database, defaultSdDataFunc, getDatabase, appVer, getCurrentCharacter, type character, type Chat, type groupChat } from "./storage/database.svelte";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { checkRisuUpdate } from "./update";
-import { MobileGUI, botMakerMode, selectedCharID, loadedStore, DBState, LoadingStatusState, selIdState, ReloadGUIPointer, bodyIntercepterStore } from "./stores.svelte";
+import { MobileGUI, botMakerMode, loadedStore, DBState, LoadingStatusState, selIdState, ReloadGUIPointer, bodyIntercepterStore } from "./stores.svelte";
 import { loadPlugins } from "./plugins/plugins.svelte";
 import { alertConfirm, alertError, alertMd, alertNormal, alertNormalWait, alertSelect, alertTOS, waitAlert } from "./alert";
 import { checkDriverInit, syncDrive } from "./drive/drive";
@@ -25,7 +25,7 @@ import { hasher } from "./parser/parser.svelte";
 import { characterURLImport, hubURL } from "./characterCards";
 import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
 import { loadRisuAccountData } from "./drive/accounter";
-import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder, type toSaveType } from "./storage/risuSave";
+import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder } from "./storage/risuSave";
 import { AutoStorage } from "./storage/autoStorage";
 import { updateAnimationSpeed } from "./gui/animation";
 import { updateColorScheme, updateTextThemeAndCSS } from "./gui/colorscheme";
@@ -45,6 +45,7 @@ import { isTauri, isNodeServer } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
+import { expandChatSaveTargets, SaveAreaTracker, type SaveAreaFlag } from "./storage/saveAreaDetector";
 
 export const forageStorage = new AutoStorage()
 
@@ -312,31 +313,14 @@ export async function saveDb() {
         }
     }
 
-    const changeTracker: toSaveType = {
-        character: [],
-        chat: [],
-        botPreset: false,
-        modules: false,
-        loadouts: false,
-        plugins: false,
-        pluginCustomStorage: false
-    }
-
     let encoder = new RisuSaveEncoder()
-    await encoder.init(getDatabase(), {
-        compression: forageStorage.isAccount
-    })
+    const saveAreaTracker = new SaveAreaTracker()
+    let needsInitialSave = true
 
     $effect.root(() => {
-
-        let selIdState = $state(0)
-
         const debounceTime = 500; // 500 milliseconds
         let saveTimeout: ReturnType<typeof setTimeout> | null = null;
-
-        selectedCharID.subscribe((v) => {
-            selIdState = v
-        })
+        const characterEffects = new Map<object, { chaId: string, dispose: () => void }>()
 
         function saveTimeoutExecute() {
             if (saveTimeout) {
@@ -347,32 +331,149 @@ export async function saveDb() {
             }, debounceTime);
         }
 
-        $effect(() => {
-            DBState.db.botPresetsId
-            DBState.db.botPresets.length
-            changeTracker.botPreset = true
-            saveTimeoutExecute()
+        function queueCharacter(chaId?: string) {
+            if (saveAreaTracker.markCharacter(chaId)) {
+                saveTimeoutExecute()
+            }
+        }
+
+        function queueChat(chaId?: string, chatId?: string) {
+            if (saveAreaTracker.markChat(chaId, chatId)) {
+                saveTimeoutExecute()
+            }
+            else {
+                queueCharacter(chaId)
+            }
+        }
+
+        function watchFlag(flag: SaveAreaFlag, read: () => void) {
+            let initialized = false
+            $effect(() => {
+                read()
+                if (initialized) {
+                    saveAreaTracker.markFlag(flag)
+                    saveTimeoutExecute()
+                }
+                initialized = true
+            })
+        }
+
+        function watchChat(character: character | groupChat, chat: Chat, markOnInitial: boolean) {
+            let initialized = false
+            return $effect.root(() => {
+                $effect(() => {
+                    $state.snapshot(chat)
+                    if (initialized || markOnInitial) {
+                        queueChat(character.chaId, chat.id)
+                    }
+                    initialized = true
+                })
+            })
+        }
+
+        function watchCharacter(character: character | groupChat, markOnInitial: boolean) {
+            return $effect.root(() => {
+                const chatEffects = new Map<object, { chatId: string, dispose: () => void }>()
+                let metadataInitialized = false
+                let chatListInitialized = false
+
+                $effect(() => {
+                    const characterData = character as unknown as Record<string, unknown>
+                    for (const key of Object.keys(characterData)) {
+                        if (key !== 'chats') {
+                            $state.snapshot(characterData[key])
+                        }
+                    }
+                    if (metadataInitialized || markOnInitial) {
+                        queueCharacter(character.chaId)
+                    }
+                    metadataInitialized = true
+                })
+
+                $effect(() => {
+                    const activeChats = new Set<object>()
+                    for (const chat of character.chats ?? []) {
+                        chat.id
+                        activeChats.add(chat)
+                        const existing = chatEffects.get(chat)
+                        if (!existing) {
+                            chatEffects.set(chat, {
+                                chatId: chat.id,
+                                dispose: watchChat(character, chat, chatListInitialized || markOnInitial)
+                            })
+                        }
+                        else if (existing.chatId !== chat.id) {
+                            queueChat(character.chaId, existing.chatId)
+                            queueChat(character.chaId, chat.id)
+                            existing.chatId = chat.id
+                        }
+                    }
+                    for (const [chat, effectState] of chatEffects) {
+                        if (!activeChats.has(chat)) {
+                            queueChat(character.chaId, effectState.chatId)
+                            effectState.dispose()
+                            chatEffects.delete(chat)
+                        }
+                    }
+                    if (chatListInitialized) {
+                        queueCharacter(character.chaId)
+                    }
+                    chatListInitialized = true
+                })
+
+                return () => {
+                    for (const effectState of chatEffects.values()) {
+                        effectState.dispose()
+                    }
+                    chatEffects.clear()
+                }
+            })
+        }
+
+        watchFlag('botPreset', () => {
+            $state.snapshot(DBState.db.botPresets)
         })
-        $effect(() => {
+        watchFlag('modules', () => {
             $state.snapshot(DBState.db.modules)
-            changeTracker.modules = true
-            saveTimeoutExecute()
         })
-        $effect(() => {
+        watchFlag('loadouts', () => {
             $state.snapshot(DBState.db.loadouts)
-            changeTracker.loadouts = true
-            saveTimeoutExecute()
         })
-        $effect(() => {
+        watchFlag('plugins', () => {
             $state.snapshot(DBState.db.plugins)
-            changeTracker.plugins = true
-            saveTimeoutExecute()
         })
-        $effect(() => {
+        watchFlag('pluginCustomStorage', () => {
             $state.snapshot(DBState.db.pluginCustomStorage)
-            changeTracker.pluginCustomStorage = true
-            saveTimeoutExecute()
         })
+        let characterListInitialized = false
+        $effect(() => {
+            const activeCharacters = new Set<object>()
+            for (const character of DBState.db.characters ?? []) {
+                character.chaId
+                activeCharacters.add(character)
+                const existing = characterEffects.get(character)
+                if (!existing) {
+                    characterEffects.set(character, {
+                        chaId: character.chaId,
+                        dispose: watchCharacter(character, characterListInitialized)
+                    })
+                }
+                else if (existing.chaId !== character.chaId) {
+                    queueCharacter(existing.chaId)
+                    queueCharacter(character.chaId)
+                    existing.chaId = character.chaId
+                }
+            }
+            for (const [character, effectState] of characterEffects) {
+                if (!activeCharacters.has(character)) {
+                    queueCharacter(effectState.chaId)
+                    effectState.dispose()
+                    characterEffects.delete(character)
+                }
+            }
+            characterListInitialized = true
+        })
+        let rootInitialized = false
         $effect(() => {
             for (const key in DBState.db) {
                 if (
@@ -382,25 +483,29 @@ export async function saveDb() {
                     $state.snapshot(DBState.db[key])
                 }
             }
-            if (DBState?.db?.characters?.[selIdState]) {
-                for (const key in DBState.db.characters[selIdState]) {
-                    if (key !== 'chats') {
-                        $state.snapshot(DBState.db.characters[selIdState][key])
-                    }
-                }
-                $state.snapshot(DBState.db.characters[selIdState].chats)
-                if (changeTracker.character[0] !== DBState.db.characters[selIdState]?.chaId) {
-                    changeTracker.character.unshift(DBState.db.characters[selIdState]?.chaId)
-                }
-                if (
-                    changeTracker.chat[0]?.[0] !== DBState.db.characters[selIdState]?.chaId ||
-                    changeTracker.chat[0]?.[1] !== DBState.db.characters[selIdState]?.chats[DBState.db.characters[selIdState]?.chatPage].id
-                ) {
-                    changeTracker.chat.unshift([DBState.db.characters[selIdState]?.chaId, DBState.db.characters[selIdState]?.chats[DBState.db.characters[selIdState]?.chatPage].id])
-                }
+            if (rootInitialized) {
+                saveAreaTracker.markRoot()
+                saveTimeoutExecute()
             }
-            saveTimeoutExecute()
+            rootInitialized = true
         })
+        $effect(() => {
+            if (requiresFullEncoderReload.state) {
+                saveTimeoutExecute()
+            }
+        })
+
+        saveTimeoutExecute()
+
+        return () => {
+            if (saveTimeout) {
+                clearTimeout(saveTimeout)
+            }
+            for (const effectState of characterEffects.values()) {
+                effectState.dispose()
+            }
+            characterEffects.clear()
+        }
     })
 
     let savetrys = 0
@@ -412,24 +517,8 @@ export async function saveDb() {
             continue
         }
 
-        saving.state = true
         changed = false
         try {
-
-            if (requiresFullEncoderReload.state) {
-                encoder = new RisuSaveEncoder()
-                await encoder.init(getDatabase(), {
-                    compression: forageStorage.isAccount,
-                    skipRemoteSavingOnCharacters: false
-                })
-                requiresFullEncoderReload.state = false
-            }
-
-            let toSave = safeStructuredClone(changeTracker)
-            changeTracker.character = changeTracker.character.length === 0 ? [] : [changeTracker.character[0]]
-            changeTracker.chat = changeTracker.chat.length === 0 ? [] : [changeTracker.chat[0]]
-            changeTracker.botPreset = false
-            changeTracker.modules = false
             if (gotChannel) {
                 //Data is saved in other tab
                 await sleep(1000)
@@ -444,6 +533,27 @@ export async function saveDb() {
                 continue
             }
 
+            const saveAreaBatch = saveAreaTracker.snapshot()
+            const needsFullEncoderReload = requiresFullEncoderReload.state
+            if (!needsInitialSave && !needsFullEncoderReload && !saveAreaTracker.hasChanges()) {
+                continue
+            }
+
+            saving.state = true
+            if (needsInitialSave || needsFullEncoderReload) {
+                encoder = new RisuSaveEncoder()
+                await encoder.init(db, {
+                    compression: forageStorage.isAccount,
+                    skipRemoteSavingOnCharacters: !needsFullEncoderReload
+                })
+                if (needsFullEncoderReload) {
+                    requiresFullEncoderReload.state = false
+                }
+            }
+
+            // Chats are detected independently, but the current save format still stores them
+            // inside their parent character block.
+            const toSave = expandChatSaveTargets(saveAreaBatch.toSave)
             await encoder.set(db, toSave)
             const encoded = encoder.encode()
             if (!encoded) {
@@ -470,8 +580,11 @@ export async function saveDb() {
             }
             savetrys = 0
             await saveDbKei()
+            saveAreaTracker.ack(saveAreaBatch)
+            needsInitialSave = false
             await sleep(500)
         } catch (error) {
+            changed = true
             savetrys += 1
             if (savetrys > 4) {
                 alertError(error)
@@ -479,6 +592,7 @@ export async function saveDb() {
             else {
                 console.error(error)
             }
+            await sleep(500)
         }
 
         saving.state = false
