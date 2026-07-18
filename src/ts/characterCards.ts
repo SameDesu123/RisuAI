@@ -1,12 +1,12 @@
 import { writable, type Writable } from "svelte/store"
 import { alertCardExport, alertConfirm, alertError, alertInput, alertMd, alertNormal, alertStore, alertTOS, alertWait } from "./alert"
 import { defaultSdDataFunc, type character, setDatabase, type customscript, type loreSettings, type loreBook, type triggerscript, importPreset, type groupChat, setCurrentCharacter, getCurrentCharacter, getDatabase, setDatabaseLite, appVer } from "./storage/database.svelte"
-import { checkNullish, decryptBuffer, isKnownUri, selectFileByDom, sleep } from "./util"
+import { checkNullish, decryptBuffer, isKnownUri, selectFileByDom, selectMultipleFilePaths, sleep } from "./util"
 import { language } from "src/lang"
 import { v4 as uuidv4, v4 } from 'uuid';
 import { changeChar, characterFormatUpdate } from "./characters"
 import { AppendableBuffer, BlankWriter, checkCharOrder, downloadFile, forageStorage, loadAsset, LocalWriter, openURL, readImage, saveAsset, VirtualWriter } from "./globalApi.svelte"
-import { isTauri, isNodeServer } from "src/ts/platform"
+import { isTauri, isNodeServer, isTauriAndroid } from "src/ts/platform"
 import { compressImage, getImageType } from "./media"
 import { DBState, SettingsMenuIndex, ShowRealmFrameStore, selectedCharID, settingsOpen } from "./stores.svelte"
 import { hasher } from "./parser/parser.svelte"
@@ -36,6 +36,21 @@ export const hubURL = isNodeServer
 
 export async function importCharacter() {
     try {
+        if(isTauriAndroid){
+            const paths = await selectMultipleFilePaths(['png', 'charx', 'jpg', 'jpeg', 'json'])
+            if(!paths){
+                return
+            }
+            for(const path of paths){
+                await importCharacterProcess({
+                    name: await basename(path),
+                    data: await readFile(path)
+                })
+                checkCharOrder()
+            }
+            return
+        }
+
         const files = await selectFileByDom(["*"], 'multiple')
         if(!files){
             return

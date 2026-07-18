@@ -82,6 +82,19 @@ export async function selectMultipleFile(ext:string[]){
         return arr
     }
 
+    const selected = await selectMultipleFilePaths(ext)
+    if(!selected){
+        return null
+    }
+
+    let arr:{name:string, data:Uint8Array}[] = []
+    for(const file of selected){
+        arr.push({name: await basename(file),data:await readFile(file)})
+    }
+    return arr
+}
+
+export async function selectMultipleFilePaths(ext:string[]):Promise<string[]|null>{
     const selected = await open({
         filters: [{
             name: ext.join(', '),
@@ -89,17 +102,10 @@ export async function selectMultipleFile(ext:string[]){
         }],
         multiple: true
     });
-    if (Array.isArray(selected)) {
-        let arr:{name:string, data:Uint8Array}[] = []
-        for(const file of selected){
-            arr.push({name: await basename(file),data:await readFile(file)})
-        }
-        return arr
-    } else if (selected === null) {
+    if(selected === null){
         return null
-    } else {
-        return [{name: await basename(selected),data:await readFile(selected)}]
     }
+    return Array.isArray(selected) ? selected : [selected]
 }
 
 export const replacePlaceholders = (msg:string, name:string) => {
