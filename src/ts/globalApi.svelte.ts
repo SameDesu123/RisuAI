@@ -14,7 +14,7 @@ import { appDataDir, join } from "@tauri-apps/api/path";
 import { get } from "svelte/store";
 import { open } from '@tauri-apps/plugin-shell'
 import streamSaver from 'streamsaver';
-import { setDatabase, type Database, defaultSdDataFunc, getDatabase, appVer, getCurrentCharacter, type character, type groupChat } from "./storage/database.svelte";
+import { setDatabase, setDatabaseLite, type Chat, type Database, defaultSdDataFunc, getDatabase, appVer, getCurrentCharacter, type character, type groupChat } from "./storage/database.svelte";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { checkRisuUpdate } from "./update";
 import { MobileGUI, botMakerMode, selectedCharID, loadedStore, DBState, LoadingStatusState, selIdState, ReloadGUIPointer, bodyIntercepterStore } from "./stores.svelte";
@@ -25,7 +25,7 @@ import { hasher } from "./parser/parser.svelte";
 import { characterURLImport, hubURL } from "./characterCards";
 import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
 import { loadRisuAccountData } from "./drive/accounter";
-import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder, type toSaveType } from "./storage/risuSave";
+import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder } from "./storage/risuSave";
 import { AutoStorage } from "./storage/autoStorage";
 import { updateAnimationSpeed } from "./gui/animation";
 import { updateColorScheme, updateTextThemeAndCSS } from "./gui/colorscheme";
@@ -45,8 +45,194 @@ import { isTauri, isNodeServer } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
+import {
+    decodeDatabaseBlockManifest,
+    isDatabaseBlockManifest,
+    type DatabaseBlockManifest,
+    type DatabaseBlockStorageAdapter,
+} from "./storage/databaseBlockFormat";
+import {
+    commitDatabaseBlockChat,
+    hasDatabaseBlockChatStubs,
+    hydrateDatabaseBlockChat,
+    hydrateDatabaseBlockChatFromRef,
+    hydrateDatabaseBlockDatabase,
+} from "./storage/databaseBlockReader";
+import {
+    createAutoDatabaseBlockStorage,
+    createTauriDatabaseBlockStorage,
+    decodeStoredDatabaseBytes,
+    preserveLegacyDatabaseBackup,
+    readDatabaseBlockManifest,
+} from "./storage/databaseBlockStorage";
+import { SaveDirtyTracker, type SaveDirtyFlag } from "./storage/saveDirtyTracker";
+import { cleanupDatabaseBlockGenerations } from "./storage/databaseBlockCleanup";
+import { saveDatabaseBlockSnapshot } from "./storage/databaseBlockSaveCycle";
+import { retainDatabaseBackupIds } from "./storage/databaseBackupRetention";
 
 export const forageStorage = new AutoStorage()
+const hydratedDatabaseBlockChats = new WeakSet<object>()
+
+export function getDatabaseBlockStorage(): DatabaseBlockStorageAdapter {
+    return isTauri
+        ? createTauriDatabaseBlockStorage()
+        : createAutoDatabaseBlockStorage(forageStorage)
+}
+
+export async function preLoadDatabaseBlockChat(characterIndex: number, chatIndex: number) {
+    const storage = getDatabaseBlockStorage()
+    const requestedCharacter = DBState.db.characters?.[characterIndex]
+    const requestedChat = requestedCharacter?.chats?.[chatIndex]
+    if (!requestedCharacter || !requestedChat) {
+        return null
+    }
+    const beforeCommit = (chat: Chat) => hydratedDatabaseBlockChats.add(chat)
+    try {
+        return await hydrateDatabaseBlockChat(
+            DBState.db,
+            storage,
+            characterIndex,
+            chatIndex,
+            beforeCommit,
+        )
+    } catch (primaryError) {
+        if (
+            DBState.db.characters.indexOf(requestedCharacter) === -1
+            || requestedCharacter.chats.indexOf(requestedChat) === -1
+        ) {
+            throw primaryError
+        }
+        const characterId = requestedCharacter.chaId
+        const chatId = requestedChat.id
+        if (!characterId || !chatId) {
+            throw primaryError
+        }
+        for (const backup of await getDbBackups()) {
+            try {
+                const backupData = isTauri
+                    ? await readFile(`database/dbbackup-${backup}.bin`, { baseDir: BaseDirectory.AppData })
+                    : await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
+                const bytes = new Uint8Array(backupData)
+                if (isDatabaseBlockManifest(bytes)) {
+                    const manifest = decodeDatabaseBlockManifest(bytes)
+                    const ref = manifest.characters.chatRefs[characterId]?.refs[chatId]
+                    if (!ref) {
+                        continue
+                    }
+                    const recoveryCharacterIndex = DBState.db.characters.indexOf(requestedCharacter)
+                    const recoveryChatIndex = requestedCharacter.chats.indexOf(requestedChat)
+                    if (recoveryCharacterIndex === -1 || recoveryChatIndex === -1) {
+                        throw primaryError
+                    }
+                    const recovered = await hydrateDatabaseBlockChatFromRef(
+                        DBState.db,
+                        storage,
+                        recoveryCharacterIndex,
+                        recoveryChatIndex,
+                        ref,
+                        beforeCommit,
+                    )
+                    if (recovered) {
+                        requiresFullEncoderReload.state = true
+                        console.warn(`Recovered chat ${characterId}/${chatId} from database backup ${backup}`)
+                        return recovered
+                    }
+                    continue
+                }
+                const legacy = await decodeRisuSave(bytes)
+                const recoveredCharacter = legacy.characters?.find((char) => char.chaId === characterId)
+                const recoveredChat = recoveredCharacter?.chats?.find((chat) => chat.id === chatId)
+                if (recoveredChat) {
+                    const recoveryCharacterIndex = DBState.db.characters.indexOf(requestedCharacter)
+                    const recoveryChatIndex = requestedCharacter.chats.indexOf(requestedChat)
+                    if (recoveryCharacterIndex === -1 || recoveryChatIndex === -1) {
+                        throw primaryError
+                    }
+                    const recovered = commitDatabaseBlockChat(
+                        DBState.db,
+                        recoveryCharacterIndex,
+                        recoveryChatIndex,
+                        recoveredChat,
+                        beforeCommit,
+                    )
+                    requiresFullEncoderReload.state = true
+                    console.warn(`Recovered chat ${characterId}/${chatId} from legacy database backup ${backup}`)
+                    return recovered
+                }
+            } catch (backupError) {
+                console.error(`Failed to recover chat from database backup ${backup}`, backupError)
+            }
+        }
+        throw primaryError
+    }
+}
+
+export async function preLoadDatabaseBlockCharacter(characterIndex: number) {
+    const character = DBState.db.characters?.[characterIndex]
+    if (!character) {
+        return null
+    }
+    const chats = [...character.chats]
+    for (const chat of chats) {
+        const currentCharacterIndex = DBState.db.characters.indexOf(character)
+        const currentChatIndex = character.chats.indexOf(chat)
+        if (currentCharacterIndex === -1 || currentChatIndex === -1) {
+            return null
+        }
+        const hydrated = await preLoadDatabaseBlockChat(currentCharacterIndex, currentChatIndex)
+        if (!hydrated) {
+            return null
+        }
+    }
+    return DBState.db.characters.includes(character) ? character : null
+}
+
+export async function getHydratedDatabaseSnapshot(options: {
+    databaseBlockStorage?: boolean
+} = {}) {
+    let db = getDatabase({ snapshot: true })
+    if (hasDatabaseBlockChatStubs(db)) {
+        db = await hydrateDatabaseBlockDatabase(db, getDatabaseBlockStorage())
+    }
+    if (options.databaseBlockStorage !== undefined) {
+        db.databaseBlockStorage = options.databaseBlockStorage
+    }
+    return db
+}
+
+export async function decodeDatabaseStorageBytes(data: Uint8Array) {
+    return await decodeStoredDatabaseBytes(data, getDatabaseBlockStorage(), decodeRisuSave)
+}
+
+let lastDatabaseBlockCleanup = 0
+async function cleanRetainedDatabaseBlocks(
+    storage: DatabaseBlockStorageAdapter,
+    current: DatabaseBlockManifest,
+    backups: number[],
+) {
+    if (Date.now() - lastDatabaseBlockCleanup < 1000 * 60 * 60 * 24) {
+        return backups
+    }
+    try {
+        const refreshedBackups = await getDbBackups()
+        const manifests = [current]
+        for (const backup of refreshedBackups) {
+            const backupData = isTauri
+                ? await readFile(`database/dbbackup-${backup}.bin`, { baseDir: BaseDirectory.AppData })
+                : await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
+            const bytes = new Uint8Array(backupData)
+            if (isDatabaseBlockManifest(bytes)) {
+                manifests.push(decodeDatabaseBlockManifest(bytes))
+            }
+        }
+        await cleanupDatabaseBlockGenerations(storage, manifests)
+        lastDatabaseBlockCleanup = Date.now()
+        return refreshedBackups
+    } catch (error) {
+        console.error("Skipped database block cleanup because retained manifests could not be verified", error)
+        return backups
+    }
+}
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
 
@@ -289,6 +475,24 @@ export let saving = $state({
 export let requiresFullEncoderReload = $state({
     state: false
 })
+
+let activeSaveDirtyTracker: SaveDirtyTracker | null = null
+let activeSaveScheduler: (() => void) | null = null
+
+export function requestCharacterSave(characterId?: string) {
+    activeSaveDirtyTracker?.markCharacter(characterId)
+    if (characterId) {
+        activeSaveScheduler?.()
+    }
+}
+
+export function requestChatSave(characterId?: string, chatId?: string) {
+    activeSaveDirtyTracker?.markChat(characterId, chatId)
+    if (characterId && chatId) {
+        activeSaveScheduler?.()
+    }
+}
+
 export async function saveDb() {
     let changed = false
     syncDrive()
@@ -312,20 +516,55 @@ export async function saveDb() {
         }
     }
 
-    const changeTracker: toSaveType = {
-        character: [],
-        chat: [],
-        botPreset: false,
-        modules: false,
-        loadouts: false,
-        plugins: false,
-        pluginCustomStorage: false
-    }
+    const dirtyTracker = new SaveDirtyTracker()
+    activeSaveDirtyTracker = dirtyTracker
 
-    let encoder = new RisuSaveEncoder()
-    await encoder.init(getDatabase(), {
-        compression: forageStorage.isAccount
-    })
+    let encoder: RisuSaveEncoder | null = null
+    let blockManifest: DatabaseBlockManifest | null | undefined
+    let blockModeActive = !!getDatabase().databaseBlockStorage && !forageStorage.isAccount
+    let retainedBackupIds: number[] | null = null
+    let lastGeneratedBackupId = 0
+    let legacyMigrationBackupChecked = false
+    async function nextDatabaseBackupId() {
+        retainedBackupIds ??= await getDbBackups({ prune: false })
+        lastGeneratedBackupId = Math.max(
+            parseInt((Date.now() / 100).toFixed()),
+            lastGeneratedBackupId + 1,
+            (retainedBackupIds[0] ?? 0) + 1,
+        )
+        return lastGeneratedBackupId
+    }
+    async function retainDatabaseBackup(backupId: number) {
+        if (retainedBackupIds === null) {
+            retainedBackupIds = await getDbBackups({ prune: false })
+        }
+        const next = retainDatabaseBackupIds(retainedBackupIds, backupId)
+        for (const removedId of next.removed) {
+            if (isTauri) {
+                await remove(`database/dbbackup-${removedId}.bin`, { baseDir: BaseDirectory.AppData })
+            }
+            else {
+                await forageStorage.removeItem(`database/dbbackup-${removedId}.bin`)
+            }
+        }
+        retainedBackupIds = next.retained
+        return retainedBackupIds
+    }
+    if (blockModeActive) {
+        try {
+            blockManifest = await readDatabaseBlockManifest(getDatabaseBlockStorage())
+        } catch (error) {
+            console.error("Failed to read the current database block manifest", error)
+            blockManifest = null
+        }
+    }
+    else {
+        encoder = new RisuSaveEncoder()
+        await encoder.init(getDatabase(), {
+            compression: forageStorage.isAccount
+        })
+    }
+    const skipInitialDirtyTracking = blockModeActive && blockManifest != null
 
     $effect.root(() => {
 
@@ -334,7 +573,7 @@ export async function saveDb() {
         const debounceTime = 500; // 500 milliseconds
         let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
-        selectedCharID.subscribe((v) => {
+        const unsubscribeSelectedChar = selectedCharID.subscribe((v) => {
             selIdState = v
         })
 
@@ -347,32 +586,114 @@ export async function saveDb() {
             }, debounceTime);
         }
 
+        activeSaveScheduler = saveTimeoutExecute
+
+        function trackFlagChange(flag: SaveDirtyFlag) {
+            dirtyTracker.markFlag(flag)
+            saveTimeoutExecute()
+        }
+
+        const chatWatcherCleanups = new Map<string, () => void>()
+        function chatWatcherKey(characterId: string, chatId: string) {
+            return `${characterId}\0${chatId}`
+        }
+
+        function cleanupChatWatchers(activeKeys?: Set<string>) {
+            for (const [key, cleanup] of chatWatcherCleanups) {
+                if (!activeKeys?.has(key)) {
+                    cleanup()
+                    chatWatcherCleanups.delete(key)
+                }
+            }
+        }
+
+        function syncChatWatchers(character: Database['characters'][number]) {
+            const activeKeys = new Set<string>()
+            for (const chat of character.chats ?? []) {
+                if (!character.chaId || !chat?.id) {
+                    continue
+                }
+                const characterId = character.chaId
+                const chatId = chat.id
+                const key = chatWatcherKey(characterId, chatId)
+                activeKeys.add(key)
+                if (chatWatcherCleanups.has(key)) {
+                    continue
+                }
+                const cleanup = $effect.root(() => {
+                    let initialized = false
+                    $effect(() => {
+                        const currentCharacter = DBState.db.characters
+                            ?.find((candidate) => candidate?.chaId === characterId)
+                        const currentChat = currentCharacter?.chats
+                            ?.find((candidate) => candidate?.id === chatId)
+                        if (!currentChat) {
+                            return
+                        }
+                        $state.snapshot(currentChat)
+                        if (initialized) {
+                            if (!hydratedDatabaseBlockChats.delete(currentChat)) {
+                                requestChatSave(characterId, chatId)
+                            }
+                        }
+                        else {
+                            initialized = true
+                        }
+                    })
+                })
+                chatWatcherCleanups.set(key, cleanup)
+            }
+            cleanupChatWatchers(activeKeys)
+        }
+
+        $effect(() => {
+            if (requiresFullEncoderReload.state) {
+                saveTimeoutExecute()
+            }
+        })
+
+        let botPresetInitialized = false
         $effect(() => {
             DBState.db.botPresetsId
-            DBState.db.botPresets.length
-            changeTracker.botPreset = true
-            saveTimeoutExecute()
+            $state.snapshot(DBState.db.botPresets)
+            if (botPresetInitialized || !skipInitialDirtyTracking) {
+                trackFlagChange('botPreset')
+            }
+            botPresetInitialized = true
         })
+        let modulesInitialized = false
         $effect(() => {
             $state.snapshot(DBState.db.modules)
-            changeTracker.modules = true
-            saveTimeoutExecute()
+            if (modulesInitialized || !skipInitialDirtyTracking) {
+                trackFlagChange('modules')
+            }
+            modulesInitialized = true
         })
+        let loadoutsInitialized = false
         $effect(() => {
             $state.snapshot(DBState.db.loadouts)
-            changeTracker.loadouts = true
-            saveTimeoutExecute()
+            if (loadoutsInitialized || !skipInitialDirtyTracking) {
+                trackFlagChange('loadouts')
+            }
+            loadoutsInitialized = true
         })
+        let pluginsInitialized = false
         $effect(() => {
             $state.snapshot(DBState.db.plugins)
-            changeTracker.plugins = true
-            saveTimeoutExecute()
+            if (pluginsInitialized || !skipInitialDirtyTracking) {
+                trackFlagChange('plugins')
+            }
+            pluginsInitialized = true
         })
+        let pluginStorageInitialized = false
         $effect(() => {
             $state.snapshot(DBState.db.pluginCustomStorage)
-            changeTracker.pluginCustomStorage = true
-            saveTimeoutExecute()
+            if (pluginStorageInitialized || !skipInitialDirtyTracking) {
+                trackFlagChange('pluginCustomStorage')
+            }
+            pluginStorageInitialized = true
         })
+        let rootInitialized = false
         $effect(() => {
             for (const key in DBState.db) {
                 if (
@@ -382,29 +703,47 @@ export async function saveDb() {
                     $state.snapshot(DBState.db[key])
                 }
             }
+            if (rootInitialized || !skipInitialDirtyTracking) {
+                dirtyTracker.markRoot()
+                saveTimeoutExecute()
+            }
+            rootInitialized = true
+        })
+        let watchedCharacterId: string | undefined
+        $effect(() => {
             if (DBState?.db?.characters?.[selIdState]) {
-                for (const key in DBState.db.characters[selIdState]) {
+                const character = DBState.db.characters[selIdState]
+                for (const key in character) {
                     if (key !== 'chats') {
-                        $state.snapshot(DBState.db.characters[selIdState][key])
+                        $state.snapshot(character[key])
                     }
                 }
-                $state.snapshot(DBState.db.characters[selIdState].chats)
-                if (changeTracker.character[0] !== DBState.db.characters[selIdState]?.chaId) {
-                    changeTracker.character.unshift(DBState.db.characters[selIdState]?.chaId)
+                character.chats?.map((chat) => chat?.id)
+                if (watchedCharacterId === character.chaId || !skipInitialDirtyTracking) {
+                    requestCharacterSave(character.chaId)
                 }
-                if (
-                    changeTracker.chat[0]?.[0] !== DBState.db.characters[selIdState]?.chaId ||
-                    changeTracker.chat[0]?.[1] !== DBState.db.characters[selIdState]?.chats[DBState.db.characters[selIdState]?.chatPage].id
-                ) {
-                    changeTracker.chat.unshift([DBState.db.characters[selIdState]?.chaId, DBState.db.characters[selIdState]?.chats[DBState.db.characters[selIdState]?.chatPage].id])
-                }
+                watchedCharacterId = character.chaId
+                syncChatWatchers(character)
             }
-            saveTimeoutExecute()
+            else {
+                watchedCharacterId = undefined
+                cleanupChatWatchers()
+            }
         })
+        return () => {
+            unsubscribeSelectedChar()
+            cleanupChatWatchers()
+            if (saveTimeout) {
+                clearTimeout(saveTimeout)
+            }
+            if (activeSaveDirtyTracker === dirtyTracker) {
+                activeSaveDirtyTracker = null
+                activeSaveScheduler = null
+            }
+        }
     })
 
     let savetrys = 0
-    let lastDbData = new Uint8Array(0)
     await sleep(1000)
     while (true) {
         if (!changed) {
@@ -414,24 +753,25 @@ export async function saveDb() {
 
         saving.state = true
         changed = false
+        let reloadConsumed = false
         try {
-
             if (requiresFullEncoderReload.state) {
-                encoder = new RisuSaveEncoder()
-                await encoder.init(getDatabase(), {
-                    compression: forageStorage.isAccount,
-                    skipRemoteSavingOnCharacters: false
-                })
                 requiresFullEncoderReload.state = false
+                reloadConsumed = true
             }
-
-            let toSave = safeStructuredClone(changeTracker)
-            changeTracker.character = changeTracker.character.length === 0 ? [] : [changeTracker.character[0]]
-            changeTracker.chat = changeTracker.chat.length === 0 ? [] : [changeTracker.chat[0]]
-            changeTracker.botPreset = false
-            changeTracker.modules = false
+            if (!reloadConsumed && !dirtyTracker.hasChanges()) {
+                saving.state = false
+                continue
+            }
+            const saveSnapshot = dirtyTracker.snapshot()
+            const toSave = {
+                ...saveSnapshot.toSave,
+                root: saveSnapshot.rootVersion !== undefined,
+            }
             if (gotChannel) {
                 //Data is saved in other tab
+                changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
+                saving.state = false
                 await sleep(1000)
                 continue
             }
@@ -440,38 +780,125 @@ export async function saveDb() {
             }
             let db = getDatabase()
             if (!db.characters) {
+                changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
+                saving.state = false
                 await sleep(1000)
                 continue
+            }
+
+            if (db.databaseBlockStorage && !forageStorage.isAccount) {
+                const blockStorage = getDatabaseBlockStorage()
+                if (!blockManifest && !legacyMigrationBackupChecked) {
+                    const migrationBackupId = await nextDatabaseBackupId()
+                    const preserved = await preserveLegacyDatabaseBackup(
+                        blockStorage,
+                        `database/dbbackup-${migrationBackupId}.bin`,
+                    )
+                    if (preserved) {
+                        retainedBackupIds = [...new Set([
+                            migrationBackupId,
+                            ...(retainedBackupIds ?? []),
+                        ])].sort((first, second) => second - first)
+                    }
+                    legacyMigrationBackupChecked = true
+                }
+                const previousManifest = blockModeActive && !reloadConsumed ? blockManifest : null
+                const result = await saveDatabaseBlockSnapshot(
+                    db,
+                    blockStorage,
+                    dirtyTracker,
+                    saveSnapshot,
+                    previousManifest,
+                    async (published) => {
+                        const backupId = await nextDatabaseBackupId()
+                        await blockStorage.setItem(
+                            `database/dbbackup-${backupId}.bin`,
+                            published.encoded,
+                        )
+                        const backups = await retainDatabaseBackup(backupId)
+                        retainedBackupIds = await cleanRetainedDatabaseBlocks(
+                            blockStorage,
+                            published.manifest,
+                            backups,
+                        )
+                    },
+                )
+                blockManifest = result.manifest
+                blockModeActive = true
+                changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
+                encoder = null
+                savetrys = 0
+                await saveDbKei(() => getHydratedDatabaseSnapshot())
+                await sleep(500)
+                saving.state = false
+                continue
+            }
+
+            if (hasDatabaseBlockChatStubs(db)) {
+                db = await hydrateDatabaseBlockDatabase(db, getDatabaseBlockStorage())
+                db.databaseBlockStorage = false
+                setDatabaseLite(db)
+                reloadConsumed = true
+            }
+
+            if (requiresFullEncoderReload.state) {
+                requiresFullEncoderReload.state = false
+                reloadConsumed = true
+            }
+            if (reloadConsumed || !encoder) {
+                encoder = new RisuSaveEncoder()
+                await encoder.init(db, {
+                    compression: forageStorage.isAccount,
+                    skipRemoteSavingOnCharacters: false
+                })
             }
 
             await encoder.set(db, toSave)
             const encoded = encoder.encode()
             if (!encoded) {
+                changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
+                saving.state = false
                 await sleep(1000)
                 continue
             }
             const dbData = new Uint8Array(encoded)
+            let backupId: number | null = null
             if (isTauri) {
                 await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
-                await writeFile(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData, { baseDir: BaseDirectory.AppData });
+                blockModeActive = false
+                blockManifest = null
+                dirtyTracker.ack(saveSnapshot)
+                changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
+                backupId = await nextDatabaseBackupId()
+                await writeFile(`database/dbbackup-${backupId}.bin`, dbData, { baseDir: BaseDirectory.AppData });
             }
             else {
 
                 await forageStorage.setItem('database/database.bin', dbData)
+                blockModeActive = false
+                blockManifest = null
+                dirtyTracker.ack(saveSnapshot)
+                changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
                 if (!forageStorage.isAccount) {
-                    await forageStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData)
+                    backupId = await nextDatabaseBackupId()
+                    await forageStorage.setItem(`database/dbbackup-${backupId}.bin`, dbData)
                 }
                 if (forageStorage.isAccount) {
                     await sleep(3000)
                 }
             }
-            if (!forageStorage.isAccount) {
-                await getDbBackups()
+            if (backupId !== null) {
+                await retainDatabaseBackup(backupId)
             }
+            legacyMigrationBackupChecked = false
             savetrys = 0
             await saveDbKei()
             await sleep(500)
         } catch (error) {
+            if (reloadConsumed) {
+                requiresFullEncoderReload.state = true
+            }
+            changed = dirtyTracker.hasChanges() || requiresFullEncoderReload.state
             savetrys += 1
             if (savetrys > 4) {
                 alertError(error)
@@ -490,9 +917,8 @@ export async function saveDb() {
  * 
  * @returns {Promise<number[]>} - A promise that resolves to an array of backup timestamps.
  */
-export async function getDbBackups() {
-    let db = getDatabase()
-    if (db?.account?.useSync && !isTauri && !isNodeServer) {
+export async function getDbBackups(options: { prune?: boolean } = {}) {
+    if (forageStorage.isAccount) {
         return []
     }
     if (isTauri) {
@@ -506,7 +932,7 @@ export async function getDbBackups() {
             }
         }
         backups.sort((a, b) => b - a)
-        while (backups.length > 20) {
+        while (options.prune !== false && backups.length > 20) {
             const last = backups.pop()
             await remove(`database/dbbackup-${last}.bin`, { baseDir: BaseDirectory.AppData })
         }
@@ -520,7 +946,7 @@ export async function getDbBackups() {
             .map(key => parseInt(key.slice(18, -4)))
             .sort((a, b) => b - a);
 
-        while (backups.length > 20) {
+        while (options.prune !== false && backups.length > 20) {
             const last = backups.pop()
             await forageStorage.removeItem(`database/dbbackup-${last}.bin`)
         }
@@ -2075,8 +2501,9 @@ export async function loadInternalBackup() {
     ) : (await forageStorage.getItem(selectedBackup))
 
     setDatabase(
-        await decodeRisuSave(Buffer.from(data) as unknown as Uint8Array)
+        await decodeDatabaseStorageBytes(Buffer.from(data) as unknown as Uint8Array)
     )
+    requiresFullEncoderReload.state = true
 
     alertNormal('Loaded backup')
 

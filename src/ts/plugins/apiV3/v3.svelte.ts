@@ -8,7 +8,7 @@ import { v4 } from "uuid";
 import { sleep } from "src/ts/util";
 import { alertConfirm, alertError, alertNormal } from "src/ts/alert";
 import { language } from "src/lang";
-import { checkCharOrder, forageStorage, getFetchLogs } from "src/ts/globalApi.svelte";
+import { checkCharOrder, forageStorage, getFetchLogs, getHydratedDatabaseSnapshot, preLoadDatabaseBlockCharacter, preLoadDatabaseBlockChat, requestCharacterSave, requestChatSave, requiresFullEncoderReload } from "src/ts/globalApi.svelte";
 import { changeColorScheme, updateColorScheme, updateTextThemeAndCSS, type ColorScheme } from "src/ts/gui/colorscheme";
 import { isNodeServer, isTauri } from "src/ts/platform";
 import { get } from "svelte/store";
@@ -34,6 +34,12 @@ import {
     type AfterTTSResult,
     type TTSHookFn,
 } from "src/ts/process/ttsHooks";
+import {
+    readHydratedPluginCharacter,
+    readHydratedPluginChat,
+    replaceHydratedPluginCharacter,
+    replaceHydratedPluginChat,
+} from "../pluginDatabaseBlockCompatibility";
 
 /*
     V3 API for RisuAI Plugins
@@ -638,6 +644,56 @@ const authorizationHeaders = [
 const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
 
     const oldApis = getV2PluginAPIs();
+    const getPluginCharacterFromIndex = async (index: number) => {
+        return await readHydratedPluginCharacter(
+            DBState.db,
+            index,
+            preLoadDatabaseBlockCharacter,
+            (character) => $state.snapshot(character),
+        )
+    }
+    const setPluginCharacterToIndex = async (index: number, character: any) => {
+        const replaced = await replaceHydratedPluginCharacter(
+            DBState.db,
+            index,
+            character,
+            preLoadDatabaseBlockCharacter,
+            requestCharacterSave,
+            requestChatSave,
+        )
+        if (replaced) {
+            requiresFullEncoderReload.state = true
+        }
+    }
+    const getCurrentPluginCharacter = async () => {
+        return await getPluginCharacterFromIndex(get(selectedCharID))
+    }
+    const setCurrentPluginCharacter = async (character: any) => {
+        await setPluginCharacterToIndex(get(selectedCharID), character)
+    }
+    const getPluginChatFromIndex = async (characterIndex: number, chatIndex: number) => {
+        return await readHydratedPluginChat(
+            DBState.db,
+            characterIndex,
+            chatIndex,
+            preLoadDatabaseBlockChat,
+            (chat) => $state.snapshot(chat),
+        )
+    }
+    const setPluginChatToIndex = async (characterIndex: number, chatIndex: number, chat: any) => {
+        const replaced = await replaceHydratedPluginChat(
+            DBState.db,
+            characterIndex,
+            chatIndex,
+            chat,
+            preLoadDatabaseBlockChat,
+            requestCharacterSave,
+            requestChatSave,
+        )
+        if (replaced) {
+            requiresFullEncoderReload.state = true
+        }
+    }
     return {
 
         //Old APIs from v2.1
@@ -674,8 +730,8 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             }
             return oldApis.nativeFetch(url, options);
         },
-        getChar: oldApis.getChar,
-        setChar: oldApis.setChar,
+        getChar: getCurrentPluginCharacter,
+        setChar: setCurrentPluginCharacter,
         addProvider: (name: string, func: (arg: PluginV2ProviderArgument, abortSignal?: AbortSignal) => Promise<{ success: boolean, content: string }>, options?: PluginV3ProviderOptions) => {
             console.warn(`[WARN] addProvider is a powerful API that can potentially be unsafe if used incorrectly. addProvider's functionality might be limited or changed in future updates to ensure security. please use other APIs if possible.`);
             let provs = get(customProviderStore)
@@ -741,7 +797,10 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             if(!conf){
                 return null;
             }
-            const db = DBState.db
+            const includesCharacters = includeOnly === 'all' || includeOnly.includes('characters')
+            const db = includesCharacters
+                ? await getHydratedDatabaseSnapshot()
+                : DBState.db
             let liteDB = {}
             for(const key of allowedDbKeys){
                 if(includeOnly !== 'all' && !includeOnly.includes(key)){
@@ -839,46 +898,10 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                 }
             }
         },
-        getCharacterFromIndex: (index:number) => {
-            const db = DBState.db
-            const charIds = Object.keys(db.characters);
-            const charId = charIds[index];
-            if(charId){
-                return $state.snapshot(db.characters[charId]);
-            }
-            return null;
-        },
-        setCharacterToIndex: (index:number, char:any) => {
-            const db = DBState.db
-            const charIds = Object.keys(db.characters);
-            const charId = charIds[index];
-            if(charId){
-                DBState.db.characters[charId] = char
-            }
-        },
-        getChatFromIndex: (characterIndex:number, chatIndex:number) => {
-            const db = DBState.db
-            const charIds = Object.keys(db.characters);
-            const charId = charIds[characterIndex];
-            if(charId){
-                const chats = db.characters[charId].chats;
-                if(chats && chats[chatIndex]){
-                    return $state.snapshot(chats[chatIndex]);
-                }
-            }
-            return null;
-        },
-        setChatToIndex: (characterIndex:number, chatIndex:number, chat:any) => {
-            const db = DBState.db
-            const charIds = Object.keys(db.characters);
-            const charId = charIds[characterIndex];
-            if(charId){
-                const chats = db.characters[charId].chats;
-                if(chats && chats[chatIndex]){
-                    DBState.db.characters[charId].chats[chatIndex] = chat
-                }
-            }
-        },
+        getCharacterFromIndex: getPluginCharacterFromIndex,
+        setCharacterToIndex: setPluginCharacterToIndex,
+        getChatFromIndex: getPluginChatFromIndex,
+        setChatToIndex: setPluginChatToIndex,
         getCurrentCharacterIndex: () => {
             return get(selectedCharID)
         },
@@ -900,8 +923,8 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             return $state.snapshot(characterLore.concat(chatLore).concat(moduleLore))
         },
         //New names for character APIs, to match API naming conventions
-        getCharacter: oldApis.getChar,
-        setCharacter: oldApis.setChar,
+        getCharacter: getCurrentPluginCharacter,
+        setCharacter: setCurrentPluginCharacter,
 
         showContainer: (
             //more types may be added in future

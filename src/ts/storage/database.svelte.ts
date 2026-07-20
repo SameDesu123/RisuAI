@@ -3,7 +3,7 @@ import { checkNullish, decryptBuffer, encryptBuffer, selectSingleFile } from '..
 import { changeLanguage, language } from '../../lang';
 import type { RisuPlugin } from '../plugins/plugins.svelte';
 import type {triggerscript as triggerscriptMain} from '../process/triggers';
-import { downloadFile, saveAsset as saveImageGlobal } from '../globalApi.svelte';
+import { downloadFile, requestCharacterSave, requestChatSave, saveAsset as saveImageGlobal } from '../globalApi.svelte';
 import { defaultAutoSuggestPrompt, defaultJailbreak, defaultMainPrompt } from './defaultPrompts';
 import { alertNormal } from '../alert';
 import type { NAISettings } from '../process/models/nai';
@@ -20,6 +20,7 @@ import {
     DEFAULT_CHAT_LOAD_INITIAL_PAGES,
     normalizeChatLoadPages,
 } from '../chatLoadPages';
+import { applyDatabaseBlockStorageDefault } from './databaseBlockActivation';
 
 //APP_VERSION_POINT is to locate the app version in the database file for version bumping
 export let appVer = "2026.6.214" //<APP_VERSION_POINT>
@@ -28,6 +29,7 @@ export let webAppSubVer = ''
 export type StreamingDisplayOptimizationMode = 'off'|'balanced'|'strong'
 
 export function setDatabase(data:Database){
+    applyDatabaseBlockStorageDefault(data)
     if(checkNullish(data.characters)){
         data.characters = []
     }
@@ -748,7 +750,14 @@ export function setCurrentCharacter(char:character|groupChat){
     if(!DBState.db.characters){
         DBState.db.characters = []
     }
-    DBState.db.characters[get(selectedCharID)] = char
+    const index = get(selectedCharID)
+    const previousCharacterId = DBState.db.characters[index]?.chaId
+    DBState.db.characters[index] = char
+    requestCharacterSave(previousCharacterId)
+    requestCharacterSave(char?.chaId)
+    for(const chat of char?.chats ?? []){
+        requestChatSave(char?.chaId ?? previousCharacterId, chat?.id)
+    }
 }
 
 export function getCharacterByIndex(index:number,options:getDatabaseOptions = {}):character|groupChat{
@@ -764,7 +773,13 @@ export function setCharacterByIndex(index:number,char:character|groupChat){
     if(!DBState.db.characters){
         DBState.db.characters = []
     }
+    const previousCharacterId = DBState.db.characters[index]?.chaId
     DBState.db.characters[index] = char
+    requestCharacterSave(previousCharacterId)
+    requestCharacterSave(char?.chaId)
+    for(const chat of char?.chats ?? []){
+        requestChatSave(char?.chaId ?? previousCharacterId, chat?.id)
+    }
 }
 
 export function getCurrentChat(){
@@ -774,8 +789,13 @@ export function getCurrentChat(){
 
 export function setCurrentChat(chat:Chat){
     const char = getCurrentCharacter()
+    const previousChatId = char.chats[char.chatPage]?.id
     char.chats[char.chatPage] = chat
-    setCurrentCharacter(char)
+    DBState.db.characters[get(selectedCharID)] = char
+    if(chat?.id && chat.id !== previousChatId){
+        requestCharacterSave(char?.chaId)
+    }
+    requestChatSave(char?.chaId, chat?.id ?? previousChatId)
 }
 
 export interface DynamicOutput {
@@ -800,6 +820,7 @@ export interface RisuPersona {
 
 export interface Database{
     characters: (character|groupChat)[],
+    databaseBlockStorage?: boolean
     apiType: string
     openAIKey: string
     proxyKey:string

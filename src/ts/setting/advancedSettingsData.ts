@@ -166,6 +166,10 @@ export const advancedSettingsItems: SettingItem[] = [
     { id: 'adv.dynamicModelRegistry', type: 'check', labelKey: 'dynamicModelRegistry', bindKey: 'dynamicModelRegistry', classes: 'mt-4' },
     { id: 'adv.disableSeperateParameterChangeOnPresetChange', type: 'check', labelKey: 'disableSeperateParameterChangeOnPresetChange', bindKey: 'disableSeperateParameterChangeOnPresetChange', classes: 'mt-4' },
     { id: 'adv.coldstorage', type: 'check', labelKey: 'coldStorage', bindKey: 'coldstorage', classes: 'mt-4', helpKey: 'coldstorage' },
+    {
+        id: 'adv.databaseBlockStorage', type: 'check', labelKey: 'databaseBlockStorage', bindKey: 'databaseBlockStorage',
+        helpKey: 'databaseBlockStorageDesc', classes: 'mt-4'
+    },
 
     // Experimental Section (visible when useExperimental is true)
     {

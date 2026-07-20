@@ -20,7 +20,7 @@ import { checkDriverInit } from "./drive/drive";
 import { characterURLImport } from "./characterCards";
 import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
 import { loadRisuAccountData } from "./drive/accounter";
-import { decodeRisuSave, encodeRisuSaveLegacy } from "./storage/risuSave";
+import { encodeRisuSaveLegacy } from "./storage/risuSave";
 import { updateAnimationSpeed } from "./gui/animation";
 import { updateColorScheme, updateTextThemeAndCSS } from "./gui/colorscheme";
 import { autoServerBackup } from "./kei/backup";
@@ -40,7 +40,9 @@ import {
     getUncleanables,
     getBasename,
     setUsingSw,
-    checkCharOrder
+    checkCharOrder,
+    decodeDatabaseStorageBytes,
+    requiresFullEncoderReload
 } from "./globalApi.svelte";
 import { isTauri } from "./platform";
 import { registerModelDynamic } from "./model/modellist";
@@ -84,7 +86,7 @@ export async function loadData() {
                     LoadingStatusState.text = "Cleaning Unnecessary Files..."
                     getDbBackups() //this also cleans the backups
                     LoadingStatusState.text = "Decoding Save File..."
-                    const decoded = await decodeRisuSave(readed)
+                    const decoded = await decodeDatabaseStorageBytes(readed)
                     setDatabase(decoded)
                 } catch (error) {
                     LoadingStatusState.text = "Reading Backup Files..."
@@ -102,8 +104,9 @@ export async function loadData() {
                                 }
                                 const backupData = new Uint8Array(await backupResponse.arrayBuffer());
                                 setDatabase(
-                                    await decodeRisuSave(backupData)
+                                    await decodeDatabaseStorageBytes(backupData)
                                 )
+                                requiresFullEncoderReload.state = true
                                 backupLoaded = true
                             } catch (error) {
                                 console.error(error)
@@ -130,7 +133,7 @@ export async function loadData() {
                     await forageStorage.setItem('database/database.bin', gotStorage)
                 }
                 try {
-                    const decoded = await decodeRisuSave(gotStorage)
+                    const decoded = await decodeDatabaseStorageBytes(gotStorage)
                     console.log(decoded)
                     setDatabase(decoded)
                 } catch (error) {
@@ -142,9 +145,11 @@ export async function loadData() {
                             LoadingStatusState.text = `Reading Backup File ${backup}...`
                             const backupData: Uint8Array = await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
                             setDatabase(
-                                await decodeRisuSave(backupData)
+                                await decodeDatabaseStorageBytes(backupData)
                             )
+                            requiresFullEncoderReload.state = true
                             backupLoaded = true
+                            break
                         } catch (error) { }
                     }
                     if (!backupLoaded) {
@@ -163,7 +168,7 @@ export async function loadData() {
                     }
                     try {
                         setDatabase(
-                            await decodeRisuSave(gotStorage)
+                            await decodeDatabaseStorageBytes(gotStorage)
                         )
                     } catch (error) {
                         const backups = await getDbBackups()
@@ -173,9 +178,11 @@ export async function loadData() {
                                 LoadingStatusState.text = `Reading Backup File ${backup}...`
                                 const backupData: Uint8Array = await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
                                 setDatabase(
-                                    await decodeRisuSave(backupData)
+                                    await decodeDatabaseStorageBytes(backupData)
                                 )
+                                requiresFullEncoderReload.state = true
                                 backupLoaded = true
+                                break
                             } catch (error) { }
                         }
                         if (!backupLoaded) {

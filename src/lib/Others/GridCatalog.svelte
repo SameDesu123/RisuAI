@@ -9,7 +9,7 @@
     import Button from "../UI/GUI/Button.svelte";
     import { language } from "src/lang";
     import { parseMultilangString } from "src/ts/util";
-    import { checkCharOrder } from "src/ts/globalApi.svelte";
+    import { checkCharOrder, requestCharacterSave } from "src/ts/globalApi.svelte";
     import MobileCharacters from "../Mobile/MobileCharacters.svelte";
     interface Props {
         endGrid?: any;
@@ -137,6 +137,7 @@
                         <div class="flex gap-2 justify-end">
                             <button class="hover:text-textcolor text-textcolor2" onclick={() => {
                                 DBState.db.characters[char.index].trashTime = undefined
+                                requestCharacterSave(DBState.db.characters[char.index].chaId)
                                 checkCharOrder()
                             }}>
                                 <Undo2Icon />

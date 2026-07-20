@@ -1,5 +1,5 @@
 import localforage from "localforage"
-import { replaceDbResources } from "../globalApi.svelte"
+import { getHydratedDatabaseSnapshot, replaceDbResources } from "../globalApi.svelte"
 import { isNodeServer } from "src/ts/platform"
 import { NodeStorage } from "./nodeStorage"
 import { OpfsStorage } from "./opfsStorage"
@@ -73,8 +73,12 @@ export class AutoStorage{
             }
 
             let replaced:{[key:string]:string} = {}
+            const sourceDb = await getHydratedDatabaseSnapshot({ databaseBlockStorage: false })
             
             for(const key of keys){
+                if(key === 'database/database.bin' || key.startsWith('database/blocks/')){
+                    continue
+                }
                 alertStore.set({
                     type: "wait",
                     msg: `Migrating your data...(${i}/${keys.length})`
@@ -86,7 +90,7 @@ export class AutoStorage{
                 i += 1
             }
 
-            const dba = replaceDbResources(db, replaced)
+            const dba = replaceDbResources(sourceDb, replaced)
             const comp = encodeRisuSaveLegacy(dba, 'compression')
             //try decoding
             try {

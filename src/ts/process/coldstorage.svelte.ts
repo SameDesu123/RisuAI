@@ -14,7 +14,7 @@ import { compress as fflateCompress, decompress as fflateDecompress } from "ffla
 import { fetchProtectedResource } from "../sionyw"
 import { alertClear, alertError, alertWait } from "../alert"
 import { language } from "src/lang"
-import type { character } from "../storage/database.svelte"
+import type { Database, character } from "../storage/database.svelte"
 
 export const coldStorageHeader = '\uEF01COLDSTORAGE\uEF01'
 
@@ -287,16 +287,16 @@ async function removeColdStorageItems(keys:string[]) {
     }
 }
 
-export async function listColdDataKeys(): Promise<string[]> {
+export async function listColdDataKeys(db: Database = DBState.db): Promise<string[]> {
     const keys:string[] = []
-    for(let i=0;i<DBState.db.characters.length;i++){
+    for(let i=0;i<db.characters.length;i++){
 
-        if(DBState.db.characters[i].coldstorage){
-            keys.push(DBState.db.characters[i].coldstorage!)
-            keys.push(...(DBState.db.characters[i].coldStoragedChats ?? []))
+        if(db.characters[i].coldstorage){
+            keys.push(db.characters[i].coldstorage!)
+            keys.push(...(db.characters[i].coldStoragedChats ?? []))
         }
-        for(let j=0;j<DBState.db.characters[i].chats.length;j++){
-            const chat = DBState.db.characters[i].chats[j]
+        for(let j=0;j<db.characters[i].chats.length;j++){
+            const chat = db.characters[i].chats[j]
             if(chat.message?.[0]?.data?.startsWith(coldStorageHeader)){
                 const coldDataKey = chat.message[0].data.slice(coldStorageHeader.length)
                 keys.push(coldDataKey)
@@ -448,6 +448,9 @@ async function makeColdDataForChat(i:number, j:number, coldTime:number): Promise
 export async function makeColdData(){
 
     if(!DBState.db.coldstorage){
+        return
+    }
+    if(DBState.db.databaseBlockStorage){
         return
     }
 
