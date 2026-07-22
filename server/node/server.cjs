@@ -1290,21 +1290,30 @@ app.post('/api/write', authenticatedRouteLimiter, async (req, res) => {
         });
         return;
     }
-    if(!isHex(filePath)){
+    const normalizedFilePath = filePath.trim();
+    if(!isHex(normalizedFilePath)){
         res.status(400).send({
             error:'Invaild Path'
         });
         return;
     }
 
-    const storageFilePath = path.join(savePath, filePath);
+    const normalizedSavePath = path.resolve(savePath);
+    const storageFilePath = path.resolve(normalizedSavePath, normalizedFilePath);
+    if (!storageFilePath.startsWith(`${normalizedSavePath}${path.sep}`)) {
+        res.status(400).send({
+            error:'Invaild Path'
+        });
+        return;
+    }
+
     try {
         await fs.writeFile(storageFilePath, fileContent);
         res.send({
             success: true
         });
     } catch (error) {
-        const storageKey = Buffer.from(filePath, 'hex').toString('utf-8');
+        const storageKey = Buffer.from(normalizedFilePath, 'hex').toString('utf-8');
         const errorCode = typeof error?.code === 'string' ? error.code : 'WRITE_FAILED';
         const errorMessage = error instanceof Error ? error.message : String(error);
         const relativeStoragePath = path.relative(process.cwd(), storageFilePath) || path.basename(storageFilePath);
