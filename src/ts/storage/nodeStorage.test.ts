@@ -39,7 +39,7 @@ describe('NodeStorage.setItem', () => {
         fetchMock.mockResolvedValue(new Response(JSON.stringify({
             error: 'Failed to write storage item',
             code: 'ENOSPC',
-            message: 'no space left on device'
+            message: "ENOSPC: no space left on device, open './save/64617461626173652f64617461626173652e62696e'"
         }), {
             status: 507,
             statusText: 'Insufficient Storage',
@@ -53,7 +53,27 @@ describe('NodeStorage.setItem', () => {
             'Key: database/database.bin\n' +
             'Size: 2048 bytes (2.00 KiB)\n' +
             'HTTP: 507 Insufficient Storage\n' +
-            'Server: Failed to write storage item | ENOSPC | no space left on device'
+            'Server: Failed to write storage item | ENOSPC | ' +
+            "ENOSPC: no space left on device, open './save/64617461626173652f64617461626173652e62696e'"
+        )
+    })
+
+    it('includes structured server details for payload limit errors', async () => {
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({
+            error: 'Storage payload is too large',
+            code: 'PAYLOAD_TOO_LARGE',
+            message: 'Storage writes are limited to 100 MiB.'
+        }), {
+            status: 413,
+            statusText: 'Payload Too Large',
+            headers: {
+                'content-type': 'application/json'
+            }
+        }))
+
+        await expect(storage.setItem('assets/example', new Uint8Array(3))).rejects.toThrow(
+            'HTTP: 413 Payload Too Large\n' +
+            'Server: Storage payload is too large | PAYLOAD_TOO_LARGE | Storage writes are limited to 100 MiB.'
         )
     })
 

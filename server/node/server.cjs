@@ -1,5 +1,7 @@
 const express = require('express');
 const app = express();
+const requestBodyLimit = '100mb';
+const requestBodyLimitLabel = '100 MiB';
 if (process.env.TRUST_PROXY) {
     app.set('trust proxy', Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
 }
@@ -13,9 +15,24 @@ const crypto = require('crypto')
 const rateLimit = require('express-rate-limit');
 const { WebSocketServer } = require('ws');
 app.use(express.static(path.join(process.cwd(), 'dist'), {index: false}));
-app.use(express.json({ limit: '100mb' }));
-app.use(express.raw({ type: 'application/octet-stream', limit: '100mb' }));
-app.use(express.text({ limit: '100mb' }));
+app.use(express.json({ limit: requestBodyLimit }));
+app.use(express.raw({ type: 'application/octet-stream', limit: requestBodyLimit }));
+app.use(express.text({ limit: requestBodyLimit }));
+app.use((error, req, res, next) => {
+    if (error?.type === 'entity.too.large' && req.path === '/api/write' && req.is('application/octet-stream')) {
+        console.error('[Storage] Rejected oversized request:', {
+            size: error.length,
+            limit: error.limit,
+        });
+        res.status(413).send({
+            error: 'Storage payload is too large',
+            code: 'PAYLOAD_TOO_LARGE',
+            message: `Storage writes are limited to ${requestBodyLimitLabel}.`,
+        });
+        return;
+    }
+    next(error);
+});
 const {pipeline} = require('stream/promises')
 const https = require('https');
 const sslPath = path.join(process.cwd(), 'server/node/ssl/certificate');
@@ -1280,8 +1297,9 @@ app.post('/api/write', authenticatedRouteLimiter, async (req, res) => {
         return;
     }
 
+    const storageFilePath = path.join(savePath, filePath);
     try {
-        await fs.writeFile(path.join(savePath, filePath), fileContent);
+        await fs.writeFile(storageFilePath, fileContent);
         res.send({
             success: true
         });
@@ -1289,6 +1307,8 @@ app.post('/api/write', authenticatedRouteLimiter, async (req, res) => {
         const storageKey = Buffer.from(filePath, 'hex').toString('utf-8');
         const errorCode = typeof error?.code === 'string' ? error.code : 'WRITE_FAILED';
         const errorMessage = error instanceof Error ? error.message : String(error);
+        const relativeStoragePath = path.relative(process.cwd(), storageFilePath) || path.basename(storageFilePath);
+        const clientErrorMessage = errorMessage.split(storageFilePath).join(`.${path.sep}${relativeStoragePath}`);
         const status = errorCode === 'ENOSPC' || errorCode === 'EDQUOT' ? 507 : 500;
 
         console.error('[Storage] Failed to write item:', {
@@ -1300,7 +1320,7 @@ app.post('/api/write', authenticatedRouteLimiter, async (req, res) => {
         res.status(status).send({
             error: 'Failed to write storage item',
             code: errorCode,
-            message: errorMessage,
+            message: clientErrorMessage,
         });
     }
 });
