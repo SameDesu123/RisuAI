@@ -7,6 +7,7 @@ import { getFreeOpenRouterModels } from "src/ts/model/openrouter"
 import { addFetchLog, fetchNative, globalFetch, textifyReadableStream } from "src/ts/globalApi.svelte"
 import { isNodeServer, isTauri } from "src/ts/platform"
 import { simplifySchema } from "src/ts/util"
+import { withOpenRouterAttributionHeaders } from "src/ts/network/openRouterHeaders"
 
 import { extractJSON, getOpenAIJSONSchema } from "../../templates/jsonSchema"
 import { applyChatTemplate } from "../../templates/chatTemplate"
@@ -544,17 +545,13 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
         body.service_tier = 'flex'
     }
 
-    let headers = {
+    let headers: Record<string, string> = {
         "Authorization": "Bearer " + (arg.key ?? (aiModel === 'nanogpt' ? db.nanogptKey : aiModel === 'reverse_proxy' ?  db.proxyKey : (aiModel === 'openrouter' ? db.openrouterKey : db.openAIKey))),
         "Content-Type": "application/json"
     }
 
     if(arg.modelInfo?.keyIdentifier){
         headers["Authorization"] = "Bearer " + db.OaiCompAPIKeys[arg.modelInfo.keyIdentifier]
-    }
-    if(aiModel === 'openrouter'){
-        headers["X-Title"] = 'RisuAI'
-        headers["HTTP-Referer"] = 'https://risuai.xyz'
     }
     if(aiModel === 'nanogpt' && db.nanogptProvider){
         headers["X-Provider"] = db.nanogptProvider
@@ -574,6 +571,7 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
     }
     
     body = applyAdditionalParameters(body, headers, getAdditionalParameters(aiModel))
+    headers = withOpenRouterAttributionHeaders(replacerURL, headers)
 
     // Some aux flows are intentionally non-streaming (e.g. memory/translate).
     // If custom Additional Parameters contains stream=true, force non-stream mode back.

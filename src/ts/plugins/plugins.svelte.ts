@@ -506,47 +506,10 @@ export const allowedDbKeys = [
     'characterOrder'
 ]
 
-const pluginFetchHeaderRules = [
-    {
-        matches: (hostname: string) => hostname === 'openrouter.ai' || hostname.endsWith('.openrouter.ai'),
-        headers: {
-            'X-Title': 'RisuAI',
-            'HTTP-Referer': 'https://risuai.xyz'
-        }
-    }
-]
-
-function withPluginFetchHeaders(url: string, arg: any = {}) {
-    let hostname = ''
-    try {
-        hostname = new URL(url).hostname.toLowerCase()
-    } catch {
-        return arg
-    }
-
-    const rule = pluginFetchHeaderRules.find((rule) => rule.matches(hostname))
-    if(!rule){
-        return arg
-    }
-
-    const headers = { ...(arg.headers ?? {}) }
-    const hasHeader = (name: string) => Object.keys(headers).some((key) => key.toLowerCase() === name.toLowerCase())
-    for(const [name, value] of Object.entries(rule.headers)){
-        if(!hasHeader(name)){
-            headers[name] = value
-        }
-    }
-
-    return {
-        ...arg,
-        headers
-    }
-}
-
 export const getV2PluginAPIs = () => {
     return {
-        risuFetch: (url: string, arg?: any) => globalFetch(url, withPluginFetchHeaders(url, arg)),
-        nativeFetch: (url: string, arg?: any) => fetchNative(url, withPluginFetchHeaders(url, arg)),
+        risuFetch: globalFetch,
+        nativeFetch: fetchNative,
         getArg: (arg: string) => {
             const db = getDatabase()
             const [name, realArg] = arg.split('::')
