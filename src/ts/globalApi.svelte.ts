@@ -25,7 +25,8 @@ import { hasher } from "./parser/parser.svelte";
 import { characterURLImport, hubURL } from "./characterCards";
 import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
 import { loadRisuAccountData } from "./drive/accounter";
-import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder, type toSaveType } from "./storage/risuSave";
+import { decodeRisuSave, encodeRisuSaveLegacy, RisuSaveEncoder } from "./storage/risuSave";
+import { cloneChangeTracker, DatabaseChangeAccumulator } from "./storage/databaseChangeAccumulator";
 import { AutoStorage } from "./storage/autoStorage";
 import { updateAnimationSpeed } from "./gui/animation";
 import { updateColorScheme, updateTextThemeAndCSS } from "./gui/colorscheme";
@@ -312,31 +313,7 @@ export async function saveDb() {
         }
     }
 
-    const createChangeTracker = (): toSaveType => ({
-        character: [],
-        botPreset: false,
-        modules: false,
-        loadouts: false,
-        plugins: false,
-        pluginCustomStorage: false
-    })
-    const cloneChangeTracker = (tracker: toSaveType): toSaveType => ({
-        ...tracker,
-        character: [...tracker.character]
-    })
-    const mergeChangeTrackers = (target: toSaveType, source: toSaveType) => {
-        for (const characterId of source.character) {
-            if (!target.character.includes(characterId)) {
-                target.character.push(characterId)
-            }
-        }
-        target.botPreset ||= source.botPreset
-        target.modules ||= source.modules
-        target.loadouts ||= source.loadouts
-        target.plugins ||= source.plugins
-        target.pluginCustomStorage ||= source.pluginCustomStorage
-    }
-    let changeTracker = createChangeTracker()
+    const changeAccumulator = new DatabaseChangeAccumulator()
     let savetrys = 0
 
     let encoder = new RisuSaveEncoder()
@@ -362,66 +339,14 @@ export async function saveDb() {
         }
 
         const unsubscribeDb = onDatabaseUpdate((info) => {
-            if (info.path.length === 0) {
+            const result = changeAccumulator.record(info, {
+                database: DBState.db,
+                selectedCharacterIndex: selIdState,
+            })
+
+            if (result.requiresFullEncoderReload) {
                 requiresFullEncoderReload.state = true
                 savetrys = 0
-                saveTimeoutExecute()
-                return
-            }
-
-            const rootKey = info.path[0]
-
-            if (rootKey === 'botPresets' || rootKey === 'botPresetsId') {
-                changeTracker.botPreset = true
-                saveTimeoutExecute()
-                return
-            }
-
-            if (rootKey === 'modules') {
-                changeTracker.modules = true
-                saveTimeoutExecute()
-                return
-            }
-
-            if (rootKey === 'loadouts' || rootKey === 'plugins' || rootKey === 'pluginCustomStorage') {
-                changeTracker[rootKey] = true
-                saveTimeoutExecute()
-                return
-            }
-
-            if (rootKey === 'characters') {
-                const affectedCharacters: Database['characters'] = []
-
-                if (info.path.length === 1) {
-                    const oldCharacters = info.oldValue as Database['characters'] | undefined
-                    const newCharacters = info.value as Database['characters'] | undefined
-                    affectedCharacters.push(...(oldCharacters ?? []), ...(newCharacters ?? []))
-                }
-                else if (typeof info.path[1] === 'number') {
-                    if (info.path.length === 2) {
-                        const oldChar = info.oldValue as Database['characters'][number] | undefined
-                        if (oldChar) {
-                            affectedCharacters.push(oldChar)
-                        }
-                    }
-                    const char = DBState.db.characters[info.path[1]]
-                    if (char) {
-                        affectedCharacters.push(char)
-                    }
-                }
-
-                for (const char of affectedCharacters) {
-                    if (!changeTracker.character.includes(char.chaId)) {
-                        changeTracker.character.unshift(char.chaId)
-                    }
-                }
-                saveTimeoutExecute()
-                return
-            }
-
-            const char = DBState.db.characters[selIdState]
-            if (char && !changeTracker.character.includes(char.chaId)) {
-                changeTracker.character.unshift(char.chaId)
             }
             saveTimeoutExecute()
         })
@@ -460,8 +385,7 @@ export async function saveDb() {
 
         saving.state = true
         changed = false
-        const pendingSave = cloneChangeTracker(changeTracker)
-        changeTracker = createChangeTracker()
+        const pendingSave = changeAccumulator.take()
         const toSave = cloneChangeTracker(pendingSave)
         try {
             const db = getDatabase()
@@ -515,7 +439,7 @@ export async function saveDb() {
             await saveDbKei()
             await sleep(500)
         } catch (error) {
-            mergeChangeTrackers(changeTracker, pendingSave)
+            changeAccumulator.restore(pendingSave)
             savetrys += 1
             if (savetrys > 4) {
                 alertError(error)

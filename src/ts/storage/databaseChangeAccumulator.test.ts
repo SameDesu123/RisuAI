@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Database } from './database.svelte'
 import type { DatabaseUpdateInfo } from './databaseState.svelte'
-import { DatabaseChangeAccumulator } from './databaseChangeAccumulator'
+import { cloneChangeTracker, DatabaseChangeAccumulator } from './databaseChangeAccumulator'
 
 type TestCharacter = Database['characters'][number]
 
@@ -164,6 +164,18 @@ describe('DatabaseChangeAccumulator', () => {
         accumulator.restore(pending)
 
         expect(accumulator.take().character).toEqual(['B', 'A'])
+    })
+
+    it('keeps pending changes intact when an encoder mutates its copy', () => {
+        const accumulator = new DatabaseChangeAccumulator()
+
+        record(accumulator, update(['characters', 0, 'name']), [character('A')])
+        const pending = accumulator.take()
+        const encoderChanges = cloneChangeTracker(pending)
+        encoderChanges.character.splice(0, 1)
+        accumulator.restore(pending)
+
+        expect(accumulator.take().character).toEqual(['A'])
     })
 
     it('merges boolean flags when restoring a failed save', () => {
