@@ -689,6 +689,7 @@ export function setDatabase(data:Database){
     data.autoScrollToNewMessage ??= true
     data.alwaysScrollToNewMessage ??= false
     data.newMessageButtonStyle ??= 'bottom-center'
+    data.stickyChatToolbar ??= false
     data.chatLoadInitialPages = normalizeChatLoadPages(data.chatLoadInitialPages, DEFAULT_CHAT_LOAD_INITIAL_PAGES)
     data.chatLoadAdditionalPages = normalizeChatLoadPages(data.chatLoadAdditionalPages, DEFAULT_CHAT_LOAD_ADDITIONAL_PAGES)
     data.streamingDisplayOptimizationMode ??= (data as {largeChatPerformanceMode?: StreamingDisplayOptimizationMode}).largeChatPerformanceMode ?? 'off'
@@ -1016,6 +1017,7 @@ export interface Database{
     enabledModules: string[]
     sideMenuRerollButton?:boolean
     requestInfoInsideChat?:boolean
+    stickyChatToolbar?:boolean
     additionalParams:[string, string][]
     applyAdditionalParamsToAll:boolean
     heightMode:string
