@@ -21,6 +21,7 @@ import {
     normalizeChatLoadPages,
 } from '../chatLoadPages';
 import { setDatabaseLite } from './databaseState.svelte';
+import { normalizeApiUsageStats, type ApiUsageStats } from '../apiUsage';
 
 export { onDatabaseUpdate, setDatabaseLite } from './databaseState.svelte';
 
@@ -709,6 +710,7 @@ export function setDatabase(data:Database){
     data.keepSessionAlive ??= 'off'
     data.loadouts ??= []
     data.longPressToPopupEditor ??= false
+    data.apiUsage = normalizeApiUsageStats(data.apiUsage)
     data.customSidebarItems ??= []
     data.moveInsteadOfCopyOnCMPConvert ??= false
     data.skipSavingAssetsOnWebSync ??= true
@@ -1091,6 +1093,7 @@ export interface Database{
         messages: number
         imports: number
     }
+    apiUsage: ApiUsageStats
     customQuotes:boolean
     customQuotesData?:[string, string, string, string]
     groupTemplate?:string
