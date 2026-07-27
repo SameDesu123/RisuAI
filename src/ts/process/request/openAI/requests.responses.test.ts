@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LLMFlags, LLMFormat, LLMProvider, LLMTokenizer } from 'src/ts/model/types'
 import { fetchNative } from 'src/ts/globalApi.svelte'
 import { callTool } from '../../mcp/mcp'
-import { __testResponsesAPI, requestOpenAI, requestOpenAIResponseAPI } from './requests'
+import {
+    __testResponsesAPI,
+    requestOpenAI,
+    requestOpenAILegacyInstruct,
+    requestOpenAIResponseAPI,
+} from './requests'
 
 const mocks = vi.hoisted(() => ({
     db: {
@@ -21,12 +26,15 @@ const mocks = vi.hoisted(() => ({
         nanogptProvider: '',
         nanogptRequestModel: 'nanogpt-model',
         nanogptUseSubscriptionEndpoint: false,
+        mistralKey: 'mistral-key',
         openAIKey: 'openai-key',
         openAIFlexProcessing: false,
         openrouterKey: 'openrouter-key',
         openrouterRequestModel: 'google/gemma-4-31b-it',
         proxyKey: 'proxy-key',
         requestRetrys: 0,
+        PresensePenalty: 0,
+        frequencyPenalty: 0,
         reasoningEffort: 2,
         seperateParametersEnabled: false,
         simplifiedToolUse: false,
@@ -515,6 +523,121 @@ describe('OpenAI request helpers', () => {
         expect(mocks.globalFetch.mock.calls[0][1].body.service_tier).toBe('flex')
     })
 
+    it('requests streaming usage from official OpenAI while preserving stream options', async () => {
+        mocks.db.additionalParams = [['stream_options.custom_flag', 'true']]
+
+        const result = await requestOpenAI(baseArg({
+            aiModel: 'reverse_proxy',
+            customURL: 'https://api.openai.com/v1/chat/completions',
+            previewBody: true,
+            useStreaming: true,
+            formated: [{ role: 'user', content: 'Hello' }],
+            modelInfo: {
+                ...baseArg().modelInfo,
+                flags: [],
+                format: LLMFormat.OpenAICompatible,
+                internalID: 'gpt-5.5',
+                parameters: [],
+                provider: LLMProvider.AsIs,
+            },
+        }))
+
+        expect(result.type).toBe('success')
+        const preview = JSON.parse(result.result as string)
+        expect(preview.body.stream_options).toEqual({
+            custom_flag: true,
+            include_usage: true,
+        })
+    })
+
+    it('does not request streaming usage from arbitrary compatible endpoints', async () => {
+        const result = await requestOpenAI(baseArg({
+            aiModel: 'reverse_proxy',
+            customURL: 'https://compatible.example/v1/chat/completions',
+            previewBody: true,
+            useStreaming: true,
+            formated: [{ role: 'user', content: 'Hello' }],
+            modelInfo: {
+                ...baseArg().modelInfo,
+                flags: [],
+                format: LLMFormat.OpenAICompatible,
+                internalID: 'custom-model',
+                parameters: [],
+                provider: LLMProvider.AsIs,
+            },
+        }))
+
+        expect(result.type).toBe('success')
+        const preview = JSON.parse(result.result as string)
+        expect(preview.body).not.toHaveProperty('stream_options')
+    })
+
+    it('tracks the final Legacy Instruct prompt and preserves provider usage', async () => {
+        mocks.globalFetch.mockResolvedValueOnce({
+            ok: true,
+            data: {
+                choices: [{ text: 'Legacy answer' }],
+                usage: { prompt_tokens: 17, completion_tokens: 3 },
+            },
+        })
+        const onUsageAttemptPrepared = vi.fn()
+        const formated = [
+            { role: 'system', content: 'Follow policy.' },
+            { role: 'user', content: 'Hello' },
+            { role: 'assistant', content: 'Hi' },
+        ]
+
+        const result = await requestOpenAILegacyInstruct(baseArg({
+            aiModel: 'gpt35_instruct',
+            formated,
+            onUsageAttemptPrepared,
+        }))
+
+        expect(result).toMatchObject({
+            type: 'success',
+            usage: { prompt_tokens: 17, completion_tokens: 3 },
+        })
+        const sentPrompt = mocks.globalFetch.mock.calls[0][1].body.prompt
+        expect(sentPrompt).toBe('\n## Instruction\nFollow policy.\n## User\nHello\n## Assistant\nHi\n## Response\n')
+        expect(onUsageAttemptPrepared).toHaveBeenCalledWith({ input: sentPrompt })
+        expect(onUsageAttemptPrepared).not.toHaveBeenCalledWith(expect.objectContaining({
+            inputChats: expect.anything(),
+        }))
+    })
+
+    it('preserves Mistral usage returned by the provider', async () => {
+        mocks.globalFetch.mockResolvedValueOnce({
+            ok: true,
+            data: {
+                choices: [{ message: { content: 'Mistral answer' } }],
+                usage: { prompt_tokens: 19, completion_tokens: 5 },
+            },
+        })
+        const onUsageAttemptPrepared = vi.fn()
+
+        const result = await requestOpenAI(baseArg({
+            aiModel: 'mistral-large',
+            formated: [{ role: 'user', content: 'Hello' }],
+            onUsageAttemptPrepared,
+            modelInfo: {
+                ...baseArg().modelInfo,
+                flags: [],
+                format: LLMFormat.Mistral,
+                internalID: 'mistral-large',
+                parameters: [],
+                provider: LLMProvider.Mistral,
+            },
+        }))
+
+        expect(result).toMatchObject({
+            type: 'success',
+            usage: { prompt_tokens: 19, completion_tokens: 5 },
+        })
+        expect(onUsageAttemptPrepared).toHaveBeenCalledWith({
+            inputChats: [{ role: 'user', content: 'Hello' }],
+        })
+    })
+
     it('tracks a model overridden in the final custom Responses request body', async () => {
         mocks.db.additionalParams = [['model', 'provider/custom-model']]
         const onUsageModelResolved = vi.fn()
@@ -575,6 +698,44 @@ describe('OpenAI request helpers', () => {
         })
         expect(JSON.stringify(external.input)).not.toContain('rs_reasoning_bad')
         expect(JSON.stringify(external.input)).not.toContain('private reasoning')
+    })
+
+    it('preserves provider usage on a non-streaming incomplete response', async () => {
+        mocks.globalFetch.mockResolvedValueOnce({
+            ok: true,
+            data: {
+                status: 'incomplete',
+                incomplete_details: { reason: 'max_output_tokens' },
+                output_text: 'Partial answer',
+                usage: { input_tokens: 31, output_tokens: 7 },
+            },
+        })
+
+        const result = await requestOpenAIResponseAPI(baseArg())
+
+        expect(result).toMatchObject({
+            type: 'fail',
+            result: expect.stringContaining('Incomplete response: max_output_tokens'),
+            usage: { input_tokens: 31, output_tokens: 7 },
+        })
+    })
+
+    it('preserves provider usage on a non-streaming failed response', async () => {
+        mocks.globalFetch.mockResolvedValueOnce({
+            ok: true,
+            data: {
+                status: 'failed',
+                error: { message: 'provider failed' },
+                usage: { input_tokens: 29, output_tokens: 2 },
+            },
+        })
+
+        const result = await requestOpenAIResponseAPI(baseArg())
+
+        expect(result).toMatchObject({
+            type: 'fail',
+            usage: { input_tokens: 29, output_tokens: 2 },
+        })
     })
 
     it('sanitizes non-streaming Responses tool continuation input with reasoning before a function call for store false', async () => {
@@ -783,5 +944,39 @@ describe('OpenAI request helpers', () => {
 
         const chunks = await chunksPromise
         expect(chunks.at(-1)?.['0']).toContain('stream failed')
+    })
+
+    it('preserves usage and failed status from a streaming incomplete response', async () => {
+        const stream = __testResponsesAPI.getResponsesTranStream(baseArg())
+        const chunksPromise = collectStream(stream.readable)
+        const writer = stream.writable.getWriter()
+        const encoder = new TextEncoder()
+
+        await writer.write(encoder.encode('data: {"type":"response.incomplete","response":{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output_text":"Partial answer","usage":{"input_tokens":37,"output_tokens":9}}}\n\n'))
+        await writer.close()
+
+        const chunks = await chunksPromise
+        expect(chunks.at(-1)).toMatchObject({
+            __usage: JSON.stringify({ input_tokens: 37, output_tokens: 9 }),
+            __usageStatus: 'failed',
+        })
+        expect(chunks.at(-1)?.['0']).toContain('max_output_tokens')
+    })
+
+    it('preserves usage and failed status from a streaming failed response', async () => {
+        const stream = __testResponsesAPI.getResponsesTranStream(baseArg())
+        const chunksPromise = collectStream(stream.readable)
+        const writer = stream.writable.getWriter()
+        const encoder = new TextEncoder()
+
+        await writer.write(encoder.encode('data: {"type":"response.failed","response":{"status":"failed","error":{"message":"provider failed"},"usage":{"input_tokens":41,"output_tokens":3}}}\n\n'))
+        await writer.close()
+
+        const chunks = await chunksPromise
+        expect(chunks.at(-1)).toMatchObject({
+            __usage: JSON.stringify({ input_tokens: 41, output_tokens: 3 }),
+            __usageStatus: 'failed',
+        })
+        expect(chunks.at(-1)?.['0']).toContain('provider failed')
     })
 })

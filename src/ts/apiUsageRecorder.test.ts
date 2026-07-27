@@ -288,4 +288,34 @@ describe('API usage request recorder', () => {
             cancelledRequestCount: 1,
         })
     })
+
+    it('keeps provider usage while recording a terminal streaming failure', async () => {
+        const source = new ReadableStream<StreamResponseChunk>({
+            start(controller) {
+                controller.enqueue({
+                    '0': 'Incomplete response',
+                    __usage: JSON.stringify({ input_tokens: 23, output_tokens: 4 }),
+                    __usageStatus: 'failed',
+                })
+                controller.close()
+            },
+        })
+        const response = await makeRecorder().finalizeResponse({
+            type: 'streaming',
+            result: source,
+        }) as Extract<requestDataResponse, { type: 'streaming' }>
+        const reader = response.result.getReader()
+        while (!(await reader.read()).done) {
+            // Drain the tracked stream.
+        }
+
+        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        expect(day).toMatchObject({
+            inputTokens: 23,
+            outputTokens: 4,
+            requestCount: 1,
+            successRequestCount: 0,
+            failedRequestCount: 1,
+        })
+    })
 })

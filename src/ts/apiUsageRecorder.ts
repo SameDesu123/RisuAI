@@ -293,8 +293,9 @@ export function createApiUsageRecorder(options: ApiUsageRecorderOptions) {
                         }
                         if (done) {
                             const result = getStreamAttemptResult(lastResponseChunk)
+                            const streamStatus = lastResponseChunk.__usageStatus === 'failed' ? 'failed' : 'success'
                             await finalize(
-                                options.abortSignal?.aborted ? 'cancelled' : 'success',
+                                options.abortSignal?.aborted ? 'cancelled' : streamStatus,
                                 { ...result, output: getStreamOutput(lastResponseChunk) },
                             )
                             controller.close()

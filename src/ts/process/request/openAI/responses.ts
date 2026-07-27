@@ -537,12 +537,20 @@ async function requestHTTPResponsesAPI(requestURL:string, body:any, headers:Reco
 
     const data = response.data as any
     if(data?.status === 'failed' || data?.error){
-        return { type: 'fail', result: JSON.stringify(data.error ?? data) }
+        return {
+            type: 'fail',
+            result: JSON.stringify(data.error ?? data),
+            usage: data.usage,
+        }
     }
     if(data?.status === 'incomplete'){
         const result = extractResponsesText(data, arg)
         const reason = data?.incomplete_details?.reason ? `Incomplete response: ${data.incomplete_details.reason}` : 'Incomplete response'
-        return { type: 'fail', result: result ? `${reason}\n${result}` : reason }
+        return {
+            type: 'fail',
+            result: result ? `${reason}\n${result}` : reason,
+            usage: data.usage,
+        }
     }
 
     const calls = extractResponsesFunctionCalls(data)
@@ -580,7 +588,11 @@ async function requestHTTPResponsesAPI(requestURL:string, body:any, headers:Reco
     const result = extractResponsesText(data, arg)
     if(!result){
         const incomplete = data?.incomplete_details?.reason ? `Incomplete response: ${data.incomplete_details.reason}` : ''
-        return { type: 'fail', result: incomplete || JSON.stringify(data) }
+        return {
+            type: 'fail',
+            result: incomplete || JSON.stringify(data),
+            usage: data.usage,
+        }
     }
 
     return { type: 'success', result, usage: data.usage }
@@ -594,6 +606,7 @@ function getResponsesTranStream(arg:RequestDataArgumentExtended):TransformStream
     let reasoning = ''
     let error = ''
     let usage: unknown
+    let usageStatus: 'success' | 'failed' | undefined
     const calls:Record<string, ResponseFunctionCallItem> = {}
 
     const appendReasoning = (incoming?:string) => {
@@ -623,6 +636,9 @@ function getResponsesTranStream(arg:RequestDataArgumentExtended):TransformStream
         }
         if(usage){
             chunk["__usage"] = JSON.stringify(usage)
+        }
+        if(usageStatus){
+            chunk["__usageStatus"] = usageStatus
         }
         controller.enqueue(chunk)
     }
@@ -660,11 +676,9 @@ function getResponsesTranStream(arg:RequestDataArgumentExtended):TransformStream
                 status: event.item.status
             }
         }
-        else if(type === 'response.failed' || type === 'response.error' || type === 'error'){
-            error = JSON.stringify(event.error ?? event)
-        }
-        else if(type === 'response.completed'){
+        else if(type === 'response.completed' || type === 'response.incomplete' || type === 'response.failed'){
             usage = event.response?.usage
+            usageStatus = type === 'response.completed' ? 'success' : 'failed'
             const finalText = extractResponsesText(event.response, arg)
             if(finalText){
                 text = finalText
@@ -672,9 +686,19 @@ function getResponsesTranStream(arg:RequestDataArgumentExtended):TransformStream
                     reasoning = ''
                 }
             }
-            for(const call of extractResponsesFunctionCalls(event.response)){
-                calls[call.call_id] = call
+            if(type === 'response.completed'){
+                for(const call of extractResponsesFunctionCalls(event.response)){
+                    calls[call.call_id] = call
+                }
             }
+            if(type !== 'response.completed'){
+                const reason = event.response?.incomplete_details?.reason
+                error = JSON.stringify(event.error ?? event.response?.error ?? (reason ? { message: `Incomplete response: ${reason}` } : event))
+            }
+        }
+        else if(type === 'response.error' || type === 'error'){
+            usageStatus = 'failed'
+            error = JSON.stringify(event.error ?? event)
         }
     }
 
@@ -748,6 +772,7 @@ function wrapResponsesToolStream(stream:ReadableStream<StreamResponseChunk>, bod
                     controller.enqueue({
                         "0": (prefix ? prefix + '\n\n' : '') + (value?.["0"] ?? ''),
                         ...(value?.["__usage"] ? { "__usage": value["__usage"] } : {}),
+                        ...(value?.["__usageStatus"] ? { "__usageStatus": value["__usageStatus"] } : {}),
                     })
                     continue
                 }

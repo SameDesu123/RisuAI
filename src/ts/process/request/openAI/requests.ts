@@ -314,6 +314,9 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
             }
         }
     
+        arg.onUsageAttemptPrepared?.({
+            inputChats: targs.body.messages,
+        })
         const res = await globalFetch(requestURL, targs)
 
         const dat = res.data as any
@@ -322,7 +325,8 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
                 const msg:OpenAIChatFull = (dat.choices[0].message)
                 return {
                     type: 'success',
-                    result: msg.content ?? ''
+                    result: msg.content ?? '',
+                    usage: dat.usage,
                 }
             } catch (error) {                    
                 return {
@@ -975,6 +979,9 @@ export async function requestOpenAILegacyInstruct(arg:RequestDataArgumentExtende
     body = applyAdditionalParameters(body, headers, getAdditionalParameters(arg.aiModel))
     arg.onUsageModelResolved?.(typeof body.model === 'string' ? body.model : undefined)
 
+    arg.onUsageAttemptPrepared?.({
+        input: body.prompt,
+    })
     const response = await globalFetch(arg.customURL ?? "https://api.openai.com/v1/completions", {
         body: body,
         headers: headers,
@@ -991,7 +998,8 @@ export async function requestOpenAILegacyInstruct(arg:RequestDataArgumentExtende
     const text:string = response.data.choices[0].text
     return {
         type: 'success',
-        result: text.replace(/##\n/g, '')
+        result: text.replace(/##\n/g, ''),
+        usage: response.data.usage,
     }
     
 }

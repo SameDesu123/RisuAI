@@ -624,6 +624,7 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
             }
         }
 
+        await arg.onUsageNextAttempt?.('failed')
         return requestGoogle(url, body, headers, arg)
     }
 
