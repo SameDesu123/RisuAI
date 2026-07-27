@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LLMFlags, LLMFormat, LLMProvider, LLMTokenizer } from 'src/ts/model/types'
 import { fetchNative } from 'src/ts/globalApi.svelte'
 import { callTool } from '../../mcp/mcp'
-import { __testResponsesAPI, requestOpenAIResponseAPI } from './requests'
+import { __testResponsesAPI, requestOpenAI, requestOpenAIResponseAPI } from './requests'
 
 const mocks = vi.hoisted(() => ({
     db: {
@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => ({
         nanogptRequestModel: 'nanogpt-model',
         nanogptUseSubscriptionEndpoint: false,
         openAIKey: 'openai-key',
+        openAIFlexProcessing: false,
+        openrouterKey: 'openrouter-key',
+        openrouterRequestModel: 'google/gemma-4-31b-it',
         proxyKey: 'proxy-key',
         requestRetrys: 0,
         reasoningEffort: 2,
@@ -103,6 +106,9 @@ vi.mock('src/ts/model/modellist', () => ({
         Mistral: 4,
         OpenAIResponseAPI: 18,
     },
+    LLMProvider: {
+        OpenAI: 0,
+    },
     getFreeOpenRouterModels: vi.fn(),
 }))
 
@@ -178,7 +184,7 @@ function sseStream(events: string[]) {
     })
 }
 
-describe('OpenAI Responses API helpers', () => {
+describe('OpenAI request helpers', () => {
     beforeEach(() => {
         mocks.fetchNative.mockReset()
         mocks.globalFetch.mockReset()
@@ -190,6 +196,8 @@ describe('OpenAI Responses API helpers', () => {
         mocks.db.nanogptProvider = ''
         mocks.db.nanogptRequestModel = 'nanogpt-model'
         mocks.db.nanogptUseSubscriptionEndpoint = false
+        mocks.db.openrouterRequestModel = 'google/gemma-4-31b-it'
+        mocks.db.openAIFlexProcessing = false
         mocks.db.simplifiedToolUse = false
         mocks.db.autofillRequestUrl = false
     })
@@ -428,10 +436,12 @@ describe('OpenAI Responses API helpers', () => {
 
     it('wires NanoGPT Responses endpoint, model, auth, and provider header', async () => {
         mocks.db.nanogptProvider = 'provider-a'
+        const onUsageModelResolved = vi.fn()
 
         const result = await requestOpenAIResponseAPI(baseArg({
             aiModel: 'nanogpt',
             previewBody: true,
+            onUsageModelResolved,
             modelInfo: {
                 ...baseArg().modelInfo,
                 internalID: 'nanogpt',
@@ -445,6 +455,81 @@ describe('OpenAI Responses API helpers', () => {
         expect(preview.body.model).toBe('nanogpt-model')
         expect(preview.headers.Authorization).toBe('Bearer nanogpt-key')
         expect(preview.headers['X-Provider']).toBe('provider-a')
+        expect(onUsageModelResolved).toHaveBeenCalledWith('nanogpt-model')
+    })
+
+    it('reports the exact OpenRouter request model to API usage tracking', async () => {
+        const onUsageModelResolved = vi.fn()
+        const result = await requestOpenAI(baseArg({
+            aiModel: 'openrouter',
+            previewBody: true,
+            useStreaming: false,
+            onUsageModelResolved,
+            formated: [{ role: 'user', content: 'Hello' }],
+            modelInfo: {
+                ...baseArg().modelInfo,
+                flags: [],
+                id: 'openrouter',
+                internalID: 'openrouter',
+                parameters: [],
+            },
+        }))
+
+        expect(result.type).toBe('success')
+        const preview = JSON.parse(result.result as string)
+        expect(preview.body.model).toBe('google/gemma-4-31b-it')
+        expect(onUsageModelResolved).toHaveBeenCalledWith('google/gemma-4-31b-it')
+    })
+
+    it('reports the final request input for a custom official OpenAI endpoint', async () => {
+        mocks.db.openAIFlexProcessing = true
+        mocks.globalFetch.mockResolvedValueOnce({
+            ok: true,
+            data: {
+                choices: [{ message: { content: 'ok' } }],
+                usage: { prompt_tokens: 10, completion_tokens: 2 },
+            },
+        })
+        const onUsageAttemptPrepared = vi.fn()
+
+        const result = await requestOpenAI(baseArg({
+            aiModel: 'reverse_proxy',
+            customURL: 'https://api.openai.com/v1/chat/completions',
+            useStreaming: false,
+            onUsageAttemptPrepared,
+            formated: [{ role: 'user', content: 'Hello' }],
+            modelInfo: {
+                ...baseArg().modelInfo,
+                flags: [],
+                format: LLMFormat.OpenAICompatible,
+                internalID: 'gpt-5.5',
+                parameters: [],
+                provider: LLMProvider.AsIs,
+            },
+        }))
+
+        expect(result.type).toBe('success')
+        expect(onUsageAttemptPrepared).toHaveBeenCalledWith(expect.objectContaining({
+            inputChats: expect.any(Array),
+        }))
+        expect(mocks.globalFetch.mock.calls[0][1].body.service_tier).toBe('flex')
+    })
+
+    it('tracks a model overridden in the final custom Responses request body', async () => {
+        mocks.db.additionalParams = [['model', 'provider/custom-model']]
+        const onUsageModelResolved = vi.fn()
+
+        const result = await requestOpenAIResponseAPI(baseArg({
+            aiModel: 'reverse_proxy',
+            customURL: 'https://proxy.example/v1/responses',
+            previewBody: true,
+            onUsageModelResolved,
+        }))
+
+        expect(result.type).toBe('success')
+        const preview = JSON.parse(result.result as string)
+        expect(preview.body.model).toBe('provider/custom-model')
+        expect(onUsageModelResolved).toHaveBeenCalledWith('provider/custom-model')
     })
 
     it('applies reverse proxy Responses endpoint autofill and additional params', async () => {
@@ -589,6 +674,39 @@ describe('OpenAI Responses API helpers', () => {
             }),
         ]))
         expect(followupBody.input.find((item:any) => item.type === 'function_call')).not.toHaveProperty('id')
+    })
+
+    it('finalizes a failed streaming tool follow-up as a failed API attempt', async () => {
+        vi.mocked(callTool).mockResolvedValueOnce([{ type: 'text', text: 'stream tool result' }] as any)
+        vi.mocked(fetchNative)
+            .mockResolvedValueOnce({
+                status: 200,
+                headers: { get: () => 'text/event-stream' },
+                body: sseStream([
+                    'data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_stream_2","name":"lookup","arguments":"{}","status":"completed"}]}}\n\n',
+                ]),
+            } as any)
+            .mockResolvedValueOnce({
+                status: 500,
+                headers: { get: () => 'application/json' },
+                body: null,
+            } as any)
+        const onUsageNextAttempt = vi.fn(async () => {})
+        const onUsageFinalAttempt = vi.fn(async () => {})
+
+        const result = await requestOpenAIResponseAPI(baseArg({
+            useStreaming: true,
+            tools: [{ name: 'lookup', description: 'Lookup data', inputSchema: { type: 'object' } }],
+            onUsageNextAttempt,
+            onUsageFinalAttempt,
+        }))
+
+        expect(result.type).toBe('streaming')
+        await collectStream(result.result as ReadableStream<Record<string, string>>)
+        expect(onUsageNextAttempt).toHaveBeenCalledWith('success', expect.objectContaining({
+            output: expect.any(Array),
+        }))
+        expect(onUsageFinalAttempt).toHaveBeenCalledWith('failed')
     })
 
     it('parses split CRLF SSE chunks, final unterminated events, text deltas, and function call deltas', async () => {
