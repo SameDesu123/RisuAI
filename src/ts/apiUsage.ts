@@ -1,5 +1,8 @@
 import { LLMProvider, ProviderNames, type LLMModel } from './model/types'
-import { DBState } from './stores.svelte'
+import {
+    ApiUsageState,
+    notifyApiUsageChanged,
+} from './apiUsageState.svelte'
 
 export interface ApiUsageModelStats {
     inputTokens: number
@@ -60,7 +63,7 @@ export const apiUsageRequestModes: ApiUsageRequestMode[] = [
 ]
 
 export const API_USAGE_RECENT_RETENTION_MS = 48 * 60 * 60 * 1000
-export const API_USAGE_MAX_RECENT_RECORDS = 10_000
+export const API_USAGE_MAX_RECENT_RECORDS = 500
 
 export interface ApiUsageRecord {
     model: string
@@ -330,15 +333,15 @@ function createApiUsageRecentRecord(
 }
 
 export function recordApiUsage(record: ApiUsageRecord) {
-    if (!DBState.db.apiUsage?.daily || typeof DBState.db.apiUsage.daily !== 'object') {
-        DBState.db.apiUsage = createEmptyApiUsageStats()
+    if (!ApiUsageState.daily || typeof ApiUsageState.daily !== 'object') {
+        ApiUsageState.daily = {}
     }
-    DBState.db.apiUsage.recentRequests ??= []
+    ApiUsageState.recentRequests ??= []
 
     const timestamp = record.date?.getTime() ?? Date.now()
     const normalizedTimestamp = Number.isFinite(timestamp) ? timestamp : Date.now()
     const dateKey = getApiUsageDateKey(new Date(normalizedTimestamp))
-    const storedDay = DBState.db.apiUsage.daily[dateKey]
+    const storedDay = ApiUsageState.daily[dateKey]
     const day = storedDay ? {
         ...normalizeStoredStats(storedDay),
         models: storedDay.models && typeof storedDay.models === 'object' ? storedDay.models : {},
@@ -363,15 +366,45 @@ export function recordApiUsage(record: ApiUsageRecord) {
     applyUsageDelta(day, recentRecord)
     applyUsageDelta(modelStats, recentRecord)
     day.models[modelStatsKey] = modelStats
-    DBState.db.apiUsage.daily[dateKey] = day
+    ApiUsageState.daily[dateKey] = day
 
-    const retentionReference = Math.max(
-        normalizedTimestamp,
-        ...DBState.db.apiUsage.recentRequests.map((candidate) => candidate.timestamp),
-    )
+    const recentRequests = ApiUsageState.recentRequests
+    const newestTimestamp = recentRequests.at(-1)?.timestamp ?? normalizedTimestamp
+    const retentionReference = Math.max(normalizedTimestamp, newestTimestamp)
     const retentionCutoff = retentionReference - API_USAGE_RECENT_RETENTION_MS
-    DBState.db.apiUsage.recentRequests = [...DBState.db.apiUsage.recentRequests, recentRecord]
-        .filter((candidate) => candidate.timestamp >= retentionCutoff)
-        .sort((a, b) => a.timestamp - b.timestamp)
-        .slice(-API_USAGE_MAX_RECENT_RECORDS)
+    if (normalizedTimestamp >= retentionCutoff) {
+        if (normalizedTimestamp >= newestTimestamp || recentRequests.length === 0) {
+            recentRequests.push(recentRecord)
+        }
+        else {
+            let low = 0
+            let high = recentRequests.length
+            while (low < high) {
+                const middle = Math.floor((low + high) / 2)
+                if (recentRequests[middle].timestamp <= normalizedTimestamp) {
+                    low = middle + 1
+                }
+                else {
+                    high = middle
+                }
+            }
+            recentRequests.splice(low, 0, recentRecord)
+        }
+    }
+
+    let expiredCount = 0
+    while (
+        expiredCount < recentRequests.length
+        && recentRequests[expiredCount].timestamp < retentionCutoff
+    ) {
+        expiredCount += 1
+    }
+    if (expiredCount > 0) {
+        recentRequests.splice(0, expiredCount)
+    }
+    const overflow = recentRequests.length - API_USAGE_MAX_RECENT_RECORDS
+    if (overflow > 0) {
+        recentRequests.splice(0, overflow)
+    }
+    notifyApiUsageChanged()
 }

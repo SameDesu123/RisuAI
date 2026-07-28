@@ -1,12 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApiUsageRecorder } from './apiUsageRecorder'
 import { createEmptyApiUsageStats } from './apiUsage'
+import { ApiUsageState, replaceApiUsageState } from './apiUsageState.svelte'
 import type { StreamResponseChunk, requestDataResponse } from './process/request/request'
-import { DBState } from './stores.svelte'
-
-vi.mock('./stores.svelte', () => ({
-    DBState: { db: {} },
-}))
 
 vi.mock('./tokenizer', () => ({
     ChatTokenizer: class {
@@ -34,14 +30,14 @@ function makeRecorder(options: {
 
 describe('API usage request recorder', () => {
     beforeEach(() => {
-        DBState.db.apiUsage = createEmptyApiUsageStats()
+        replaceApiUsageState(createEmptyApiUsageStats())
     })
 
     it('records successful translation requests', async () => {
         const recorder = makeRecorder({ mode: 'translate' })
         await recorder.finalizeResponse({ type: 'success', result: 'Done' })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day).toMatchObject({
             inputTokens: 12,
             outputTokens: 4,
@@ -56,7 +52,7 @@ describe('API usage request recorder', () => {
         await recorder.recordNextAttempt('failed')
         await recorder.finalizeResponse({ type: 'success', result: 'Done' })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day).toMatchObject({
             requestCount: 2,
             successRequestCount: 1,
@@ -71,7 +67,7 @@ describe('API usage request recorder', () => {
         })
         await recorder.finalizeResponse({ type: 'success', result: 'Done' })
 
-        const model = Object.values(Object.values(DBState.db.apiUsage.daily)[0].models)[0]
+        const model = Object.values(Object.values(ApiUsageState.daily)[0].models)[0]
         expect(model).toMatchObject({
             model: 'gpt-5.5',
             provider: { id: 'custom', name: 'Example AI', url: 'https://llm.example/v1' },
@@ -91,7 +87,7 @@ describe('API usage request recorder', () => {
             usage: { input_tokens: 50, output_tokens: 9 },
         })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day).toMatchObject({
             inputTokens: 80,
             outputTokens: 16,
@@ -130,7 +126,7 @@ describe('API usage request recorder', () => {
             },
         })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day).toMatchObject({
             inputTokens: 280,
             outputTokens: 105,
@@ -150,7 +146,7 @@ describe('API usage request recorder', () => {
         recorder.prepareAttempt({ input: secondInput })
         await recorder.finalizeResponse({ type: 'success', result: 'Done' })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day.inputTokens).toBe(JSON.stringify(firstInput).length + JSON.stringify(secondInput).length)
         expect(day.outputTokens).toBe('tool call'.length + 'Done'.length)
     })
@@ -159,7 +155,7 @@ describe('API usage request recorder', () => {
         const recorder = makeRecorder()
         await recorder.finalizeResponse({ type: 'fail', result: 'Unauthorized' })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day).toMatchObject({
             failedRequestCount: 1,
             reportedCostUsd: 0,
@@ -176,7 +172,7 @@ describe('API usage request recorder', () => {
             usageBillingStatus: 'not_billed',
         })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day).toMatchObject({
             failedRequestCount: 1,
             reportedCostUsd: 0,
@@ -189,7 +185,7 @@ describe('API usage request recorder', () => {
         recorder.resolveModel('google/gemma-4-31b-it')
         await recorder.finalizeResponse({ type: 'success', result: 'Done' })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day.models).toMatchObject({
             'google/gemma-4-31b-it': {
                 requestCount: 1,
@@ -206,7 +202,7 @@ describe('API usage request recorder', () => {
         recorder.resolveModel('provider/fallback-model')
         await recorder.finalizeResponse({ type: 'success', result: 'Done' })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day.models['provider/first-model']).toMatchObject({
             requestCount: 1,
             failedRequestCount: 1,
@@ -222,7 +218,7 @@ describe('API usage request recorder', () => {
         recorder.resolveModel('   ')
         await recorder.finalizeResponse({ type: 'success', result: 'Done' })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day.models['gpt-5.5'].requestCount).toBe(1)
     })
 
@@ -232,7 +228,7 @@ describe('API usage request recorder', () => {
         await recorder.finalizeAttempt('failed')
         await recorder.finalizeResponse({ type: 'success', result: 'Partial tool output' })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day).toMatchObject({
             requestCount: 2,
             successRequestCount: 1,
@@ -257,7 +253,7 @@ describe('API usage request recorder', () => {
             // Drain the tracked stream.
         }
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day).toMatchObject({
             outputTokens: 5,
             successRequestCount: 1,
@@ -281,7 +277,7 @@ describe('API usage request recorder', () => {
         abortController.abort()
         await reader.cancel()
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day).toMatchObject({
             outputTokens: 7,
             requestCount: 1,
@@ -309,7 +305,7 @@ describe('API usage request recorder', () => {
             // Drain the tracked stream.
         }
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day).toMatchObject({
             inputTokens: 23,
             outputTokens: 4,

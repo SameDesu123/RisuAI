@@ -8,16 +8,12 @@ import {
     normalizeApiUsageStats,
     recordApiUsage,
 } from './apiUsage'
+import { ApiUsageState, replaceApiUsageState } from './apiUsageState.svelte'
 import { LLMProvider } from './model/types'
-import { DBState } from './stores.svelte'
-
-vi.mock('./stores.svelte', () => ({
-    DBState: { db: {} },
-}))
 
 describe('API usage persistence', () => {
     beforeEach(() => {
-        DBState.db.apiUsage = createEmptyApiUsageStats()
+        replaceApiUsageState(createEmptyApiUsageStats())
     })
 
     it('uses local calendar dates for daily buckets', () => {
@@ -106,7 +102,7 @@ describe('API usage persistence', () => {
             date,
         })
 
-        const day = DBState.db.apiUsage.daily['2026-07-27']
+        const day = ApiUsageState.daily['2026-07-27']
         expect(day).toMatchObject({
             inputTokens: 110,
             outputTokens: 50,
@@ -126,7 +122,7 @@ describe('API usage persistence', () => {
             reportedCostUsd: 0.0123,
             costReportedRequestCount: 1,
         })
-        expect(DBState.db.apiUsage.recentRequests).toHaveLength(2)
+        expect(ApiUsageState.recentRequests).toHaveLength(2)
     })
 
     it('keeps identical model ids separate by provider', () => {
@@ -146,7 +142,7 @@ describe('API usage persistence', () => {
             date,
         })
 
-        const day = DBState.db.apiUsage.daily[getApiUsageDateKey(date)]
+        const day = ApiUsageState.daily[getApiUsageDateKey(date)]
         expect(Object.values(day.models)).toHaveLength(2)
         expect(Object.values(day.models).map((stats) => stats.provider?.name).sort()).toEqual([
             'OpenAI',
@@ -162,10 +158,10 @@ describe('API usage persistence', () => {
             billingStatus: 'not_billed',
         })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(day.reportedCostUsd).toBe(0)
         expect(day.costReportedRequestCount).toBe(1)
-        expect(DBState.db.apiUsage.recentRequests[0].reportedCostUsd).toBe(0)
+        expect(ApiUsageState.recentRequests[0].reportedCostUsd).toBe(0)
     })
 
     it('drops expired recent records while retaining daily aggregates', () => {
@@ -183,8 +179,41 @@ describe('API usage persistence', () => {
             date: new Date(now),
         })
 
-        expect(DBState.db.apiUsage.recentRequests.map((record) => record.model)).toEqual(['current'])
-        expect(Object.keys(DBState.db.apiUsage.daily)).toHaveLength(2)
+        expect(ApiUsageState.recentRequests.map((record) => record.model)).toEqual(['current'])
+        expect(Object.keys(ApiUsageState.daily)).toHaveLength(2)
+    })
+
+    it('appends normal runtime records without sorting and keeps the newest 500', () => {
+        const now = Date.now()
+        const sortSpy = vi.spyOn(Array.prototype, 'sort')
+
+        for (let index = 0; index <= API_USAGE_MAX_RECENT_RECORDS; index++) {
+            recordApiUsage({
+                model: String(index),
+                inputTokens: 1,
+                outputTokens: 1,
+                date: new Date(now + index),
+            })
+        }
+
+        expect(sortSpy).not.toHaveBeenCalled()
+        expect(ApiUsageState.recentRequests).toHaveLength(API_USAGE_MAX_RECENT_RECORDS)
+        expect(ApiUsageState.recentRequests[0].model).toBe('1')
+        expect(ApiUsageState.recentRequests.at(-1)?.model).toBe(String(API_USAGE_MAX_RECENT_RECORDS))
+        sortSpy.mockRestore()
+    })
+
+    it('inserts an out-of-order runtime record at its timestamp position', () => {
+        const now = Date.now()
+        recordApiUsage({ model: 'newest', inputTokens: 1, outputTokens: 1, date: new Date(now) })
+        recordApiUsage({ model: 'oldest', inputTokens: 1, outputTokens: 1, date: new Date(now - 2) })
+        recordApiUsage({ model: 'middle', inputTokens: 1, outputTokens: 1, date: new Date(now - 1) })
+
+        expect(ApiUsageState.recentRequests.map((record) => record.model)).toEqual([
+            'oldest',
+            'middle',
+            'newest',
+        ])
     })
 
     it('caps normalized recent records', () => {
@@ -214,7 +243,7 @@ describe('API usage persistence', () => {
             outputTokens: 1,
         })
 
-        const day = Object.values(DBState.db.apiUsage.daily)[0]
+        const day = Object.values(ApiUsageState.daily)[0]
         expect(Object.keys(day.models)).toEqual(['model:__proto__'])
     })
 
