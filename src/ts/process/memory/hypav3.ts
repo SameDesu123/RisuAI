@@ -20,6 +20,7 @@ import { chatCompletion, unloadEngine } from "../webllm";
 import { hypaV3ProgressStore } from "src/ts/stores.svelte";
 import { type ChatTokenizer } from "src/ts/tokenizer";
 import { inlayTokenRegex } from "src/ts/util/inlayTokens";
+import { shuffle } from "./hypav3Retrieval";
 
 export interface HypaV3Preset {
     name: string;
@@ -830,9 +831,9 @@ async function hypaMemoryV3MainExp(
         );
 
         // Target only summaries that haven't been selected yet
-        const unusedSummaries = data.summaries
-            .filter((e) => !selectedSummaries.includes(e))
-            .sort(() => Math.random() - 0.5); // Random shuffle
+        const unusedSummaries = shuffle(
+            data.summaries.filter((e) => !selectedSummaries.includes(e))
+        );
 
         for (const summary of unusedSummaries) {
             const summaryTokens = await tokenizer.tokenizeChat({
@@ -1493,9 +1494,9 @@ async function hypaMemoryV3Main(
         );
 
         // Target only summaries that haven't been selected yet
-        const unusedSummaries = data.summaries
-            .filter((e) => !selectedSummaries.includes(e))
-            .sort(() => Math.random() - 0.5); // Random shuffle
+        const unusedSummaries = shuffle(
+            data.summaries.filter((e) => !selectedSummaries.includes(e))
+        );
 
         for (const summary of unusedSummaries) {
             const summaryTokens = await tokenizer.tokenizeChat({
