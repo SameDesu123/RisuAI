@@ -521,7 +521,14 @@ async function cleanChunks(options:{
         return
     }
 
-    const uncleanable = new Set(await getUncleanables(db))
+    let uncleanable: Set<string>
+    try {
+        uncleanable = new Set(await getUncleanables(db))
+    }
+    catch (error) {
+        console.error('Skipping asset cleanup because cold storage references could not be collected:', error)
+        return
+    }
     if (isTauri) {
         const assets = await readDir('assets', { baseDir: BaseDirectory.AppData })
         console.log(assets)

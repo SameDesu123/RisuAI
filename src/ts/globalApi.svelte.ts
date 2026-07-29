@@ -40,6 +40,10 @@ import { fetch as TauriHTTPFetch } from '@tauri-apps/plugin-http';
 import { moduleUpdate } from "./process/modules";
 import type { AccountStorage } from "./storage/accountStorage";
 import { getColdStorageItem, makeColdData } from "./process/coldstorage.svelte";
+import {
+    getCharactersForAssetReferenceScan,
+    type ColdStoragePayloadSnapshot
+} from "./process/coldstorageData";
 import { isTauri, isNodeServer } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
@@ -971,19 +975,44 @@ export function getBasename(data: string) {
     return lasts;
 }
 
-export async function getUncleanables(db: Database, uptype: 'basename' | 'pure' = 'basename') {
-    let chars: (character|groupChat)[] = []
-    if (db.characters) {
-        for(let cha of db.characters){
-            if(cha?.coldstorage){
-                const coldData = await getColdStorageItem(cha.coldstorage!)
-                if(coldData?.character && coldData.character.chaId === cha.chaId){
-                    cha = coldData.character
-                }
+export async function getUncleanables(
+    db: Database,
+    uptype: 'basename' | 'pure' = 'basename',
+    options: {
+        coldStorageSnapshot?: ColdStoragePayloadSnapshot
+        allowedUnavailableColdStorageKeys?: Iterable<string>
+    } = {},
+) {
+    let coldStorageSnapshot = options.coldStorageSnapshot
+    if (!coldStorageSnapshot) {
+        const payloads: ColdStoragePayloadSnapshot['payloads'][number][] = []
+        const missingKeys: string[] = []
+        const loadedKeys = new Set<string>()
+        for (const cha of db.characters ?? []) {
+            if (!cha?.coldstorage || loadedKeys.has(cha.coldstorage)) {
+                continue
             }
-            chars.push(cha)
+            loadedKeys.add(cha.coldstorage)
+            const value = await getColdStorageItem(cha.coldstorage)
+            if (value) {
+                payloads.push({ key: cha.coldstorage, value })
+            }
+            else {
+                missingKeys.push(cha.coldstorage)
+            }
+        }
+        coldStorageSnapshot = {
+            payloads,
+            missingKeys,
+            invalidKeys: [],
         }
     }
+
+    const chars = getCharactersForAssetReferenceScan(
+        db,
+        coldStorageSnapshot,
+        options.allowedUnavailableColdStorageKeys,
+    )
 
     return getUncleanablesSync(db, uptype, { chars });
 }
