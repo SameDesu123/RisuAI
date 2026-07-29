@@ -1,5 +1,6 @@
 import { allowedDbKeys, customProviderStore, getV2PluginAPIs, handlePluginInstallViaPlugin, pluginV2, type PluginV2ProviderArgument, type PluginV2ProviderOptions, type RisuPlugin } from "../plugins.svelte";
 import { SandboxHost } from "./factory";
+import { getPluginPermissionKey, PluginPermissionSessionCache, type PluginPermission } from "./pluginPermissionCache";
 import { getDatabase } from "src/ts/storage/database.svelte";
 import { SafeLocalPluginStorage, tagWhitelist } from "../pluginSafeClass";
 import DOMPurify from 'dompurify';
@@ -551,8 +552,7 @@ const unloadV3Plugin = async (pluginName: string) => {
     }
 }
 
-const permissionGivenPlugins: Set<string> = new Set();
-const permissionDeniedPlugins: Set<string> = new Set();
+const permissionSessionCache = new PluginPermissionSessionCache();
 const permissionForage = localforage.createInstance({
     name: 'plugin_permissions',
     storeName: 'plugin_permissions'
@@ -564,15 +564,18 @@ type PluginV3ProviderOptions = PluginV2ProviderOptions & {
 
 export const customV3ProviderMetaStore:LLMModel[] = []
 
-const getPluginPermission = async (pluginName: string, permissionDesc: 'fetchLogs'|'db'|'mainDom'|'replacer'|'provider'|'sendChat', reconfirm: boolean|'periodically' = false) => {
-    if(permissionGivenPlugins.has(pluginName)){
-        return true;
-    }
-    if(permissionDeniedPlugins.has(pluginName)){
-        return false;
+const getPluginPermission = async (pluginName: string, permissionDesc: PluginPermission, reconfirm: boolean|'periodically' = false) => {
+    const scriptHash = await hasher(
+        new TextEncoder().encode(
+            DBState.db.plugins.find(p => p.name === pluginName)?.script
+        )
+    )
+    const cachedPermission = permissionSessionCache.get(scriptHash, permissionDesc)
+    if(cachedPermission !== undefined){
+        return cachedPermission;
     }
 
-    let pluginHash = ''
+    const permissionKey = getPluginPermissionKey(scriptHash, permissionDesc)
 
     let requiresReconfirm = false;
 
@@ -587,14 +590,8 @@ const getPluginPermission = async (pluginName: string, permissionDesc: 'fetchLog
         requiresReconfirm = true;
     }
 
-    pluginHash = await hasher(
-        new TextEncoder().encode(
-            DBState.db.plugins.find(p => p.name === pluginName)?.script
-        )
-    ) + `_${permissionDesc}`;
-
-    if(!requiresReconfirm &&await permissionForage.getItem(pluginHash)){
-        permissionGivenPlugins.add(pluginName);
+    if(!requiresReconfirm && await permissionForage.getItem(permissionKey)){
+        permissionSessionCache.set(scriptHash, permissionDesc, true)
         return true;
     }   
     
@@ -611,15 +608,15 @@ const getPluginPermission = async (pluginName: string, permissionDesc: 'fetchLog
         return false;
     }
     const conf = await alertConfirm(alertTitle)
-    if(conf && pluginHash){
-        permissionGivenPlugins.add(pluginName);
-        await permissionForage.setItem(pluginHash, true);
+    if(conf && permissionKey){
+        permissionSessionCache.set(scriptHash, permissionDesc, true)
+        await permissionForage.setItem(permissionKey, true);
         if(reconfirm === 'periodically'){
             await permissionForage.setItem(pluginName + '_' + permissionDesc + '_lastGrantTime', Date.now());
         }
         return true;
     }
-    permissionDeniedPlugins.add(pluginName);
+    permissionSessionCache.set(scriptHash, permissionDesc, false)
     return false;
 }
 
