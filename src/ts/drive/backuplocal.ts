@@ -11,7 +11,7 @@ import { hubURL } from "../characterCards";
 import { language } from "src/lang";
 import { collectColdStorageBackupPayloads, confirmIncompleteColdStorageOperation, getColdStorageBackupKey, getColdStorageItem, isColdStorageBackupData, listColdDataKeys, setColdStorageItem } from "../process/coldstorage.svelte";
 import { DBState } from "../stores.svelte";
-import { tryReadBackupAsset } from "./backupAssets";
+import { collectPartialCharacterBackupAssets, tryReadBackupAsset } from "./backupAssets";
 
 function getBasename(data:string){
     const baseNameRegex = /\\/g
@@ -28,6 +28,10 @@ export async function SaveLocalBackup(){
     if(!await confirmIncompleteColdStorageOperation(db, unavailableColdStorageKeys, 'backup')){
         return
     }
+    const assetKeys = (await getUncleanables(db, 'pure', {
+        coldStorageSnapshot: coldStoragePayloads,
+        allowedUnavailableColdStorageKeys: unavailableColdStorageKeys,
+    })).filter((key) => key.startsWith('assets/'))
 
     const writer = new LocalWriter()
     const r = await writer.init()
@@ -78,7 +82,6 @@ export async function SaveLocalBackup(){
         assetMap.set(db.customBackground, { charName: 'User Settings', assetName: 'Custom Background' })
     }
     const missingAssets: string[] = []
-    const assetKeys = (await getUncleanables(db, 'pure')).filter((key) => key.startsWith('assets/'))
 
     if(isTauri){
         for(let i=0;i<assetKeys.length;i++){
@@ -215,6 +218,14 @@ export async function SavePartialLocalBackup(){
         return
     }
 
+    // Only collect main profile images for both characters and groups.
+    // Reuse the validated payload snapshot so account-backed cold data is not read twice.
+    const assetMap = collectPartialCharacterBackupAssets(
+        db.characters,
+        coldStoragePayloads,
+        unavailableColdStorageKeys,
+    )
+
     const writer = new LocalWriter()
     const r = await writer.init()
     if(!r){
@@ -222,32 +233,6 @@ export async function SavePartialLocalBackup(){
         return
     }
 
-    const assetMap = new Map<string, { charName: string, assetName: string }>()
-    
-    // Only collect main profile images for both characters and groups
-    if (db.characters) {
-        for (const char of db.characters) {
-            if (!char) continue
-            const charName = char.name ?? 'Unknown Character'
-            
-            // Save the main profile image (supports both character and group types)
-            // Note: emotionImages are intentionally excluded from partial backup
-            if (char.image) {
-                assetMap.set(char.image, { charName: charName, assetName: 'Profile Image' })
-            }
-            if (char.imageThumbnail) {
-                assetMap.set(char.imageThumbnail, { charName: charName, assetName: 'Profile Thumbnail' })
-            }
-            if(char.coldstorage){
-                const coldData = await getColdStorageItem(char.coldstorage)
-                const coldThumbnail = coldData?.character?.imageThumbnail
-                if(coldThumbnail){
-                    assetMap.set(coldThumbnail, { charName: charName, assetName: 'Profile Thumbnail' })
-                }
-            }
-        }
-    }
-    
     // User icon
     if (db.userIcon) {
         assetMap.set(db.userIcon, { charName: 'User Settings', assetName: 'User Icon' })

@@ -128,14 +128,17 @@ async function backupDrive(ACCESS_TOKEN:string) {
         return d.name
     })
     const db = getDatabase()
-    const assetPaths = (await getUncleanables(db, 'pure')).filter((path) => path.startsWith('assets/'))
-    const missingAssets: string[] = []
-
     const coldStoragePayloads = await collectColdStorageBackupPayloads(db)
     const unavailableColdStorageKeys = [...coldStoragePayloads.missingKeys, ...coldStoragePayloads.invalidKeys]
     if(!await confirmIncompleteColdStorageOperation(db, unavailableColdStorageKeys, 'backup')){
         return
     }
+
+    const assetPaths = (await getUncleanables(db, 'pure', {
+        coldStorageSnapshot: coldStoragePayloads,
+        allowedUnavailableColdStorageKeys: unavailableColdStorageKeys,
+    })).filter((path) => path.startsWith('assets/'))
+    const missingAssets: string[] = []
 
     for(let i=0;i<assetPaths.length;i++){
         const path = assetPaths[i]
@@ -300,7 +303,9 @@ async function loadDrive(ACCESS_TOKEN:string, mode: 'backup'|'sync'):Promise<voi
                 return
             }
         }
-        const requiredImages = (await getUncleanables(db))
+        const requiredImages = await getUncleanables(db, 'basename', {
+            allowedUnavailableColdStorageKeys: coldStorageRestoreFailures,
+        })
         let ind = 0;
         let errorLogs:string[] = []
         for(const images of requiredImages){
