@@ -570,8 +570,8 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
         body.n = db.genTime
     }
     
-    body = applyAdditionalParameters(body, headers, getAdditionalParameters(aiModel))
     headers = withOpenRouterAttributionHeaders(replacerURL, headers)
+    body = applyAdditionalParameters(body, headers, getAdditionalParameters(aiModel))
 
     // Some aux flows are intentionally non-streaming (e.g. memory/translate).
     // If custom Additional Parameters contains stream=true, force non-stream mode back.

@@ -12,7 +12,7 @@ function toHeaderRecord(currentHeaders: HeadersInit): Record<string, string> {
     if(Array.isArray(currentHeaders)){
         return Object.fromEntries(currentHeaders)
     }
-    return { ...currentHeaders }
+    return { ...(currentHeaders as Record<string, string>) }
 }
 
 export function withOpenRouterAttributionHeaders(

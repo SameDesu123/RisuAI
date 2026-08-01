@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("src/ts/storage/database.svelte", () => ({
+    getDatabase: () => ({}),
+}));
 
 import { parseAdditionalParamJsonValue } from "../additionalParams";
+import { applyAdditionalParameters } from "../shared";
+import { withOpenRouterAttributionHeaders } from "../../../network/openRouterHeaders";
 
 describe("parseAdditionalParamJsonValue", () => {
     it("parses standard JSON additional parameter values", () => {
@@ -40,5 +46,22 @@ describe("parseAdditionalParamJsonValue", () => {
 
     it("returns undefined for invalid json:: payloads", () => {
         expect(parseAdditionalParamJsonValue('{"enable_thinking": Truthy}')).toBeUndefined();
+    });
+});
+
+describe("applyAdditionalParameters", () => {
+    it("removes OpenRouter title aliases case-insensitively", () => {
+        const headers = withOpenRouterAttributionHeaders("https://openrouter.ai/api/v1", {
+            "x-title": "Legacy title",
+            "X-Custom": "kept",
+        });
+
+        applyAdditionalParameters({}, headers, [["header::X-Title", "{{none}}"]]);
+
+        expect(withOpenRouterAttributionHeaders("https://openrouter.ai/api/v1", headers)).toBe(headers);
+        expect(headers).toEqual({
+            "HTTP-Referer": "https://risuai.xyz",
+            "X-Custom": "kept",
+        });
     });
 });

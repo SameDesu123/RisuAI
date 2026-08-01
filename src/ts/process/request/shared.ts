@@ -91,7 +91,16 @@ export function applyAdditionalParameters<T extends Record<string, any>>(
 
         if (value === '{{none}}') {
             if (key.startsWith('header::')) {
-                delete headers[key.replace('header::', '')]
+                const headerName = key.replace('header::', '').toLowerCase()
+                const headerNames = headerName === 'x-title' || headerName === 'x-openrouter-title'
+                    ? new Set(['x-title', 'x-openrouter-title'])
+                    : new Set([headerName])
+
+                for(const existingHeader of Object.keys(headers)){
+                    if(headerNames.has(existingHeader.toLowerCase())){
+                        delete headers[existingHeader]
+                    }
+                }
             }
             else {
                 delete body[key]

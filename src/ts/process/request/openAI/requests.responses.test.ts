@@ -370,6 +370,35 @@ describe('OpenAI Responses API helpers', () => {
         expect(preview.body.extra).toEqual({ enabled: true })
     })
 
+    it('includes OpenRouter attribution headers in Responses previews', async () => {
+        const result = await requestOpenAIResponseAPI(baseArg({
+            aiModel: 'reverse_proxy',
+            customURL: 'https://openrouter.ai/api/v1',
+            previewBody: true,
+        }))
+
+        expect(result.type).toBe('success')
+        const preview = JSON.parse(result.result as string)
+        expect(preview.headers['HTTP-Referer']).toBe('https://risuai.xyz')
+        expect(preview.headers['X-OpenRouter-Title']).toBe('RisuAI')
+    })
+
+    it('preserves an explicit OpenRouter attribution opt-out in Responses previews', async () => {
+        mocks.db.additionalParams = [['header::X-Title', '{{none}}']]
+
+        const result = await requestOpenAIResponseAPI(baseArg({
+            aiModel: 'reverse_proxy',
+            customURL: 'https://openrouter.ai/api/v1',
+            previewBody: true,
+        }))
+
+        expect(result.type).toBe('success')
+        const preview = JSON.parse(result.result as string)
+        expect(preview.headers['HTTP-Referer']).toBe('https://risuai.xyz')
+        expect(preview.headers).not.toHaveProperty('X-Title')
+        expect(preview.headers).not.toHaveProperty('X-OpenRouter-Title')
+    })
+
     it('does not duplicate top-level output_text when message output blocks are also present', () => {
         const text = __testResponsesAPI.extractResponsesText({
             output_text: 'final text',
