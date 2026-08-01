@@ -73,7 +73,8 @@ export const advancedSettingsItems: SettingItem[] = [
         options: {
             selectOptions: [
                 { value: 'off', label: 'Off' },
-                { value: 'sound', label: 'Via Sound' },
+                { value: 'pip', labelKey: 'keepSessionAlivePip' },
+                { value: 'sound', labelKey: 'keepSessionAliveSound' },
             ]
         }
     },

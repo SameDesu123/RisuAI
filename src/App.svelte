@@ -12,7 +12,7 @@
     import { showRealmInfoStore, importCharacterProcess } from './ts/characterCards';
     import { importPreset, getDatabase, setDatabase } from './ts/storage/database.svelte';
     import { readModule } from './ts/process/modules';
-    import { alertNormal } from './ts/alert';
+    import { alertError, alertNormal } from './ts/alert';
     import { language } from './lang';
     import RealmFrame from './lib/UI/Realm/RealmFrame.svelte';
     import SavePopupIconComp from './lib/Others/SavePopupIcon.svelte';
@@ -37,6 +37,8 @@
     import Legal from './lib/Others/Legal.svelte';
     import CustomSidebarConfig from './lib/Others/CustomSidebarConfig.svelte';
     import { RISU_APP_INTERNAL_DRAG_TYPE, RISU_SIDEBAR_DRAG_TYPE } from './ts/dragTypes';
+    import { onMount } from 'svelte';
+    import { PipKeepAliveController, type PipKeepAliveError } from './ts/pipKeepAlive';
 
 
   
@@ -44,7 +46,43 @@
     let gridOpen = $state(false)
     let aprilFools = $state(new Date().getMonth() === 3 && new Date().getDate() === 1)
     let aprilFoolsPage = $state(0)
-    let keepingSessionAlive = $state(false)
+    let keepAliveController = $state<PipKeepAliveController | null>(null)
+
+    const showKeepAliveError = (error: PipKeepAliveError) => {
+        switch (error) {
+            case 'unsupported':
+                alertError(language.keepSessionAlivePipUnsupported)
+                break
+            case 'playback':
+                alertError(language.keepSessionAlivePipPlaybackFailed)
+                break
+            case 'request':
+                alertError(language.keepSessionAlivePipRequestFailed)
+                break
+        }
+    }
+
+    const startKeepAliveFromUserGesture = (event: Event) => {
+        if (!event.isTrusted) return
+        void keepAliveController?.startFromUserGesture()
+    }
+
+    onMount(() => {
+        keepAliveController = new PipKeepAliveController({
+            videoSrc: `${import.meta.env.BASE_URL}keepAlive.mp4`,
+            soundSrc: sendSound,
+            onNotReady: () => alertNormal(language.keepSessionAlivePipNotReady),
+            onError: showKeepAliveError
+        })
+        keepAliveController.prepare()
+        keepAliveController.syncMode(DBState.db?.keepSessionAlive ?? 'off')
+
+        return () => keepAliveController?.destroy()
+    })
+
+    $effect(() => {
+        keepAliveController?.syncMode(DBState.db?.keepSessionAlive ?? 'off')
+    })
 
     const getMainDropEffect = (e:DragEvent): DataTransfer['dropEffect'] => {
         const types = Array.from(e.dataTransfer?.types ?? [])
@@ -62,6 +100,8 @@
     }
 
 </script>
+
+<svelte:window onclick={startKeepAliveFromUserGesture} onkeydown={startKeepAliveFromUserGesture} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -99,28 +139,6 @@
         })
         checkCharOrder()
     }
-}} onclick={() => {
-    if(keepingSessionAlive){
-        return
-    }
-
-    const aliveMode = DBState?.db?.keepSessionAlive
-    switch(aliveMode){
-        case 'pip':{
-
-            break
-        }
-        case 'sound':{
-            console.log("Starting silent audio to keep session alive")
-            const silentAudio = new Audio(sendSound);
-            silentAudio.loop = true;
-            silentAudio.volume = 0.000001;
-            silentAudio.play();
-            keepingSessionAlive = true;
-            break
-        }
-    }
-
 }}>
     {#if !import.meta.env.VITE_RISU_LEGAL_CONFIGURED}
         <Legal />

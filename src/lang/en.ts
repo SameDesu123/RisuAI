@@ -277,7 +277,8 @@ export const languageEnglish = {
             "- **File Attachments**: Searching within PDF/TXT/XML attachments\n" +
             "- **Playground**: Embedding testing in Playground",
         keepSessionAlive:
-            "Keeps the tab active and prevents the session from expiring due to inactivity in browsers. This may require refresh to take effect.\n\n" +
+            "Keeps the tab active and reduces the chance of the browser suspending it while inactive.\n\n" +
+            "- **Via PIP**: Opens a small Picture-in-Picture window after your next click or key press. It continuously plays a status video with a very quiet audio signal, which may still be visible or faintly audible.\n" +
             "- **Via Sound**: Plays a silent audio at regular intervals to keep the session alive. This method is known as most compatible and effective in most browsers.\n",
         reSummarizationPrompt:
             "The prompt used when merging multiple selected summaries into one via bulk edit. If blank, the default prompt is used.",
@@ -1651,6 +1652,10 @@ export const languageEnglish = {
     keepSessionAlive: "Keep Session Alive",
     keepSessionAlivePip: "Via PIP",
     keepSessionAliveSound: "Via Sound",
+    keepSessionAlivePipNotReady: "The Picture-in-Picture media is still loading. Please press once more.",
+    keepSessionAlivePipUnsupported: "Picture-in-Picture is not supported or enabled in this browser.",
+    keepSessionAlivePipPlaybackFailed: "The session keep-alive media could not be played.",
+    keepSessionAlivePipRequestFailed: "The Picture-in-Picture window could not be opened. Please check the browser permission and try again.",
     // NanoGPT Dashboard
     nanoGPTLoadingAccountInfo: "Loading account info…",
     nanoGPTCreditBalance: "Credit Balance:",

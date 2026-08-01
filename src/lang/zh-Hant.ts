@@ -184,7 +184,7 @@ export const languageChineseTraditional = {
         "hypaV3SummarizationMaxConcurrent": "最大同時發送的總結模型請求數。僅在總結模型設為「輔助模型」時適用。",
         "hypaV3EmbeddingRequestsPerMinute": "用於相似性搜尋的每分鐘最大嵌入模型請求數。",
         "hypaV3EmbeddingMaxConcurrent": "用於相似性搜尋的最大同時嵌入模型請求數。",
-        "keepSessionAlive": "使分頁保持活躍狀態，防止因閒置而在瀏覽器中過期。可能需要重新整理後才能生效。\n\n- **透過音效**：定期播放靜音音訊以保持工作階段活躍。此方法在大多數瀏覽器中相容性最佳且最有效。",
+        "keepSessionAlive": "使分頁保持活躍，並降低瀏覽器在閒置時暫停分頁的可能性。\n\n- **透過子母畫面（PIP）**：在下一次點擊或按鍵後開啟小型子母畫面視窗。視窗會持續播放狀態影片和極低音量的音訊訊號，因此仍可能看得到或隱約聽見。\n- **透過音效**：定期播放靜音音訊以保持工作階段活躍。此方法在大多數瀏覽器中相容性最佳且最有效。",
         "localNetworkModeDesc": "透過本機伺服器路由私有/區域網路模型 URL，而非透過瀏覽器直接抓取。\n\n**用途**\n- 避免瀏覽器的私有網路/CORS 限制\n- 降低本機推斷首個 Token 生成緩慢時的逾時風險\n\n**運作方式**\n- 串流回應使用實驗性的 Job+WebSocket 中繼（回退至 /proxy2）\n- 非串流回應使用 /proxy2 中繼\n\n**限制**\n- 僅適用於 OpenAI 相容的請求路徑"
     },
     "setup": {
@@ -1466,6 +1466,10 @@ export const languageChineseTraditional = {
     "keepSessionAlive": "保持工作階段活躍",
     "keepSessionAlivePip": "透過子母畫面（PIP）",
     "keepSessionAliveSound": "透過音效",
+    "keepSessionAlivePipNotReady": "子母畫面媒體仍在載入中，請再按一次。",
+    "keepSessionAlivePipUnsupported": "此瀏覽器不支援或未啟用子母畫面功能。",
+    "keepSessionAlivePipPlaybackFailed": "無法播放用於保持工作階段活躍的媒體。",
+    "keepSessionAlivePipRequestFailed": "無法開啟子母畫面視窗。請檢查瀏覽器權限後再試一次。",
     "loadouts": "配置組包",
     "loadout": "配置組包",
     "nanoGPTLoadingAccountInfo": "正在載入帳戶資訊…",
