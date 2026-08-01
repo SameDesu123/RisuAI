@@ -25,7 +25,7 @@ import { setDatabaseLite } from './databaseState.svelte';
 export { onDatabaseUpdate, setDatabaseLite } from './databaseState.svelte';
 
 //APP_VERSION_POINT is to locate the app version in the database file for version bumping
-export let appVer = "2026.6.214" //<APP_VERSION_POINT>
+export let appVer = "2026.6.215" //<APP_VERSION_POINT>
 export let webAppSubVer = ''
 
 export type StreamingDisplayOptimizationMode = 'off'|'balanced'|'strong'
@@ -389,6 +389,7 @@ export function setDatabase(data:Database){
     data.animationSpeed ??= 0.4
     data.colorScheme ??= safeStructuredClone(defaultColorScheme)
     data.colorSchemeName ??= 'default'
+    data.customColorScheme ??= safeStructuredClone(data.colorSchemeName === 'custom' ? data.colorScheme : defaultColorScheme)
     data.NAIsettings.starter ??= ""
     data.hypaModel ??= 'MiniLM'
     data.mancerHeader ??= ''
@@ -959,6 +960,7 @@ export interface Database{
     hideRealm:boolean
     colorScheme:ColorScheme
     colorSchemeName:string
+    customColorScheme:ColorScheme
     promptTemplate?:PromptItem[]
     forceProxyAsOpenAI?:boolean
     hypaModel:HypaModel
