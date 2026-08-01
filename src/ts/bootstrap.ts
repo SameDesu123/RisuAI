@@ -521,14 +521,7 @@ async function cleanChunks(options:{
         return
     }
 
-    let uncleanable: Set<string>
-    try {
-        uncleanable = new Set(await getUncleanables(db))
-    }
-    catch (error) {
-        console.error('Skipping asset cleanup because cold storage references could not be collected:', error)
-        return
-    }
+    const uncleanable = new Set(await getUncleanables(db))
     if (isTauri) {
         const assets = await readDir('assets', { baseDir: BaseDirectory.AppData })
         console.log(assets)
@@ -644,6 +637,7 @@ async function cleanChunks(options:{
         }
     }
 }
+
 
 /**
  * Assigns unique IDs to characters and chats.

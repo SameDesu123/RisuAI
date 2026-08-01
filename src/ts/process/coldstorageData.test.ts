@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
     coldStorageHeader,
-    getCharactersForAssetReferenceScan,
     getColdStorageAffectedCharacters,
     getColdStorageBackupKey,
     getColdStorageBackupName,
@@ -114,82 +113,6 @@ describe('coldstorageData', () => {
         expect(isColdStorageBackupData([])).toBe(true)
         expect(isColdStorageBackupData({ nope: true })).toBe(false)
         expect(isColdStorageBackupData(null)).toBe(false)
-    })
-
-    it('keeps both a live cold stub and its stored character during asset scans', () => {
-        const key = '11111111-1111-1111-1111-111111111111'
-        const liveCharacter = {
-            type: 'character',
-            chaId: 'cold-character',
-            coldstorage: key,
-            image: 'assets/profile.png',
-            imageThumbnail: 'assets/profile-thumbnail.webp',
-            chats: [],
-        }
-        const coldCharacter = {
-            type: 'character',
-            chaId: 'cold-character',
-            image: 'assets/profile.png',
-            emotionImages: [['happy', 'assets/happy.png']],
-            chats: [],
-        }
-
-        expect(getCharactersForAssetReferenceScan({
-            characters: [liveCharacter],
-        } as any, {
-            payloads: [{ key, value: { character: coldCharacter } }],
-            missingKeys: [],
-            invalidKeys: [],
-        })).toEqual([liveCharacter, coldCharacter])
-    })
-
-    it('fails asset scans when a required cold character is unavailable', () => {
-        const key = '11111111-1111-1111-1111-111111111111'
-        const db = {
-            characters: [{
-                type: 'character',
-                chaId: 'cold-character',
-                coldstorage: key,
-                image: 'assets/profile.png',
-                chats: [],
-            }],
-        } as any
-        const snapshot = {
-            payloads: [],
-            missingKeys: [key],
-            invalidKeys: [],
-        }
-
-        expect(() => getCharactersForAssetReferenceScan(db, snapshot)).toThrow(
-            `Cold storage item ${key} is unavailable`,
-        )
-        expect(getCharactersForAssetReferenceScan(db, snapshot, [key])).toEqual(db.characters)
-    })
-
-    it('fails asset scans when a cold payload belongs to another character', () => {
-        const key = '11111111-1111-1111-1111-111111111111'
-
-        expect(() => getCharactersForAssetReferenceScan({
-            characters: [{
-                type: 'character',
-                chaId: 'expected-character',
-                coldstorage: key,
-                chats: [],
-            }],
-        } as any, {
-            payloads: [{
-                key,
-                value: {
-                    character: {
-                        type: 'character',
-                        chaId: 'different-character',
-                        chats: [],
-                    },
-                },
-            }],
-            missingKeys: [],
-            invalidKeys: [],
-        })).toThrow(`Cold storage item ${key} does not match character expected-character`)
     })
 
     it('rewrites character cold storage asset references without mutating the original payload', () => {

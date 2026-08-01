@@ -3,15 +3,6 @@ import type { Database, character, groupChat } from "../storage/database.svelte"
 
 export const coldStorageHeader = '\uEF01COLDSTORAGE\uEF01'
 
-export type ColdStoragePayloadSnapshot = {
-    payloads: ReadonlyArray<{
-        key: string
-        value: unknown
-    }>
-    missingKeys: ReadonlyArray<string>
-    invalidKeys: ReadonlyArray<string>
-}
-
 export function getColdStorageBackupKey(name: string): string | null {
     const match = name.match(/^(?:coldstorage[/_])?([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\.json$/)
     return match?.[1] ?? null
@@ -29,61 +20,6 @@ export function isColdStorageBackupData(data: unknown): boolean {
     return !!data
         && typeof data === 'object'
         && ('character' in data || 'message' in data)
-}
-
-export function getColdStorageCharacter(data: unknown): character | groupChat | null {
-    if (
-        !data
-        || typeof data !== 'object'
-        || !('character' in data)
-        || !data.character
-        || typeof data.character !== 'object'
-    ) {
-        return null
-    }
-
-    return data.character as character | groupChat
-}
-
-export function getCharactersForAssetReferenceScan(
-    db: Pick<Database, 'characters'>,
-    snapshot: ColdStoragePayloadSnapshot,
-    allowedUnavailableKeys: Iterable<string> = [],
-): (character | groupChat)[] {
-    const payloadsByKey = new Map(snapshot.payloads.map((payload) => [payload.key, payload.value]))
-    const unavailableKeys = new Set([
-        ...snapshot.missingKeys,
-        ...snapshot.invalidKeys,
-    ])
-    const allowedKeys = new Set(allowedUnavailableKeys)
-    const characters: (character | groupChat)[] = []
-
-    for (const liveCharacter of db.characters ?? []) {
-        if (!liveCharacter) {
-            continue
-        }
-
-        characters.push(liveCharacter)
-        if (!liveCharacter.coldstorage) {
-            continue
-        }
-
-        const key = liveCharacter.coldstorage
-        if (!payloadsByKey.has(key)) {
-            if (unavailableKeys.has(key) && allowedKeys.has(key)) {
-                continue
-            }
-            throw new Error(`Cold storage item ${key} is unavailable during asset reference collection.`)
-        }
-
-        const coldCharacter = getColdStorageCharacter(payloadsByKey.get(key))
-        if (!coldCharacter || coldCharacter.chaId !== liveCharacter.chaId) {
-            throw new Error(`Cold storage item ${key} does not match character ${liveCharacter.chaId}.`)
-        }
-        characters.push(coldCharacter)
-    }
-
-    return characters
 }
 
 function replaceData(data: string | undefined, replacer: { [key: string]: string }) {

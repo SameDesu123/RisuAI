@@ -133,10 +133,7 @@ async function createImageThumbnail(data: Uint8Array, maxSize = 192) {
             return null
         }
 
-        return {
-            data: new Uint8Array(await thumbBlob.arrayBuffer()),
-            ext: thumbBlob.type === 'image/webp' ? 'webp' : 'png'
-        }
+        return new Uint8Array(await thumbBlob.arrayBuffer())
     }
     finally {
         URL.revokeObjectURL(url)
@@ -149,7 +146,7 @@ async function saveImageThumbnail(data: Uint8Array) {
         return ''
     }
 
-    return await saveImage(thumb.data, await hasher(thumb.data), `thumbnail.${thumb.ext}`)
+    return await saveImage(thumb, await hasher(thumb), 'thumbnail.png')
 }
 
 function characterMatchesThumbnailSource(char: CharacterImageThumbnailHolder | undefined, source: CharacterImageThumbnailSource) {

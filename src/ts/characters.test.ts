@@ -272,14 +272,14 @@ describe('ensureCharacterSidebarImageThumbnail', () => {
             image: 'assets/full.png',
         }]
 
-        await expect(ensureCharacterSidebarImageThumbnail(0)).resolves.toBe('assets/thumbhash.webp')
+        await expect(ensureCharacterSidebarImageThumbnail(0)).resolves.toBe('assets/thumbhash.png')
 
         expect(mocks.readImage).toHaveBeenCalledWith('assets/full.png')
         expect(mockCanvas.width).toBe(192)
         expect(mockCanvas.height).toBe(108)
         expect(mockCanvas.toBlob).toHaveBeenCalledWith(expect.any(Function), 'image/webp', 0.8)
-        expect(mocks.saveImage).toHaveBeenCalledWith(expect.any(Uint8Array), 'thumbhash', 'thumbnail.webp')
-        expect(DBState.db.characters[0].imageThumbnail).toBe('assets/thumbhash.webp')
+        expect(mocks.saveImage).toHaveBeenCalledWith(expect.any(Uint8Array), 'thumbhash', 'thumbnail.png')
+        expect(DBState.db.characters[0].imageThumbnail).toBe('assets/thumbhash.png')
         expect(DBState.db.characters[0].imageThumbnailVersion).toBe(2)
         expect(DBState.db.characters[0].imageThumbnailSource).toBe('assets/full.png')
     })
@@ -296,11 +296,11 @@ describe('ensureCharacterSidebarImageThumbnail', () => {
             imageThumbnailSource: 'assets/full.png',
         }]
 
-        await expect(ensureCharacterSidebarImageThumbnail(0)).resolves.toBe('assets/thumbhash.webp')
+        await expect(ensureCharacterSidebarImageThumbnail(0)).resolves.toBe('assets/thumbhash.png')
 
         expect(mocks.assetExists).toHaveBeenCalledWith('assets/missing.webp')
         expect(mocks.readImage).toHaveBeenCalledWith('assets/full.png')
-        expect(DBState.db.characters[0].imageThumbnail).toBe('assets/thumbhash.webp')
+        expect(DBState.db.characters[0].imageThumbnail).toBe('assets/thumbhash.png')
         expect(DBState.db.characters[0].imageThumbnailVersion).toBe(2)
         expect(DBState.db.characters[0].imageThumbnailSource).toBe('assets/full.png')
     })
@@ -314,11 +314,11 @@ describe('ensureCharacterSidebarImageThumbnail', () => {
             imageThumbnail: 'assets/old.webp',
         }]
 
-        await expect(ensureCharacterSidebarImageThumbnail(0)).resolves.toBe('assets/thumbhash.webp')
+        await expect(ensureCharacterSidebarImageThumbnail(0)).resolves.toBe('assets/thumbhash.png')
 
         expect(mocks.getFileSrc).not.toHaveBeenCalledWith('assets/old.webp')
         expect(mocks.readImage).toHaveBeenCalledWith('assets/full.png')
-        expect(DBState.db.characters[0].imageThumbnail).toBe('assets/thumbhash.webp')
+        expect(DBState.db.characters[0].imageThumbnail).toBe('assets/thumbhash.png')
         expect(DBState.db.characters[0].imageThumbnailVersion).toBe(2)
         expect(DBState.db.characters[0].imageThumbnailSource).toBe('assets/full.png')
     })
@@ -334,7 +334,7 @@ describe('ensureCharacterSidebarImageThumbnail', () => {
             imageThumbnailSource: 'assets/old.png',
         }]
 
-        await expect(ensureCharacterSidebarImageThumbnail(0)).resolves.toBe('assets/thumbhash.webp')
+        await expect(ensureCharacterSidebarImageThumbnail(0)).resolves.toBe('assets/thumbhash.png')
 
         expect(mocks.assetExists).not.toHaveBeenCalledWith('assets/old.webp')
         expect(mocks.readImage).toHaveBeenCalledWith('assets/new.png')
@@ -480,11 +480,11 @@ describe('makeGroupImage', () => {
         expect(mocks.getFileSrc).toHaveBeenCalledWith('assets/member-1.png')
         expect(mocks.getFileSrc).toHaveBeenCalledWith('assets/member-2.png')
         expect(DBState.db.characters[0].image).toBe('assets/generated-group.png')
-        expect(DBState.db.characters[0].imageThumbnail).toBe('assets/thumbhash.webp')
+        expect(DBState.db.characters[0].imageThumbnail).toBe('assets/thumbhash.png')
         expect(DBState.db.characters[0].imageThumbnailVersion).toBe(2)
         expect(DBState.db.characters[0].imageThumbnailSource).toBe('assets/generated-group.png')
         expect(mocks.saveImage).toHaveBeenCalledWith(expect.any(Uint8Array))
-        expect(mocks.saveImage).toHaveBeenCalledWith(expect.any(Uint8Array), 'thumbhash', 'thumbnail.webp')
+        expect(mocks.saveImage).toHaveBeenCalledWith(expect.any(Uint8Array), 'thumbhash', 'thumbnail.png')
     })
 
     test('keeps the generated group icon when thumbnail persistence fails', async () => {
