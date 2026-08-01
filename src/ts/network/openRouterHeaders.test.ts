@@ -48,4 +48,40 @@ describe('withOpenRouterAttributionHeaders', () => {
         })
         expect(result).not.toHaveProperty('X-OpenRouter-Title')
     })
+
+    it('preserves Headers instances from plugin RequestInit options', () => {
+        const input = new Headers({ Authorization: 'Bearer plugin-key' })
+        const result = new Headers(withOpenRouterAttributionHeaders(
+            'https://openrouter.ai/api/v1/chat/completions',
+            input,
+        ))
+
+        expect(result.get('Authorization')).toBe('Bearer plugin-key')
+        expect(result.get('HTTP-Referer')).toBe('https://risuai.xyz')
+        expect(result.get('X-OpenRouter-Title')).toBe('RisuAI')
+        expect(input.has('HTTP-Referer')).toBe(false)
+    })
+
+    it('preserves tuple-array headers from plugin RequestInit options', () => {
+        const input: [string, string][] = [['Authorization', 'Bearer plugin-key']]
+        const result = new Headers(withOpenRouterAttributionHeaders(
+            'https://openrouter.ai/api/v1/chat/completions',
+            input,
+        ))
+
+        expect(result.get('Authorization')).toBe('Bearer plugin-key')
+        expect(result.get('HTTP-Referer')).toBe('https://risuai.xyz')
+        expect(result.get('X-OpenRouter-Title')).toBe('RisuAI')
+        expect(input).toEqual([['Authorization', 'Bearer plugin-key']])
+    })
+
+    it('does not restore attribution headers explicitly removed after applying defaults', () => {
+        const headers = withOpenRouterAttributionHeaders('https://openrouter.ai/api/v1/chat/completions')
+        delete headers['HTTP-Referer']
+        delete headers['X-OpenRouter-Title']
+
+        expect(withOpenRouterAttributionHeaders('https://openrouter.ai/api/v1/chat/completions', headers)).toBe(headers)
+        expect(headers).not.toHaveProperty('HTTP-Referer')
+        expect(headers).not.toHaveProperty('X-OpenRouter-Title')
+    })
 })
