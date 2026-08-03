@@ -37,7 +37,7 @@
     getCharImage,
     getCharacterSidebarImage,
     ensureCharacterSidebarImageThumbnail,
-    clearCharacterImageThumbnail,
+    markCharacterImageThumbnailFailed,
   } from "../../ts/characters";
     import CharConfig from "./CharConfig.svelte";
     import { language } from "../../lang";
@@ -627,7 +627,7 @@
               src={getSidebarImageSource(char.index)}
               srcKey={getSidebarImageCacheKey(char.index)}
               onVisible={getSidebarThumbnailEnsurer(char.index)}
-              onError={() => clearCharacterImageThumbnail(char.index)}
+              onError={() => markCharacterImageThumbnailFailed(char.index)}
               size="56" 
               rounded={IconRounded} 
               name={char.name}
@@ -792,7 +792,7 @@
                   src={getSidebarImageSource(char2.index)}
                   srcKey={getSidebarImageCacheKey(char2.index)}
                   onVisible={getSidebarThumbnailEnsurer(char2.index)}
-                  onError={() => clearCharacterImageThumbnail(char2.index)}
+                  onError={() => markCharacterImageThumbnailFailed(char2.index)}
                   size="56" 
                   rounded={IconRounded} 
                   name={char2.name}

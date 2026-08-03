@@ -55,6 +55,10 @@ type CharacterImageType = 'plain'|'css'|'contain'|'lgcss'
 
 const thumbnailPromises = new Map<string, Promise<string>>()
 const characterImageThumbnailVersion = 2
+// Sources whose sidebar thumbnail failed to render. Remembered for the current
+// session so a decode/load failure cannot loop back into regeneration; picking
+// a new icon changes the key and starts a fresh attempt.
+const failedThumbnailSources = new Set<string>()
 
 type CharacterImageThumbnailHolder = {
     chaId?: string
@@ -81,6 +85,15 @@ export function clearCharacterImageThumbnail(charIndex: number) {
         return
     }
     clearImageThumbnail(char)
+}
+
+export function markCharacterImageThumbnailFailed(charIndex: number) {
+    const char = DBState.db.characters[charIndex]
+    if(!char?.image){
+        return
+    }
+    clearImageThumbnail(char)
+    failedThumbnailSources.add(getThumbnailPromiseKey(charIndex, char.image, char.chaId))
 }
 
 function getThumbnailPromiseKey(charIndex: number, image: string, chaId?: string) {
@@ -205,6 +218,9 @@ export async function ensureCharacterSidebarImageThumbnail(charIndex: number) {
         image: char.image,
     }
     const key = getThumbnailPromiseKey(charIndex, source.image, source.chaId)
+    if(failedThumbnailSources.has(key)){
+        return ''
+    }
     const pending = thumbnailPromises.get(key)
     if(pending){
         return await pending

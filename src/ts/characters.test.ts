@@ -92,7 +92,7 @@ vi.mock('./pngChunk', () => ({
 }))
 vi.mock('./process/coldstorage.svelte', () => ({ getColdStorageItem: vi.fn() }))
 
-import { clearCharacterImageThumbnail, ensureCharacterSidebarImageThumbnail, getCharacterSidebarImage, makeGroupImage, selectCharImg } from './characters'
+import { clearCharacterImageThumbnail, ensureCharacterSidebarImageThumbnail, getCharacterSidebarImage, markCharacterImageThumbnailFailed, makeGroupImage, selectCharImg } from './characters'
 import { DBState } from './stores.svelte'
 
 const originalCreateElement = document.createElement.bind(document)
@@ -458,6 +458,41 @@ describe('clearCharacterImageThumbnail', () => {
         expect(DBState.db.characters[0].imageThumbnail).toBe('')
         expect(DBState.db.characters[0].imageThumbnailVersion).toBeUndefined()
         expect(DBState.db.characters[0].imageThumbnailSource).toBeUndefined()
+    })
+})
+
+describe('markCharacterImageThumbnailFailed', () => {
+    test('clears the cached thumbnail and blocks regeneration for that source', async () => {
+        mocks.readImage.mockResolvedValue(new Uint8Array([1, 2, 3]))
+        ;(DBState.db as any).characters = [{
+            chaId: 'char-1',
+            image: 'assets/failed-source.png',
+            imageThumbnail: 'assets/broken.webp',
+            imageThumbnailVersion: 2,
+            imageThumbnailSource: 'assets/failed-source.png',
+        }]
+
+        markCharacterImageThumbnailFailed(0)
+
+        expect(DBState.db.characters[0].imageThumbnail).toBe('')
+        await expect(ensureCharacterSidebarImageThumbnail(0)).resolves.toBe('')
+        expect(mocks.readImage).not.toHaveBeenCalled()
+        expect(mocks.saveImage).not.toHaveBeenCalled()
+    })
+
+    test('still generates a thumbnail for a different source image', async () => {
+        installImageAndCanvasMocks()
+        mocks.readImage.mockResolvedValue(new Uint8Array([1, 2, 3]))
+        ;(DBState.db as any).characters = [{
+            chaId: 'char-1',
+            image: 'assets/another-source.png',
+        }]
+
+        await expect(ensureCharacterSidebarImageThumbnail(0)).resolves.toBe('assets/thumbhash.png')
+
+        expect(mocks.readImage).toHaveBeenCalledWith('assets/another-source.png')
+        expect(DBState.db.characters[0].imageThumbnail).toBe('assets/thumbhash.png')
+        expect(DBState.db.characters[0].imageThumbnailSource).toBe('assets/another-source.png')
     })
 })
 
