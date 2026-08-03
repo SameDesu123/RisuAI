@@ -120,12 +120,15 @@ async function createImageThumbnail(data: Uint8Array, maxSize = 192) {
         ctx.drawImage(image, 0, 0, width, height)
 
         const thumbBlob = await new Promise<Blob | null>((resolve) => {
-            canvas.toBlob((webpBlob) => {
-                if(webpBlob){
-                    resolve(webpBlob)
+            canvas.toBlob((encodedBlob) => {
+                if(!encodedBlob){
+                    resolve(null)
                     return
                 }
-                canvas.toBlob(resolve, 'image/png')
+                if(encodedBlob.type !== 'image/webp'){
+                    console.warn(`WebP encoding unavailable, falling back to ${encodedBlob.type}`)
+                }
+                resolve(encodedBlob)
             }, 'image/webp', 0.8)
         })
 
