@@ -978,7 +978,12 @@ export async function getUncleanables(db: Database, uptype: 'basename' | 'pure' 
             if(cha?.coldstorage){
                 const coldData = await getColdStorageItem(cha.coldstorage!)
                 if(coldData?.character && coldData.character.chaId === cha.chaId){
-                    cha = coldData.character
+                    // Keep both sides: the live stub preserves the current profile
+                    // image/thumbnail, while the cold payload contributes the rest
+                    // of the character assets (emotion images, CC assets, ...).
+                    chars.push(cha)
+                    chars.push(coldData.character)
+                    continue
                 }
             }
             chars.push(cha)
