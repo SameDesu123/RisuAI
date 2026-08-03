@@ -20,6 +20,7 @@
     chaId?: string;
     srcKey?: string;
     onVisible?: () => void | Promise<void>;
+    onError?: () => void;
   }
 
   let {
@@ -35,7 +36,8 @@
     oncontextmenu,
     chaId,
     srcKey,
-    onVisible
+    onVisible,
+    onError
   }: Props = $props();
 
   let avatarRoot: HTMLSpanElement;
@@ -199,6 +201,7 @@
         {#if img}
         <img
           src={img}
+          onerror={onError}
           class="bg-skin-border sidebar-avatar rounded-md object-cover object-top"
           style:width={size + "px"}
           style:height={size + "px"}
