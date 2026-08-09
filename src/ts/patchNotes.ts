@@ -1,3 +1,4 @@
+// Change this repository URL if you want to use release notes from a fork instead.
 const GITHUB_RELEASES_URL = 'https://api.github.com/repos/kwaroran/Risuai/releases'
 const PATCH_NOTE_CACHE_KEY = 'risu_patch_notes_cache_v1'
 const PATCH_NOTE_CACHE_VERSION = 1
