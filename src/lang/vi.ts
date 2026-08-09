@@ -860,7 +860,7 @@ export const languageVietnamese = {
     "popularityLevel": "{} Mức độ phổ biến",
     "colorScheme": "Bảng màu",
     "customColorContrastTitle": "Độ dễ đọc của văn bản",
-    "customColorContrastDescription": "Độ tương phản cao hơn giúp văn bản dễ đọc hơn. Khuyến nghị mức AA trở lên cho văn bản thông thường.",
+    "customColorContrastDescription": "Tính theo tiêu chuẩn độ tương phản WCAG. Độ tương phản cao hơn giúp dễ đọc hơn; khuyến nghị AA trở lên cho văn bản thông thường.",
     "customColorContrastTextBackground": "Văn bản / Nền",
     "customColorContrastTextDarkBackground": "Văn bản / Nền tối",
     "customColorContrastText2Background": "Văn bản 2 / Nền",

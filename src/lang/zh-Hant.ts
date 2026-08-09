@@ -864,7 +864,7 @@ export const languageChineseTraditional = {
     "popularityLevel": "人氣 {}",
     "colorScheme": "配色方案",
     "customColorContrastTitle": "文字易讀性",
-    "customColorContrastDescription": "對比度越高，文字越容易閱讀。一般文字建議達到 AA 或更高等級。",
+    "customColorContrastDescription": "依 WCAG 對比度標準計算。對比度越高越容易閱讀；一般文字建議達到 AA 或更高等級。",
     "customColorContrastTextBackground": "文字 / 背景",
     "customColorContrastTextDarkBackground": "文字 / 深色背景",
     "customColorContrastText2Background": "文字 2 / 背景",

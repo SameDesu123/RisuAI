@@ -881,7 +881,7 @@ export const languageKorean = {
     "popularityLevel": "{} 인기도",
     "colorScheme": "색상 팔레트",
     "customColorContrastTitle": "텍스트 가독성",
-    "customColorContrastDescription": "대비가 높을수록 글자를 읽기 쉬워집니다. 일반 텍스트에는 AA 이상을 권장합니다.",
+    "customColorContrastDescription": "WCAG 대비 기준으로 계산합니다. 대비가 높을수록 읽기 쉬우며, 일반 텍스트에는 AA 이상을 권장합니다.",
     "customColorContrastTextBackground": "텍스트 / 배경",
     "customColorContrastTextDarkBackground": "텍스트 / 어두운 배경",
     "customColorContrastText2Background": "텍스트 2 / 배경",

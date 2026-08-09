@@ -860,7 +860,7 @@ export const languageGerman = {
     "popularityLevel": "{} Beliebtheit",
     "colorScheme": "Farbschema",
     "customColorContrastTitle": "Textlesbarkeit",
-    "customColorContrastDescription": "Ein höherer Kontrast erleichtert das Lesen. Für normalen Text wird mindestens AA empfohlen.",
+    "customColorContrastDescription": "Berechnet nach den WCAG-Kontrastrichtlinien. Ein höherer Kontrast erleichtert das Lesen; für normalen Text wird mindestens AA empfohlen.",
     "customColorContrastTextBackground": "Text / Hintergrund",
     "customColorContrastTextDarkBackground": "Text / Dunkler Hintergrund",
     "customColorContrastText2Background": "Text 2 / Hintergrund",

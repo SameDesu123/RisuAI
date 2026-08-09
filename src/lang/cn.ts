@@ -860,7 +860,7 @@ export const languageChinese = {
     "popularityLevel": "{} 人气",
     "colorScheme": "配色方案",
     "customColorContrastTitle": "文本可读性",
-    "customColorContrastDescription": "对比度越高，文本越容易阅读。普通文本建议达到 AA 或更高等级。",
+    "customColorContrastDescription": "按 WCAG 对比度标准计算。对比度越高越易阅读；普通文本建议达到 AA 或更高等级。",
     "customColorContrastTextBackground": "文本 / 背景",
     "customColorContrastTextDarkBackground": "文本 / 深色背景",
     "customColorContrastText2Background": "文本 2 / 背景",

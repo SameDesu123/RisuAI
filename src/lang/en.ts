@@ -1019,7 +1019,7 @@ export const languageEnglish = {
     popularityLevel: "{} Popularity",
     colorScheme: "Color Scheme",
     customColorContrastTitle: "Text Readability",
-    customColorContrastDescription: "Higher contrast makes text easier to read. AA is recommended for normal text.",
+    customColorContrastDescription: "Calculated using WCAG contrast guidelines. Higher contrast makes text easier to read; AA is recommended for normal text.",
     customColorContrastTextBackground: "Text / Background",
     customColorContrastTextDarkBackground: "Text / Dark Background",
     customColorContrastText2Background: "Text 2 / Background",
