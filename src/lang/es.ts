@@ -859,6 +859,7 @@ export const languageSpanish = {
     "hideAllImages": "Ocultar todas las imágenes",
     "popularityLevel": "{} Popularidad",
     "colorScheme": "Esquema de Colores",
+    "showCustomColorContrast": "Mostrar información de contraste WCAG",
     "customColorContrastTitle": "Legibilidad del texto",
     "customColorContrastDescription": "Calculado según las pautas de contraste WCAG. Un mayor contraste facilita la lectura; se recomienda AA o superior para texto normal.",
     "customColorContrastTextBackground": "Texto / Fondo",

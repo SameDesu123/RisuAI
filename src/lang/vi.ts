@@ -859,6 +859,7 @@ export const languageVietnamese = {
     "hideAllImages": "Ẩn tất cả hình ảnh",
     "popularityLevel": "{} Mức độ phổ biến",
     "colorScheme": "Bảng màu",
+    "showCustomColorContrast": "Hiển thị thông tin độ tương phản WCAG",
     "customColorContrastTitle": "Độ dễ đọc của văn bản",
     "customColorContrastDescription": "Tính theo tiêu chuẩn độ tương phản WCAG. Độ tương phản cao hơn giúp dễ đọc hơn; khuyến nghị AA trở lên cho văn bản thông thường.",
     "customColorContrastTextBackground": "Văn bản / Nền",

@@ -1018,6 +1018,7 @@ export const languageEnglish = {
     hideAllImages: "Hide All Images",
     popularityLevel: "{} Popularity",
     colorScheme: "Color Scheme",
+    showCustomColorContrast: "Show WCAG Contrast Information",
     customColorContrastTitle: "Text Readability",
     customColorContrastDescription: "Calculated using WCAG contrast guidelines. Higher contrast makes text easier to read; AA is recommended for normal text.",
     customColorContrastTextBackground: "Text / Background",

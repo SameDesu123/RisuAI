@@ -136,40 +136,42 @@
             </button>
         </div>
 
-        <div class="contrast-section mt-4 pt-3 border-t border-darkborderc">
-            <div class="font-semibold">{language.customColorContrastTitle}</div>
-            <div class="mt-1 text-sm text-textcolor2">
-                {language.customColorContrastDescription}
-            </div>
+        {#if DBState.db.showCustomColorContrast}
+            <div class="contrast-section mt-4 pt-3 border-t border-darkborderc">
+                <div class="font-semibold">{language.customColorContrastTitle}</div>
+                <div class="mt-1 text-sm text-textcolor2">
+                    {language.customColorContrastDescription}
+                </div>
 
-            <div class="mt-3 flex flex-col gap-2">
-                {#each contrastChecks as check}
-                    <div class="contrast-row flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
-                        <div class="contrast-pair flex items-center min-w-0">
-                            <span
-                                class="contrast-preview border border-darkborderc"
-                                style:color={check.foreground}
-                                style:background={check.background}
-                                aria-hidden="true"
-                            >Aa</span>
-                            <span class="ml-2">{getContrastPairLabel(check.pair)}</span>
-                        </div>
-                        {#if check.ratio !== null && check.rating !== null}
-                            <div class="contrast-result shrink-0">
-                                <span class="contrast-ratio tabular-nums">{check.ratio.toFixed(2)} : 1</span>
-                                <span class="contrast-rating text-textcolor2">
-                                    {getContrastRatingLabel(check.rating)} ({getContrastRatingDetail(check.rating)})
-                                </span>
+                <div class="mt-3 flex flex-col gap-2">
+                    {#each contrastChecks as check}
+                        <div class="contrast-row flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
+                            <div class="contrast-pair flex items-center min-w-0">
+                                <span
+                                    class="contrast-preview border border-darkborderc"
+                                    style:color={check.foreground}
+                                    style:background={check.background}
+                                    aria-hidden="true"
+                                >Aa</span>
+                                <span class="ml-2">{getContrastPairLabel(check.pair)}</span>
                             </div>
-                        {:else}
-                            <span class="contrast-unavailable shrink-0 text-textcolor2">
-                                {language.customColorContrastUnavailable}
-                            </span>
-                        {/if}
-                    </div>
-                {/each}
+                            {#if check.ratio !== null && check.rating !== null}
+                                <div class="contrast-result shrink-0">
+                                    <span class="contrast-ratio tabular-nums">{check.ratio.toFixed(2)} : 1</span>
+                                    <span class="contrast-rating text-textcolor2">
+                                        {getContrastRatingLabel(check.rating)} ({getContrastRatingDetail(check.rating)})
+                                    </span>
+                                </div>
+                            {:else}
+                                <span class="contrast-unavailable shrink-0 text-textcolor2">
+                                    {language.customColorContrastUnavailable}
+                                </span>
+                            {/if}
+                        </div>
+                    {/each}
+                </div>
             </div>
-        </div>
+        {/if}
 
     </div>
 {/if}

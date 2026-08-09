@@ -390,6 +390,7 @@ export function setDatabase(data:Database){
     data.colorScheme ??= safeStructuredClone(defaultColorScheme)
     data.colorSchemeName ??= 'default'
     data.customColorScheme ??= safeStructuredClone(data.colorSchemeName === 'custom' ? data.colorScheme : defaultColorScheme)
+    data.showCustomColorContrast ??= false
     data.NAIsettings.starter ??= ""
     data.hypaModel ??= 'MiniLM'
     data.mancerHeader ??= ''
@@ -961,6 +962,7 @@ export interface Database{
     colorScheme:ColorScheme
     colorSchemeName:string
     customColorScheme:ColorScheme
+    showCustomColorContrast:boolean
     promptTemplate?:PromptItem[]
     forceProxyAsOpenAI?:boolean
     hypaModel:HypaModel

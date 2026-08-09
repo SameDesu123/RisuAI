@@ -863,6 +863,7 @@ export const languageChineseTraditional = {
     "hideAllImages": "隱藏所有圖片",
     "popularityLevel": "人氣 {}",
     "colorScheme": "配色方案",
+    "showCustomColorContrast": "顯示 WCAG 對比度資訊",
     "customColorContrastTitle": "文字易讀性",
     "customColorContrastDescription": "依 WCAG 對比度標準計算。對比度越高越容易閱讀；一般文字建議達到 AA 或更高等級。",
     "customColorContrastTextBackground": "文字 / 背景",

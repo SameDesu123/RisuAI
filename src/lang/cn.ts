@@ -859,6 +859,7 @@ export const languageChinese = {
     "hideAllImages": "隐藏所有图片",
     "popularityLevel": "{} 人气",
     "colorScheme": "配色方案",
+    "showCustomColorContrast": "显示 WCAG 对比度信息",
     "customColorContrastTitle": "文本可读性",
     "customColorContrastDescription": "按 WCAG 对比度标准计算。对比度越高越易阅读；普通文本建议达到 AA 或更高等级。",
     "customColorContrastTextBackground": "文本 / 背景",
