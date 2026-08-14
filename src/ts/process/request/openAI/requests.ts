@@ -282,6 +282,9 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
 
         const requestURL = arg.customURL ?? "https://api.mistral.ai/v1/chat/completions"
         const networkOptions = getLocalNetworkRequestOptions(requestURL, db, false)
+        const headers = withOpenRouterAttributionHeaders(requestURL, {
+            "Authorization": "Bearer " + (arg.key ?? db.mistralKey),
+        })
 
         const targs = {
             body: applyParameters({
@@ -292,9 +295,7 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
             }, ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'], {}, arg.mode, {
                 modelId: arg.modelInfo.id
             } ),
-            headers: {
-                "Authorization": "Bearer " + (arg.key ?? db.mistralKey),
-            },
+            headers,
             abortSignal: arg.abortSignal,
             chatId: arg.chatId,
             interceptor: 'mistral',
@@ -939,14 +940,16 @@ export async function requestOpenAILegacyInstruct(arg:RequestDataArgumentExtende
         frequency_penalty: arg.frequencyPenalty || (db.frequencyPenalty / 100),
     }
 
-    let headers:any = {
+    const requestURL = arg.customURL ?? "https://api.openai.com/v1/completions"
+    let headers: Record<string, string> = {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + (arg.key ?? db.openAIKey)
     }
 
+    headers = withOpenRouterAttributionHeaders(requestURL, headers)
     body = applyAdditionalParameters(body, headers, getAdditionalParameters(arg.aiModel))
 
-    const response = await globalFetch(arg.customURL ?? "https://api.openai.com/v1/completions", {
+    const response = await globalFetch(requestURL, {
         body: body,
         headers: headers,
         chatId: arg.chatId,
