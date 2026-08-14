@@ -2,6 +2,18 @@ export type PluginPermission = 'fetchLogs' | 'db' | 'mainDom' | 'replacer' | 'pr
 
 type PluginScriptHasher = (data: Uint8Array) => Promise<string>
 
+export async function runWithPluginPermission<T>(
+    requestPermission: () => Promise<boolean>,
+    onAllowed: () => Promise<T>,
+    deniedResult: T,
+): Promise<T> {
+    if (!(await requestPermission())) {
+        return deniedResult
+    }
+
+    return onAllowed()
+}
+
 export function createPluginScriptHashGetter(script: string, hasher: PluginScriptHasher): () => Promise<string> {
     let scriptHash: Promise<string> | undefined
 

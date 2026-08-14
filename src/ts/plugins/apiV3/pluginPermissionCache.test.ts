@@ -1,9 +1,38 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
     createPluginScriptHashGetter,
     getPluginPermissionKey,
     PluginPermissionSessionCache,
+    runWithPluginPermission,
 } from './pluginPermissionCache'
+
+describe('runWithPluginPermission', () => {
+    it('does not invoke the protected callback when permission is denied', async () => {
+        const onAllowed = vi.fn(async () => 'allowed')
+
+        const result = await runWithPluginPermission(
+            async () => false,
+            onAllowed,
+            'denied',
+        )
+
+        expect(result).toBe('denied')
+        expect(onAllowed).not.toHaveBeenCalled()
+    })
+
+    it('invokes the protected callback when permission is granted', async () => {
+        const onAllowed = vi.fn(async () => 'allowed')
+
+        const result = await runWithPluginPermission(
+            async () => true,
+            onAllowed,
+            'denied',
+        )
+
+        expect(result).toBe('allowed')
+        expect(onAllowed).toHaveBeenCalledOnce()
+    })
+})
 
 describe('createPluginScriptHashGetter', () => {
     it('hashes the loaded plugin script only once', async () => {

@@ -1,6 +1,6 @@
 import { allowedDbKeys, customProviderStore, getV2PluginAPIs, handlePluginInstallViaPlugin, pluginV2, type PluginV2ProviderArgument, type PluginV2ProviderOptions, type RisuPlugin } from "../plugins.svelte";
 import { SandboxHost } from "./factory";
-import { createPluginScriptHashGetter, getPluginPermissionKey, PluginPermissionSessionCache, type PluginPermission } from "./pluginPermissionCache";
+import { createPluginScriptHashGetter, getPluginPermissionKey, PluginPermissionSessionCache, runWithPluginPermission, type PluginPermission } from "./pluginPermissionCache";
 import { getDatabase } from "src/ts/storage/database.svelte";
 import { SafeLocalPluginStorage, tagWhitelist } from "../pluginSafeClass";
 import DOMPurify from 'dompurify';
@@ -676,12 +676,20 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             console.warn(`[WARN] addProvider is a powerful API that can potentially be unsafe if used incorrectly. addProvider's functionality might be limited or changed in future updates to ensure security. please use other APIs if possible.`);
             let provs = get(customProviderStore)
             provs.push(name)
-            pluginV2.providers.set(name, async (arg, abortSignal) => {
-               await getPermission('provider', 'periodically');
-               //mode is overridden to v3, due to vulnerabilities using mode.
-               //Alternative to mode will be added in future
-               arg.mode = 'v3'
-               return await func(arg, abortSignal);
+            pluginV2.providers.set(name, (arg, abortSignal) => {
+                return runWithPluginPermission(
+                    () => getPermission('provider', 'periodically'),
+                    async () => {
+                        //mode is overridden to v3, due to vulnerabilities using mode.
+                        //Alternative to mode will be added in future
+                        arg.mode = 'v3'
+                        return func(arg, abortSignal);
+                    },
+                    {
+                        success: false,
+                        content: language.providerPermissionDenied,
+                    },
+                )
             }),
             pluginV2.providerOptions.set(name, options ?? {})
             customProviderStore.set(provs)
