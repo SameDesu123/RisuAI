@@ -1,5 +1,16 @@
 export type PluginPermission = 'fetchLogs' | 'db' | 'mainDom' | 'replacer' | 'provider' | 'sendChat'
 
+type PluginScriptHasher = (data: Uint8Array) => Promise<string>
+
+export function createPluginScriptHashGetter(script: string, hasher: PluginScriptHasher): () => Promise<string> {
+    let scriptHash: Promise<string> | undefined
+
+    return () => {
+        scriptHash ??= hasher(new TextEncoder().encode(script))
+        return scriptHash
+    }
+}
+
 export function getPluginPermissionKey(scriptHash: string, permission: PluginPermission): string {
     return `${scriptHash}_${permission}`
 }

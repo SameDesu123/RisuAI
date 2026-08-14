@@ -1,8 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import {
+    createPluginScriptHashGetter,
     getPluginPermissionKey,
     PluginPermissionSessionCache,
 } from './pluginPermissionCache'
+
+describe('createPluginScriptHashGetter', () => {
+    it('hashes the loaded plugin script only once', async () => {
+        let hashCalls = 0
+        const getScriptHash = createPluginScriptHashGetter('plugin-script', async (data) => {
+            hashCalls++
+            expect(new TextDecoder().decode(data)).toBe('plugin-script')
+            return 'script-hash'
+        })
+
+        expect(hashCalls).toBe(0)
+
+        const hashes = await Promise.all([
+            getScriptHash(),
+            getScriptHash(),
+            getScriptHash(),
+        ])
+
+        expect(hashes).toEqual(['script-hash', 'script-hash', 'script-hash'])
+        expect(hashCalls).toBe(1)
+    })
+})
 
 describe('PluginPermissionSessionCache', () => {
     it('keeps permission decisions isolated by permission', () => {
