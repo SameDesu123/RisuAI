@@ -6,11 +6,11 @@ describe('withOpenRouterAttributionHeaders', () => {
     it('adds attribution headers for OpenRouter and its subdomains', () => {
         expect(withOpenRouterAttributionHeaders('https://openrouter.ai/api/v1/chat/completions')).toEqual({
             'HTTP-Referer': 'https://risuai.xyz',
-            'X-OpenRouter-Title': 'RisuAI',
+            'X-OpenRouter-Title': 'Risuai',
         })
         expect(withOpenRouterAttributionHeaders('https://api.openrouter.ai/v1/models')).toEqual({
             'HTTP-Referer': 'https://risuai.xyz',
-            'X-OpenRouter-Title': 'RisuAI',
+            'X-OpenRouter-Title': 'Risuai',
         })
     })
 
@@ -58,7 +58,7 @@ describe('withOpenRouterAttributionHeaders', () => {
 
         expect(result.get('Authorization')).toBe('Bearer plugin-key')
         expect(result.get('HTTP-Referer')).toBe('https://risuai.xyz')
-        expect(result.get('X-OpenRouter-Title')).toBe('RisuAI')
+        expect(result.get('X-OpenRouter-Title')).toBe('Risuai')
         expect(input.has('HTTP-Referer')).toBe(false)
     })
 
@@ -71,8 +71,17 @@ describe('withOpenRouterAttributionHeaders', () => {
 
         expect(result.get('Authorization')).toBe('Bearer plugin-key')
         expect(result.get('HTTP-Referer')).toBe('https://risuai.xyz')
-        expect(result.get('X-OpenRouter-Title')).toBe('RisuAI')
+        expect(result.get('X-OpenRouter-Title')).toBe('Risuai')
         expect(input).toEqual([['Authorization', 'Bearer plugin-key']])
+    })
+
+    it('joins repeated tuple-array header values like the Headers API', () => {
+        const result = new Headers(withOpenRouterAttributionHeaders(
+            'https://openrouter.ai/api/v1/chat/completions',
+            [['X-Plugin-Value', 'one'], ['x-plugin-value', 'two']],
+        ))
+
+        expect(result.get('X-Plugin-Value')).toBe('one, two')
     })
 
     it('does not restore attribution headers explicitly removed after applying defaults', () => {

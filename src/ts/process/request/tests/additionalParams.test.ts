@@ -64,4 +64,32 @@ describe("applyAdditionalParameters", () => {
             "X-Custom": "kept",
         });
     });
+
+    it("replaces OpenRouter title aliases and differently-cased referers", () => {
+        const headers = withOpenRouterAttributionHeaders("https://openrouter.ai/api/v1", {
+            Authorization: "Bearer test-key",
+        });
+
+        applyAdditionalParameters({}, headers, [
+            ["header::X-Title", "MyApp"],
+            ["header::http-referer", "https://example.com"],
+        ]);
+
+        expect(headers).toEqual({
+            Authorization: "Bearer test-key",
+            "X-Title": "MyApp",
+            "http-referer": "https://example.com",
+        });
+    });
+
+    it("keeps exact header deletion semantics outside OpenRouter", () => {
+        const headers = {
+            "X-Title": "remove",
+            "x-title": "keep",
+        };
+
+        applyAdditionalParameters({}, headers, [["header::X-Title", "{{none}}"]]);
+
+        expect(headers).toEqual({ "x-title": "keep" });
+    });
 });
