@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod memory_watchdog;
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -578,6 +580,12 @@ fn main() {
     }
 
     builder
+        .setup(|app| {
+            if let Err(error) = memory_watchdog::start(app.handle()) {
+                eprintln!("[memory-watchdog] failed to start: {error}");
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
@@ -597,7 +605,9 @@ fn main() {
             run_py_server,
             install_py_dependencies,
             streamed_fetch,
-            oauth_login
+            oauth_login,
+            memory_watchdog::memory_watchdog_event,
+            memory_watchdog::memory_watchdog_log_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application")
