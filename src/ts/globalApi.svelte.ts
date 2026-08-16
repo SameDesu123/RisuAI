@@ -45,6 +45,7 @@ import { isTauri, isNodeServer } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
+import { registerMemoryWatchdogProbe } from "./debug/memoryWatchdog";
 
 export const forageStorage = new AutoStorage()
 
@@ -1330,6 +1331,43 @@ let fetchIndex = 0
  * @type {{ [key: string]: StreamedFetchChunk[] }}
  */
 let nativeFetchData: { [key: string]: StreamedFetchChunk[] } = {}
+
+registerMemoryWatchdogProbe('fetch', () => {
+    let requestChars = 0
+    let responseChars = 0
+    let headerChars = 0
+    for (const entry of fetchLog) {
+        requestChars += entry.body?.length ?? 0
+        responseChars += entry.response?.length ?? 0
+        headerChars += entry.header?.length ?? 0
+    }
+
+    let queuedChunks = 0
+    let queuedBodyChars = 0
+    let activeQueues = 0
+    for (const queue of Object.values(nativeFetchData)) {
+        if (queue.length > 0) {
+            activeQueues += 1
+        }
+        queuedChunks += queue.length
+        for (const chunk of queue) {
+            if (chunk.type === 'chunk') {
+                queuedBodyChars += chunk.body.length
+            }
+        }
+    }
+
+    return [
+        `fetch_log_entries=${fetchLog.length}`,
+        `fetch_log_request_chars=${requestChars}`,
+        `fetch_log_response_chars=${responseChars}`,
+        `fetch_log_header_chars=${headerChars}`,
+        `native_fetch_queues=${Object.keys(nativeFetchData).length}`,
+        `native_fetch_active_queues=${activeQueues}`,
+        `native_fetch_queued_chunks=${queuedChunks}`,
+        `native_fetch_queued_body_chars=${queuedBodyChars}`,
+    ].join(';')
+})
 
 /**
  * Interface representing a streamed fetch chunk data.

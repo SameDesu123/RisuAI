@@ -46,13 +46,32 @@ import { isTauri } from "./platform";
 import { registerModelDynamic } from "./model/modellist";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
+import { registerMemoryWatchdogProbe, startMemoryWatchdogFrontendProbe } from "./debug/memoryWatchdog";
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
+
+registerMemoryWatchdogProbe('db', () => {
+    const db = DBState.db
+    const selectedIndex = get(selectedCharID)
+    const character = db?.characters?.[selectedIndex]
+    const selectedChat = character?.chats?.[character?.chatPage ?? 0]
+
+    return [
+        `characters=${db?.characters?.length ?? 0}`,
+        `character_order=${db?.characterOrder?.length ?? 0}`,
+        `selected_character=${selectedIndex}`,
+        `selected_character_chats=${character?.chats?.length ?? 0}`,
+        `selected_chat_messages=${selectedChat?.message?.length ?? 0}`,
+        `coldstorage=${Boolean(db?.coldstorage)}`,
+        `prompt_info_inside_chat=${Boolean(db?.promptInfoInsideChat)}`,
+    ].join(';')
+})
 
 /**
  * Loads the application data.
  */
 export async function loadData() {
+    startMemoryWatchdogFrontendProbe()
     const loaded = get(loadedStore)
     if (!loaded) {
         try {
