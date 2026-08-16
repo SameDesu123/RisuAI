@@ -52,6 +52,7 @@
     import QuickSettingsGui from "../Others/QuickSettingsGUI.svelte";
     import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
     import { RISU_SIDEBAR_DRAG_TYPE } from "src/ts/dragTypes";
+    import { memoryWatchdogEvent } from "src/ts/debug/memoryWatchdog";
   let sideBarMode = $state(0);
   let editMode = $state(false);
   let menuMode = $state(0);
@@ -123,6 +124,11 @@
     }
     if (!isEqual(charImages, newCharImages)) {
       charImages = newCharImages;
+      let normalCharacters = 0
+      for (const item of newCharImages) {
+        normalCharacters += item.type === 'normal' ? 1 : item.folder.length
+      }
+      memoryWatchdogEvent('sidebar.list.update', `entries=${newCharImages.length};characters=${normalCharacters}`)
     }
     if(IconRounded !== DBState.db.roundIcons){
       IconRounded = DBState.db.roundIcons

@@ -441,10 +441,18 @@ async fn streamed_fetch(
     method: String,
     timeout_secs: Option<u64>,
 ) -> String {
+    memory_watchdog::log_event(
+        "native",
+        "native_fetch.start",
+        &format!("id={id};method={method};body_base64_chars={};timeout_secs={}", body.len(), timeout_secs.unwrap_or(240)),
+    );
     //parse headers
     let headers_json: Value = match serde_json::from_str(&headers) {
         Ok(h) => h,
-        Err(e) => return format!(r#"{{"success":false, body:{}}}"#, e.to_string()),
+        Err(e) => {
+            memory_watchdog::log_event("native", "native_fetch.error", &format!("id={id};error={e}"));
+            return format!(r#"{{"success":false, body:{}}}"#, e.to_string());
+        },
     };
 
     let mut headers = HeaderMap::new();
@@ -470,6 +478,7 @@ async fn streamed_fetch(
     if method == "POST" {
 
         let body_decoded = general_purpose::STANDARD.decode(body.as_bytes()).unwrap();
+        memory_watchdog::log_event("native", "native_fetch.body_decoded", &format!("id={id};decoded_bytes={}", body_decoded.len()));
 
         builder = client
         .post(&url)
@@ -486,6 +495,7 @@ async fn streamed_fetch(
     else if method == "PUT" {
 
         let body_decoded = general_purpose::STANDARD.decode(body.as_bytes()).unwrap();
+        memory_watchdog::log_event("native", "native_fetch.body_decoded", &format!("id={id};decoded_bytes={}", body_decoded.len()));
 
         builder = client
         .put(&url)
@@ -496,6 +506,7 @@ async fn streamed_fetch(
     else if method == "DELETE" {
 
         let body_decoded = general_purpose::STANDARD.decode(body.as_bytes()).unwrap();
+        memory_watchdog::log_event("native", "native_fetch.body_decoded", &format!("id={id};decoded_bytes={}", body_decoded.len()));
 
         builder = client
         .delete(&url)
@@ -515,7 +526,11 @@ async fn streamed_fetch(
 
     match response {
         Ok(mut resp) => {
+            let mut streamed_bytes = 0usize;
+            let mut chunk_count = 0usize;
+            let mut logged_first_chunk = false;
             let headers = resp.headers();
+            memory_watchdog::log_event("native", "native_fetch.headers", &format!("id={id};status={}", resp.status().as_u16()));
             let header_json = header_map_to_json(headers);
             app.emit(
                 "streamed_fetch",
@@ -535,6 +550,12 @@ async fn streamed_fetch(
                             break;
                         }
                         let chunk = chunk.unwrap();
+                        chunk_count += 1;
+                        streamed_bytes = streamed_bytes.saturating_add(chunk.len());
+                        if !logged_first_chunk {
+                            memory_watchdog::log_event("native", "native_fetch.first_chunk", &format!("id={id};bytes={}", chunk.len()));
+                            logged_first_chunk = true;
+                        }
                         let encoded = general_purpose::STANDARD.encode(chunk);
                         let emited = app.emit(
                             "streamed_fetch",
@@ -547,11 +568,15 @@ async fn streamed_fetch(
                         match emited {
                             Ok(_) => {}
                             Err(e) => {
+                                memory_watchdog::log_event("native", "native_fetch.emit_error", &format!("id={id};error={e}"));
                                 return format!(r#"{{"success":false, body:{}}}"#, e.to_string())
                             }
                         }
                     }
-                    Err(e) => return format!(r#"{{"success":false, body:{}}}"#, e.to_string()),
+                    Err(e) => {
+                        memory_watchdog::log_event("native", "native_fetch.stream_error", &format!("id={id};error={e}"));
+                        return format!(r#"{{"success":false, body:{}}}"#, e.to_string());
+                    },
                 }
             }
             app.emit(
@@ -559,9 +584,13 @@ async fn streamed_fetch(
                 &format!(r#"{{"type": "end", "id": "{}"}}"#, id),
             )
             .unwrap();
+            memory_watchdog::log_event("native", "native_fetch.end", &format!("id={id};chunks={chunk_count};streamed_bytes={streamed_bytes}"));
             return "{\"success\":true}".to_string();
         }
-        Err(e) => return format!(r#"{{"success":false, body:{}}}"#, e.to_string()),
+        Err(e) => {
+            memory_watchdog::log_event("native", "native_fetch.request_error", &format!("id={id};error={e}"));
+            return format!(r#"{{"success":false, body:{}}}"#, e.to_string());
+        },
     }
 }
 

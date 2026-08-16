@@ -11,6 +11,7 @@ import {
     mkdir,
     readFile,
 } from "@tauri-apps/plugin-fs"
+import { memoryWatchdogEvent } from "../debug/memoryWatchdog"
 
 const packr = new Packr({
     useRecords:false
@@ -431,6 +432,12 @@ export class RisuSaveDecoder {
     }[] = []
     async decode(data: Uint8Array): Promise<Database> {
         console.log('Decoding RisuSave data');
+        memoryWatchdogEvent('decoder.risusave.start', `input_bytes=${data.byteLength}`)
+        let decodedBlockTextChars = 0
+        let cachedBlockTextChars = 0
+        let compressedBlockCount = 0
+        let remoteDecodedChars = 0
+        let parsedCharacterBlocks = 0
         let offset = magicRisuSaveHeader.length;
         //@ts-expect-error Database has required fields, but we initialize empty and populate incrementally during decode
         let db:Database = {}
@@ -456,6 +463,7 @@ export class RisuSaveDecoder {
                 offset += length;
 
                 if (compression) {
+                    compressedBlockCount += 1
                     //decode using DecompressionStream
                     await checkCompressionStreams();
                     const cs = new DecompressionStream('gzip');
@@ -467,16 +475,19 @@ export class RisuSaveDecoder {
                 }
 
                 loadedBlocks.add(name);
+                const decodedBlock = new TextDecoder().decode(blockData)
+                decodedBlockTextChars += decodedBlock.length
                 this.blocks.push({
                     name,
                     type,
                     compression,
-                    content: new TextDecoder().decode(blockData)
+                    content: decodedBlock
                 })   
             } catch (error) {
                 continue
             }
         }
+        memoryWatchdogEvent('decoder.blocks.loaded', `blocks=${this.blocks.length};text_chars=${decodedBlockTextChars};compressed_blocks=${compressedBlockCount}`)
         console.log('blocks',this.blocks)
         let directory: string[] = []
         for(let i = 0; i < this.blocks.length; i++){
@@ -503,6 +514,7 @@ export class RisuSaveDecoder {
                                             } = await risuSaveCacheForage.getItem(`risuSaveBlock_${dirKey}`) as any;
 
                                             if(dirData){
+                                                cachedBlockTextChars += dirData.data.length
                                                 this.blocks.push({
                                                     name: dirData.name,
                                                     type: dirData.type,
@@ -525,6 +537,10 @@ export class RisuSaveDecoder {
                         db.characters ??= [];
                         const character = JSON.parse(this.blocks[key].content);
                         db.characters.push(character);
+                        parsedCharacterBlocks += 1
+                        if (parsedCharacterBlocks % 50 === 0) {
+                            memoryWatchdogEvent('decoder.characters.progress', `parsed_characters=${parsedCharacterBlocks};blocks=${this.blocks.length};text_chars=${decodedBlockTextChars + cachedBlockTextChars + remoteDecodedChars}`)
+                        }
                         break
                     }
                     case RisuSaveType.BOTPRESET:{
@@ -580,6 +596,7 @@ export class RisuSaveDecoder {
                             break;
                         }
                         const decoded = new TextDecoder().decode(remoteData)
+                        remoteDecodedChars += decoded.length
 
                         //add to blocks for further processing
                         this.blocks.push({
@@ -615,6 +632,7 @@ export class RisuSaveDecoder {
             db.botPresets = [presetTemplate]
             db.botPresetsId = 0
         }
+        memoryWatchdogEvent('decoder.risusave.end', `blocks=${this.blocks.length};initial_text_chars=${decodedBlockTextChars};cached_text_chars=${cachedBlockTextChars};remote_text_chars=${remoteDecodedChars};parsed_characters=${parsedCharacterBlocks};characters=${db.characters?.length ?? 0}`)
         console.log('Decoded RisuSave data', db);
         return db;
     }

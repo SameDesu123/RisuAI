@@ -46,7 +46,7 @@ import { isTauri } from "./platform";
 import { registerModelDynamic } from "./model/modellist";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
-import { registerMemoryWatchdogProbe, startMemoryWatchdogFrontendProbe } from "./debug/memoryWatchdog";
+import { memoryWatchdogEvent, registerMemoryWatchdogProbe, startMemoryWatchdogFrontendProbe } from "./debug/memoryWatchdog";
 
 const appWindow = isTauri ? getCurrentWebviewWindow() : null
 
@@ -76,6 +76,7 @@ export async function loadData() {
     if (!loaded) {
         try {
             if (isTauri) {
+                memoryWatchdogEvent("db.load.start")
                 LoadingStatusState.text = "Checking Files..."
                 appWindow.maximize()
                 if (!await exists('', { baseDir: BaseDirectory.AppData })) {
@@ -95,16 +96,22 @@ export async function loadData() {
                     LoadingStatusState.text = "Reading Save File..."
                     const dbPath = await join(appDataDirPath, 'database/database.bin');
                     const assetUrl = convertFileSrc(dbPath);
+                    memoryWatchdogEvent("db.read.start")
                     const response = await fetch(assetUrl);
                     if (!response.ok) {
                         throw new Error(`Failed to load database: ${response.status}`);
                     }
                     const readed = new Uint8Array(await response.arrayBuffer());
+                    memoryWatchdogEvent("db.read.end", `bytes=${readed.byteLength}`)
                     LoadingStatusState.text = "Cleaning Unnecessary Files..."
                     getDbBackups() //this also cleans the backups
                     LoadingStatusState.text = "Decoding Save File..."
+                    memoryWatchdogEvent("db.decode.start", `bytes=${readed.byteLength}`)
                     const decoded = await decodeRisuSave(readed)
+                    memoryWatchdogEvent("db.decode.end", `characters=${decoded?.characters?.length ?? 0}`)
+                    memoryWatchdogEvent("db.set.start", `characters=${decoded?.characters?.length ?? 0}`)
                     setDatabase(decoded)
+                    memoryWatchdogEvent("db.set.end", `characters=${decoded?.characters?.length ?? 0}`)
                 } catch (error) {
                     LoadingStatusState.text = "Reading Backup Files..."
                     const backups = await getDbBackups()
@@ -120,9 +127,10 @@ export async function loadData() {
                                     throw new Error(`Failed to load backup ${backup}: ${backupResponse.status}`);
                                 }
                                 const backupData = new Uint8Array(await backupResponse.arrayBuffer());
-                                setDatabase(
-                                    await decodeRisuSave(backupData)
-                                )
+                                memoryWatchdogEvent("db.backup.decode.start", `bytes=${backupData.byteLength};backup=${backup}`)
+                                const backupDecoded = await decodeRisuSave(backupData)
+                                memoryWatchdogEvent("db.backup.decode.end", `characters=${backupDecoded?.characters?.length ?? 0};backup=${backup}`)
+                                setDatabase(backupDecoded)
                                 backupLoaded = true
                             } catch (error) {
                                 console.error(error)
@@ -133,6 +141,7 @@ export async function loadData() {
                         throw "Your save file is corrupted"
                     }
                 }
+                memoryWatchdogEvent("db.load.end", `characters=${DBState.db?.characters?.length ?? 0}`)
                 LoadingStatusState.text = "Checking Update..."
                 await checkRisuUpdate()
                 await changeFullscreen()

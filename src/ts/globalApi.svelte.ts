@@ -45,7 +45,7 @@ import { isTauri, isNodeServer } from "./platform";
 import { isLocalNetworkUrl } from "./network/localNetwork";
 import { decodeProxyJobWsChunk, formatProxyStreamErrorMessage, parseProxyJobWsEvent } from "./network/proxyJobWs";
 import { getNodeServerProxyAuth } from "./storage/nodeStorage";
-import { registerMemoryWatchdogProbe } from "./debug/memoryWatchdog";
+import { memoryWatchdogEvent, registerMemoryWatchdogProbe } from "./debug/memoryWatchdog";
 
 export const forageStorage = new AutoStorage()
 
@@ -324,9 +324,11 @@ export async function saveDb() {
     }
 
     let encoder = new RisuSaveEncoder()
+    memoryWatchdogEvent("save.encoder.init.start")
     await encoder.init(getDatabase(), {
         compression: forageStorage.isAccount
     })
+    memoryWatchdogEvent("save.encoder.init.end")
 
     $effect.root(() => {
 
@@ -405,6 +407,7 @@ export async function saveDb() {
     })
 
     let savetrys = 0
+    let saveSequence = 0
     let lastDbData = new Uint8Array(0)
     await sleep(1000)
     while (true) {
@@ -415,14 +418,19 @@ export async function saveDb() {
 
         saving.state = true
         changed = false
+        saveSequence += 1
+        const currentSaveSequence = saveSequence
+        memoryWatchdogEvent("save.start", `seq=${currentSaveSequence}`)
         try {
 
             if (requiresFullEncoderReload.state) {
                 encoder = new RisuSaveEncoder()
+                memoryWatchdogEvent("save.encoder.reload.start", `seq=${currentSaveSequence}`)
                 await encoder.init(getDatabase(), {
                     compression: forageStorage.isAccount,
                     skipRemoteSavingOnCharacters: false
                 })
+                memoryWatchdogEvent("save.encoder.reload.end", `seq=${currentSaveSequence}`)
                 requiresFullEncoderReload.state = false
             }
 
@@ -445,16 +453,24 @@ export async function saveDb() {
                 continue
             }
 
+            memoryWatchdogEvent("save.encoder.set.start", `seq=${currentSaveSequence};characters=${toSave.character.length};chats=${toSave.chat.length};bot_preset=${toSave.botPreset};modules=${toSave.modules}`)
             await encoder.set(db, toSave)
+            memoryWatchdogEvent("save.encoder.set.end", `seq=${currentSaveSequence}`)
+            memoryWatchdogEvent("save.encoder.encode.start", `seq=${currentSaveSequence}`)
             const encoded = encoder.encode()
+            memoryWatchdogEvent("save.encoder.encode.end", `seq=${currentSaveSequence};encoded_bytes=${encoded?.byteLength ?? 0}`)
             if (!encoded) {
                 await sleep(1000)
                 continue
             }
             const dbData = new Uint8Array(encoded)
             if (isTauri) {
+                memoryWatchdogEvent('save.write.main.start', `seq=${currentSaveSequence};bytes=${dbData.byteLength}`)
                 await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
+                memoryWatchdogEvent('save.write.main.end', `seq=${currentSaveSequence};bytes=${dbData.byteLength}`)
+                memoryWatchdogEvent('save.write.backup.start', `seq=${currentSaveSequence};bytes=${dbData.byteLength}`)
                 await writeFile(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData, { baseDir: BaseDirectory.AppData });
+                memoryWatchdogEvent('save.write.backup.end', `seq=${currentSaveSequence};bytes=${dbData.byteLength}`)
             }
             else {
 
@@ -470,9 +486,11 @@ export async function saveDb() {
                 await getDbBackups()
             }
             savetrys = 0
+            memoryWatchdogEvent("save.end", `seq=${currentSaveSequence};bytes=${dbData.byteLength}`)
             await saveDbKei()
             await sleep(500)
         } catch (error) {
+            memoryWatchdogEvent("save.error", `seq=${currentSaveSequence};error=${String(error)}`)
             savetrys += 1
             if (savetrys > 4) {
                 alertError(error)
@@ -1342,10 +1360,13 @@ registerMemoryWatchdogProbe('fetch', () => {
         headerChars += entry.header?.length ?? 0
     }
 
+    let queueCount = 0
     let queuedChunks = 0
     let queuedBodyChars = 0
     let activeQueues = 0
-    for (const queue of Object.values(nativeFetchData)) {
+    for (const key in nativeFetchData) {
+        queueCount += 1
+        const queue = nativeFetchData[key]
         if (queue.length > 0) {
             activeQueues += 1
         }
@@ -1362,10 +1383,11 @@ registerMemoryWatchdogProbe('fetch', () => {
         `fetch_log_request_chars=${requestChars}`,
         `fetch_log_response_chars=${responseChars}`,
         `fetch_log_header_chars=${headerChars}`,
-        `native_fetch_queues=${Object.keys(nativeFetchData).length}`,
+        `native_fetch_queues=${queueCount}`,
         `native_fetch_active_queues=${activeQueues}`,
         `native_fetch_queued_chunks=${queuedChunks}`,
         `native_fetch_queued_body_chars=${queuedBodyChars}`,
+        `saving=${saving.state}`,
     ].join(';')
 })
 

@@ -23,9 +23,14 @@ export function memoryWatchdogEvent(event: string, detail = '') {
         return
     }
 
+    const heapDetail = collectBrowserMemoryProbe()
+    const combinedDetail = [sanitizeInline(detail), heapDetail]
+        .filter(Boolean)
+        .join(';')
+
     void invoke('memory_watchdog_event', {
         event,
-        detail: sanitizeInline(detail),
+        detail: combinedDetail,
     }).catch((error) => {
         console.warn('[memory-watchdog] failed to write event', error)
     })
@@ -159,6 +164,11 @@ export function startMemoryWatchdogFrontendProbe() {
         'frontend.watchdog.start',
         `interval_ms=${FRONTEND_SAMPLE_INTERVAL_MS};image_interval_ms=${IMAGE_SAMPLE_INTERVAL_MS}`
     )
+    void getMemoryWatchdogLogPath().then((path) => {
+        if (path) {
+            console.info(`[memory-watchdog] log: ${path}`)
+        }
+    })
     void writeFrontendSample()
     window.setInterval(() => {
         void writeFrontendSample()

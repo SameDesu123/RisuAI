@@ -15,6 +15,7 @@ import { type HypaV3Settings, type HypaV3Preset, createHypaV3Preset } from '../p
 import { normalizeTranslatorPresetState, type TranslatorPreset } from '../translator/presets'
 import { isTauri, isNodeServer } from "src/ts/platform"
 import { safeStructuredClone } from '../polyfill';
+import { memoryWatchdogEvent } from '../debug/memoryWatchdog';
 import {
     DEFAULT_CHAT_LOAD_ADDITIONAL_PAGES,
     DEFAULT_CHAT_LOAD_INITIAL_PAGES,
@@ -28,6 +29,7 @@ export let appSubVer = 'preview'
 export type StreamingDisplayOptimizationMode = 'off'|'balanced'|'strong'
 
 export function setDatabase(data:Database){
+    memoryWatchdogEvent("database.normalize.start", `characters=${data?.characters?.length ?? 0}`)
     if(checkNullish(data.characters)){
         data.characters = []
     }
@@ -718,7 +720,10 @@ export function setDatabase(data:Database){
         }
     }
     changeLanguage(data.language)
+    memoryWatchdogEvent("database.assign.start", `characters=${data.characters.length}`)
     setDatabaseLite(data)
+    memoryWatchdogEvent("database.assign.end", `characters=${data.characters.length}`)
+    memoryWatchdogEvent("database.normalize.end", `characters=${data.characters.length}`)
 }
 
 export function setDatabaseLite(data:Database){
