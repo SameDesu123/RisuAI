@@ -48,6 +48,7 @@
     import SideChatList from "./SideChatList.svelte";
     import { ConnectionIsHost, ConnectionOpenStore, RoomIdStore } from "src/ts/sync/multiuser";
   import { sideBarSize } from "src/ts/gui/guisize";
+  import { desktopTitleBarState } from "src/ts/gui/windowChrome.svelte";
   import DevTool from "./DevTool.svelte";
     import QuickSettingsGui from "../Others/QuickSettingsGUI.svelte";
     import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
@@ -476,7 +477,7 @@
   class:hidden={hidden}
   class:flex={!hidden}
 >
-  {#if !DBState.db.hamburgerButtonBottom}
+  {#if !desktopTitleBarState.enabled && !DBState.db.hamburgerButtonBottom}
   <button
     class="flex h-8 min-h-8 w-14 min-w-14 cursor-pointer text-white mt-2 items-center justify-center rounded-md bg-textcolor2 transition-colors hover:bg-blue-500"
     onclick={() => {
@@ -826,7 +827,7 @@
       >
     </div>
   </div>
-  {#if DBState.db.hamburgerButtonBottom}
+  {#if !desktopTitleBarState.enabled && DBState.db.hamburgerButtonBottom}
   <div class="border-t border-t-selected w-full relative text-white ">
     {#if menuMode === 1}
       <div class="absolute bottom-full w-20 min-w-20 flex border-t-selected border-t bg-bgcolor flex-col items-center pt-2 rounded-t-md z-20 pb-2">
