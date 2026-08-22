@@ -196,6 +196,7 @@ export const advancedSettingsItems: SettingItem[] = [
         helpKey: 'modernDesktopTitleBar',
         showExperimental: true,
         condition: () => isTauri && desktopTitleBarState.available,
+        disabled: () => desktopTitleBarState.transitioning,
         getValue: () => desktopTitleBarState.enabled,
         setValue: (_db, val: any) => {
             void setDesktopTitleBarEnabled(!!val)

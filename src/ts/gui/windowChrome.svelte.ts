@@ -76,6 +76,8 @@ export interface WindowChromeDeps {
     writeStoredPreference(value: string): void;
     /** Waits until the custom title bar had a chance to render (Svelte tick). */
     afterDomUpdate?(): Promise<void>;
+    /** Mirrors controller changes into the app's reactive UI state. */
+    onEnabledChange?(enabled: boolean): void;
 }
 
 export interface WindowChromeController {
@@ -104,6 +106,11 @@ export function createWindowChromeController(deps: WindowChromeDeps): WindowChro
     let transitioning = false;
     let queue: Promise<unknown> = Promise.resolve();
 
+    const updateEnabled = (next: boolean) => {
+        enabled = next;
+        deps.onEnabledChange?.(next);
+    };
+
     const serialize = <T>(task: () => Promise<T>): Promise<T> => {
         const run = queue.then(task);
         queue = run.catch(() => undefined);
@@ -129,8 +136,8 @@ export function createWindowChromeController(deps: WindowChromeDeps): WindowChro
     };
 
     /**
-     * Hides native chrome; on failure keeps native decorations and rolls the
-     * preference back to "false". Must only run inside the serialized queue.
+     * Hides native chrome. A successful native restoration rolls the setting
+     * back; if restoration also fails, custom controls stay visible.
      */
     const tryHideNativeSafely = async (): Promise<boolean> => {
         try {
@@ -138,13 +145,21 @@ export function createWindowChromeController(deps: WindowChromeDeps): WindowChro
             return true;
         } catch (error) {
             console.warn('Failed to hide native window chrome:', error);
+            let restored = false;
             try {
                 await applyRestored();
+                restored = true;
             } catch (restoreError) {
                 console.error('Failed to restore native title bar:', restoreError);
             }
-            enabled = false;
-            deps.writeStoredPreference('false');
+            if (restored) {
+                updateEnabled(false);
+                deps.writeStoredPreference('false');
+            } else {
+                // Restoration also failed, so keep the custom controls visible.
+                updateEnabled(true);
+                deps.writeStoredPreference('true');
+            }
             return false;
         }
     };
@@ -156,7 +171,9 @@ export function createWindowChromeController(deps: WindowChromeDeps): WindowChro
         init() {
             if (!initialized) {
                 initialized = true;
-                enabled = deps.platform !== null && parseTitleBarStoredValue(deps.readStoredPreference());
+                updateEnabled(
+                    deps.platform !== null && parseTitleBarStoredValue(deps.readStoredPreference())
+                );
             }
             return enabled;
         },
@@ -190,7 +207,7 @@ export function createWindowChromeController(deps: WindowChromeDeps): WindowChro
                 try {
                     if (next) {
                         // 1. Activate custom bar first so it renders...
-                        enabled = true;
+                        updateEnabled(true);
                         deps.writeStoredPreference('true');
                         // 2. ...wait for it to render...
                         await waitDomUpdate();
@@ -201,7 +218,7 @@ export function createWindowChromeController(deps: WindowChromeDeps): WindowChro
                         try {
                             await applyRestored();
                             // 2. ...then hide the custom bar.
-                            enabled = false;
+                            updateEnabled(false);
                             deps.writeStoredPreference('false');
                         } catch (error) {
                             console.warn('Failed to restore native title bar:', error);
@@ -225,27 +242,21 @@ export function createWindowChromeController(deps: WindowChromeDeps): WindowChro
 export const desktopTitleBarState = $state({
     enabled: false,
     available: getTauriDesktopPlatform() !== null,
+    transitioning: false,
 });
 
-function createProductionController(): WindowChromeController | null {
-    const platform = getTauriDesktopPlatform();
-    if (platform === null) {
-        return null;
-    }
-    const storageKey = getTitleBarStorageKey(platform);
-    let appWindowPromise: Promise<{
-        setTitleBarStyle(style: 'visible' | 'transparent' | 'overlay'): Promise<void>;
-        setDecorations(decorations: boolean): Promise<void>;
-    }> | null = null;
+export interface NativeChromeWindow {
+    title(): Promise<string>;
+    setTitle(title: string): Promise<void>;
+    setTitleBarStyle(style: 'visible' | 'transparent' | 'overlay'): Promise<void>;
+    setDecorations(decorations: boolean): Promise<void>;
+}
 
-    const getAppWindow = () => {
-        if (!appWindowPromise) {
-            appWindowPromise = import('@tauri-apps/api/webviewWindow').then((m) =>
-                m.getCurrentWebviewWindow()
-            );
-        }
-        return appWindowPromise;
-    };
+export function createNativeChromeHandlers(
+    platform: DesktopTitleBarPlatform,
+    getAppWindow: () => Promise<NativeChromeWindow>
+) {
+    let originalTitle: string | null = null;
 
     const applyChromeAction = async (action: NativeChromeAction) => {
         const appWindow = await getAppWindow();
@@ -256,14 +267,48 @@ function createProductionController(): WindowChromeController | null {
         }
     };
 
+    return {
+        async hideNativeChrome() {
+            if (platform === 'macos') {
+                const appWindow = await getAppWindow();
+                originalTitle ??= await appWindow.title();
+                await appWindow.setTitle('');
+            }
+            await applyChromeAction(getNativeChromeAction(platform, true));
+        },
+        async restoreNativeChrome() {
+            await applyChromeAction(getNativeChromeAction(platform, false));
+            if (platform === 'macos' && originalTitle !== null) {
+                const appWindow = await getAppWindow();
+                await appWindow.setTitle(originalTitle);
+            }
+        },
+    };
+}
+
+function createProductionController(): WindowChromeController | null {
+    const platform = getTauriDesktopPlatform();
+    if (platform === null) {
+        return null;
+    }
+    const storageKey = getTitleBarStorageKey(platform);
+    let appWindowPromise: Promise<NativeChromeWindow> | null = null;
+
+    const getAppWindow = () => {
+        if (!appWindowPromise) {
+            appWindowPromise = import('@tauri-apps/api/webviewWindow').then((m) =>
+                m.getCurrentWebviewWindow()
+            );
+        }
+        return appWindowPromise;
+    };
+
+    const nativeChrome = createNativeChromeHandlers(platform, getAppWindow);
+
     return createWindowChromeController({
         platform,
-        hideNativeChrome() {
-            return applyChromeAction(getNativeChromeAction(platform, true));
-        },
-        restoreNativeChrome() {
-            return applyChromeAction(getNativeChromeAction(platform, false));
-        },
+        hideNativeChrome: nativeChrome.hideNativeChrome,
+        restoreNativeChrome: nativeChrome.restoreNativeChrome,
         readStoredPreference() {
             try {
                 return localStorage.getItem(storageKey);
@@ -280,6 +325,9 @@ function createProductionController(): WindowChromeController | null {
         },
         afterDomUpdate() {
             return import('svelte').then((svelte) => svelte.tick());
+        },
+        onEnabledChange(enabled) {
+            desktopTitleBarState.enabled = enabled;
         },
     });
 }
@@ -311,10 +359,15 @@ export async function ensureDesktopTitleBarApplied(): Promise<boolean> {
 
 /** Settings entry point. Rolls back state/storage on failure. */
 export async function setDesktopTitleBarEnabled(next: boolean): Promise<boolean> {
-    if (!windowChrome) {
-        return false;
+    if (!windowChrome || desktopTitleBarState.transitioning) {
+        return desktopTitleBarState.enabled;
     }
-    const enabled = await windowChrome.setEnabled(next);
-    desktopTitleBarState.enabled = enabled;
-    return enabled;
+    desktopTitleBarState.transitioning = true;
+    try {
+        const enabled = await windowChrome.setEnabled(next);
+        desktopTitleBarState.enabled = enabled;
+        return enabled;
+    } finally {
+        desktopTitleBarState.transitioning = false;
+    }
 }

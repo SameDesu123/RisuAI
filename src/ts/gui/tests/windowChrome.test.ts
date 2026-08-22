@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
     createWindowChromeController,
+    createNativeChromeHandlers,
     getNativeChromeAction,
     getTitleBarStorageKey,
     parseTitleBarStoredValue,
     type DesktopTitleBarPlatform,
+    type NativeChromeWindow,
     type WindowChromeDeps,
 } from '../windowChrome.svelte'
 
@@ -93,6 +95,54 @@ describe('native chrome mapping', () => {
     })
 })
 
+describe('native chrome handlers', () => {
+    function createNativeWindow() {
+        const calls: string[] = []
+        const appWindow: NativeChromeWindow = {
+            title: async () => {
+                calls.push('title')
+                return 'Risuai'
+            },
+            setTitle: async (title) => {
+                calls.push(`set-title:${title}`)
+            },
+            setTitleBarStyle: async (style) => {
+                calls.push(`style:${style}`)
+            },
+            setDecorations: async (decorations) => {
+                calls.push(`decorations:${decorations}`)
+            },
+        }
+        return { appWindow, calls }
+    }
+
+    it('hides and restores the native macOS title around overlay mode', async () => {
+        const { appWindow, calls } = createNativeWindow()
+        const handlers = createNativeChromeHandlers('macos', async () => appWindow)
+
+        await handlers.hideNativeChrome()
+        await handlers.restoreNativeChrome()
+
+        expect(calls).toEqual([
+            'title',
+            'set-title:',
+            'style:overlay',
+            'style:visible',
+            'set-title:Risuai',
+        ])
+    })
+
+    it('does not touch the window title on Windows', async () => {
+        const { appWindow, calls } = createNativeWindow()
+        const handlers = createNativeChromeHandlers('windows', async () => appWindow)
+
+        await handlers.hideNativeChrome()
+        await handlers.restoreNativeChrome()
+
+        expect(calls).toEqual(['decorations:false', 'decorations:true'])
+    })
+})
+
 describe('window chrome controller', () => {
     it('stays disabled without a stored preference and never touches native chrome', async () => {
         const { deps, calls } = createDeps()
@@ -128,14 +178,17 @@ describe('window chrome controller', () => {
     })
 
     it('enables UI first, waits, then hides native chrome', async () => {
-        const { deps, calls } = createDeps()
+        const { deps, calls } = createDeps({
+            onEnabledChange: (enabled) => calls.push(`state:${enabled}`),
+        })
         const controller = createWindowChromeController(deps)
         controller.init()
+        calls.length = 0
 
         const result = await controller.setEnabled(true)
 
         expect(result).toBe(true)
-        expect(calls).toEqual(['write:true', 'tick', 'hide'])
+        expect(calls).toEqual(['state:true', 'write:true', 'tick', 'hide'])
     })
 
     it('restores native chrome before disabling the custom bar', async () => {
@@ -176,6 +229,25 @@ describe('window chrome controller', () => {
         await controller.setEnabled(true)
 
         const result = await controller.setEnabled(false)
+
+        expect(result).toBe(true)
+        expect(controller.isEnabled()).toBe(true)
+        expect(getStored()).toBe('true')
+    })
+
+    it('keeps the custom bar when both hiding and native restoration fail', async () => {
+        const { deps, getStored } = createDeps({
+            hideNativeChrome: async () => {
+                throw new Error('apply failed')
+            },
+            restoreNativeChrome: async () => {
+                throw new Error('restore failed')
+            },
+        })
+        const controller = createWindowChromeController(deps)
+        controller.init()
+
+        const result = await controller.setEnabled(true)
 
         expect(result).toBe(true)
         expect(controller.isEnabled()).toBe(true)

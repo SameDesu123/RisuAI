@@ -152,6 +152,9 @@ export interface SettingItem {
 
     /** Custom CSS classes for wrapper around label + input controls */
     containerClasses?: string;
+
+    /** Disable an interactive setting, optionally based on the current context. */
+    disabled?: boolean | ((ctx: SettingContext) => boolean);
         
     /**
      * Component ID for custom components (type: 'custom')

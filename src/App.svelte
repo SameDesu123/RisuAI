@@ -128,7 +128,7 @@
     {#if showDesktopTitleBar}
         <DesktopTitleBar />
     {/if}
-    <div class="flex min-h-0 w-full flex-1">
+    <div class="relative flex min-h-0 min-w-0 w-full flex-1">
     {#if !import.meta.env.VITE_RISU_LEGAL_CONFIGURED}
         <Legal />
     {:else if aprilFools}
@@ -231,7 +231,7 @@
             {#if (!$DynamicGUI)}
                 <Sidebar openGrid={() => {gridOpen = true}} hidden={!$sideBarStore} />
             {:else}
-                <div class="top-0 w-full h-full left-0 z-30 flex flex-row items-center" class:fixed={$sideBarStore} class:hidden={!$sideBarStore} >
+                <div class="absolute inset-0 z-30 flex flex-row items-center" class:hidden={!$sideBarStore} >
                     <!-- svelte-ignore a11y_click_events_have_key_events -->
                     <Sidebar openGrid={() => {gridOpen = true}}  hidden={false} />
 

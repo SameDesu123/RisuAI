@@ -66,6 +66,10 @@ export function checkCondition(item: SettingItem, ctx: SettingContext): boolean 
     return item.condition(ctx);
 }
 
+export function checkDisabled(item: SettingItem, ctx: SettingContext): boolean {
+    return typeof item.disabled === 'function' ? item.disabled(ctx) : (item.disabled ?? false);
+}
+
 export function getFullSettingsData(searchTerm = '') {
     const full =  accessibilitySettingsItems.concat(
         advancedSettingsItems,
