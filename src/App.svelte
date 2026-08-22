@@ -126,7 +126,7 @@
 
 }}>
     {#if showDesktopTitleBar}
-        <DesktopTitleBar />
+        <DesktopTitleBar bind:gridOpen />
     {/if}
     <div class="relative flex min-h-0 min-w-0 w-full flex-1">
     {#if !import.meta.env.VITE_RISU_LEGAL_CONFIGURED}

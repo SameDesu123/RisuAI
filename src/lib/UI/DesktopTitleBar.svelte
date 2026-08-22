@@ -2,6 +2,12 @@
     import { onMount, type Snippet } from 'svelte'
     import {
         PanelLeftIcon,
+        HomeIcon,
+        MessageCircleIcon,
+        ContactIcon,
+        LayoutGridIcon,
+        GlobeIcon,
+        ShellIcon,
         Settings as SettingsIcon,
         MinusIcon,
         SquareIcon,
@@ -11,10 +17,15 @@
     import { language } from 'src/lang'
     import {
         DBState,
+        additionalHamburgerMenu,
+        OpenRealmStore,
+        PlaygroundStore,
         selectedCharID,
+        SettingsMenuIndex,
         settingsOpen,
         sideBarStore,
     } from 'src/ts/stores.svelte'
+    import PluginDefinedIcon from 'src/lib/Others/PluginDefinedIcon.svelte'
     import {
         ensureDesktopTitleBarApplied,
         getTauriDesktopPlatform,
@@ -25,9 +36,10 @@
     interface Props {
         /** Reserved seat for transient status indicators (save/connection/update). */
         statusSnippet?: Snippet
+        gridOpen?: boolean
     }
 
-    let { statusSnippet }: Props = $props()
+    let { statusSnippet, gridOpen = $bindable(false) }: Props = $props()
 
     const platform = getTauriDesktopPlatform()
     const isMac = platform === 'macos'
@@ -36,6 +48,14 @@
     const appWindow = isTauri ? getCurrentWebviewWindow() : null
 
     let maximized = $state(false)
+    let lastCharacterIndex = $state(-1)
+
+    $effect(() => {
+        const index = $selectedCharID
+        if (index >= 0 && DBState.db.characters?.[index]?.chaId !== '§playground') {
+            lastCharacterIndex = index
+        }
+    })
 
     $effect(() => {
         if (!appWindow) {
@@ -73,20 +93,62 @@
         ensureDesktopTitleBarApplied().catch(() => undefined)
     })
 
-    const contextLabel = $derived.by(() => {
-        if ($settingsOpen) {
-            return language.settings
-        }
-        const index = $selectedCharID
-        const char = index >= 0 ? DBState.db.characters?.[index] : undefined
-        if (char?.name) {
-            return char.name
-        }
-        return 'RisuAI'
-    })
+    const homeActive = $derived(
+        !gridOpen && !$settingsOpen && !$OpenRealmStore && $PlaygroundStore === 0 && $selectedCharID < 0
+    )
+    const normalActive = $derived(
+        !gridOpen && !$settingsOpen && !$OpenRealmStore && $PlaygroundStore === 0 && $selectedCharID >= 0
+    )
 
     const toggleSidebar = () => {
         sideBarStore.update((open) => !open)
+    }
+
+    const openHome = () => {
+        gridOpen = false
+        settingsOpen.set(false)
+        selectedCharID.set(-1)
+        PlaygroundStore.set(0)
+        OpenRealmStore.set(false)
+    }
+
+    const openNormal = () => {
+        gridOpen = false
+        settingsOpen.set(false)
+        PlaygroundStore.set(0)
+        OpenRealmStore.set(false)
+        if ($selectedCharID < 0 && DBState.db.characters?.[lastCharacterIndex]) {
+            selectedCharID.set(lastCharacterIndex)
+        }
+    }
+
+    const openPersona = () => {
+        gridOpen = false
+        SettingsMenuIndex.set(12)
+        settingsOpen.set(true)
+    }
+
+    const openCharacterGrid = () => {
+        settingsOpen.set(false)
+        PlaygroundStore.set(0)
+        OpenRealmStore.set(false)
+        gridOpen = true
+    }
+
+    const openRealm = () => {
+        gridOpen = false
+        settingsOpen.set(false)
+        selectedCharID.set(-1)
+        PlaygroundStore.set(0)
+        OpenRealmStore.set(true)
+    }
+
+    const openPlayground = () => {
+        gridOpen = false
+        settingsOpen.set(false)
+        selectedCharID.set(-1)
+        OpenRealmStore.set(false)
+        PlaygroundStore.set(1)
     }
 
     const toggleSettings = () => {
@@ -115,6 +177,8 @@
 
     const iconButtonClass =
         'inline-flex h-8 min-h-8 w-8 min-w-8 items-center justify-center rounded-md text-textcolor transition-colors hover:bg-darkbutton focus-visible:outline-2 focus-visible:outline-selected'
+    const segmentButtonClass =
+        'inline-flex h-7 min-h-7 items-center justify-center gap-1.5 px-2 text-xs text-textcolor transition-colors hover:bg-darkbutton focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-selected'
 </script>
 
 <div
@@ -133,17 +197,91 @@
         >
             <PanelLeftIcon size={16} />
         </button>
+        <button
+            type="button"
+            class={iconButtonClass}
+            class:bg-selected={homeActive}
+            title={language.home}
+            aria-label={language.home}
+            onclick={openHome}
+        >
+            <HomeIcon size={16} />
+        </button>
     </div>
 
-    <div class="h-full min-w-1 flex-1" data-tauri-drag-region></div>
-
     <div
-        class="flex h-full max-w-[45%] items-center justify-center"
-        data-tauri-drag-region
+        class="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center overflow-hidden rounded-md border border-borderc bg-darkbg max-[560px]:hidden"
     >
-        <span class="truncate text-sm text-textcolor/90 max-[620px]:hidden">
-            {contextLabel}
-        </span>
+        <button
+            type="button"
+            class={segmentButtonClass}
+            class:bg-selected={normalActive}
+            title={language.normal}
+            aria-label={language.normal}
+            onclick={openNormal}
+        >
+            <MessageCircleIcon size={14} />
+            <span class="max-[900px]:hidden">{language.normal}</span>
+        </button>
+        <button
+            type="button"
+            class={segmentButtonClass}
+            class:bg-selected={$settingsOpen && $SettingsMenuIndex === 12}
+            title={language.persona}
+            aria-label={language.persona}
+            onclick={openPersona}
+        >
+            <ContactIcon size={14} />
+            <span class="max-[900px]:hidden">{language.persona}</span>
+        </button>
+        <button
+            type="button"
+            class={segmentButtonClass}
+            class:bg-selected={gridOpen}
+            title={language.character}
+            aria-label={language.character}
+            onclick={openCharacterGrid}
+        >
+            <LayoutGridIcon size={14} />
+            <span class="max-[900px]:hidden">{language.character}</span>
+        </button>
+        <button
+            type="button"
+            class={segmentButtonClass}
+            class:bg-selected={!gridOpen && !$settingsOpen && $OpenRealmStore}
+            title={language.hub}
+            aria-label={language.hub}
+            onclick={openRealm}
+        >
+            <GlobeIcon size={14} />
+            <span class="max-[900px]:hidden">{language.hub}</span>
+        </button>
+        <button
+            type="button"
+            class={segmentButtonClass}
+            class:bg-selected={!gridOpen && !$settingsOpen && $PlaygroundStore !== 0}
+            title={language.playground.playground}
+            aria-label={language.playground.playground}
+            onclick={openPlayground}
+        >
+            <ShellIcon size={14} />
+            <span class="max-[900px]:hidden">{language.playground.playground}</span>
+        </button>
+        {#each additionalHamburgerMenu as menu (menu.id)}
+            <button
+                type="button"
+                class="{segmentButtonClass} px-2"
+                title={menu.name}
+                aria-label={menu.name}
+                onclick={() => {
+                    gridOpen = false
+                    settingsOpen.set(false)
+                    menu.callback()
+                }}
+            >
+                <PluginDefinedIcon ico={menu} />
+            </button>
+        {/each}
     </div>
 
     <div class="h-full min-w-1 flex-1" data-tauri-drag-region></div>
