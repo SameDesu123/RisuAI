@@ -176,9 +176,9 @@
     }
 
     const iconButtonClass =
-        'inline-flex h-8 min-h-8 w-8 min-w-8 items-center justify-center rounded-md text-textcolor transition-colors hover:bg-darkbutton focus-visible:outline-2 focus-visible:outline-selected'
+        'inline-flex h-9 min-h-9 w-9 min-w-9 items-center justify-center rounded-lg text-textcolor transition-colors hover:bg-darkbutton focus-visible:outline-2 focus-visible:outline-selected'
     const segmentButtonClass =
-        'inline-flex h-7 min-h-7 items-center justify-center gap-1.5 px-2 text-xs text-textcolor transition-colors hover:bg-darkbutton focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-selected'
+        'inline-flex h-9 min-h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium text-textcolor transition-colors focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-selected'
 
     const quickNavigation = [
         { id: 'normal', icon: MessageCircleIcon, label: () => language.normal, active: () => normalActive, open: openNormal },
@@ -190,10 +190,10 @@
 </script>
 
 <div
-    class="relative z-40 flex h-10 min-h-10 w-full shrink-0 select-none items-stretch border-b border-borderc bg-bgcolor text-textcolor"
+    class="relative z-40 flex h-[52px] min-h-[52px] w-full shrink-0 select-none items-stretch border-b border-borderc bg-bgcolor text-textcolor"
 >
     <div
-        class="flex items-center gap-0.5 pr-1 {isMac ? 'pl-[84px]' : 'pl-1.5'}"
+        class="flex items-center gap-1 pr-1.5 {isMac ? 'pl-[84px]' : 'pl-2'}"
         data-tauri-drag-region
     >
         <button
@@ -203,7 +203,7 @@
             aria-label={language.titleBarToggleSidebar}
             onclick={toggleSidebar}
         >
-            <PanelLeftIcon size={16} />
+            <PanelLeftIcon size={18} />
         </button>
         <button
             type="button"
@@ -213,31 +213,33 @@
             aria-label={language.home}
             onclick={openHome}
         >
-            <HomeIcon size={16} />
+            <HomeIcon size={18} />
         </button>
     </div>
 
     <div
-        class="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center overflow-hidden rounded-md border border-borderc bg-darkbg max-[560px]:hidden"
+        class="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-0.5 rounded-xl border border-textcolor/10 bg-darkbg p-1 shadow-sm max-[560px]:hidden"
     >
         {#each quickNavigation as item (item.id)}
             {@const Icon = item.icon}
             <button
                 type="button"
-                class={segmentButtonClass}
-                class:bg-selected={item.active()}
+                class="{segmentButtonClass} {item.active()
+                    ? 'bg-selected shadow-sm ring-1 ring-textcolor/10'
+                    : 'text-textcolor/70 hover:bg-darkbutton hover:text-textcolor'}"
                 title={item.label()}
                 aria-label={item.label()}
+                aria-pressed={item.active()}
                 onclick={item.open}
             >
-                <Icon size={14} />
+                <Icon size={16} />
                 <span class="max-[900px]:hidden">{item.label()}</span>
             </button>
         {/each}
         {#each additionalHamburgerMenu as menu (menu.id)}
             <button
                 type="button"
-                class="{segmentButtonClass} px-2"
+                class="{segmentButtonClass} px-2.5 text-textcolor/70 hover:bg-darkbutton hover:text-textcolor"
                 title={menu.name}
                 aria-label={menu.name}
                 onclick={() => {
@@ -253,7 +255,7 @@
 
     <div class="h-full min-w-1 flex-1" data-tauri-drag-region></div>
 
-    <div class="flex h-full items-center gap-0.5 pl-1 {isMac ? 'pr-2' : 'pr-0'}">
+    <div class="flex h-full items-center gap-1 pl-1.5 {isMac ? 'pr-2' : 'pr-0'}">
         {#if statusSnippet}
             {@render statusSnippet()}
         {/if}
@@ -265,39 +267,39 @@
             aria-label={language.settings}
             onclick={toggleSettings}
         >
-            <SettingsIcon size={16} />
+            <SettingsIcon size={18} />
         </button>
         {#if isWindowControlsPlatform}
             <button
                 type="button"
-                class="inline-flex h-10 min-h-10 w-11 min-w-11 items-center justify-center rounded-none text-textcolor transition-colors hover:bg-darkbutton focus-visible:outline-2 focus-visible:outline-selected"
+                class="inline-flex h-full w-12 min-w-12 items-center justify-center rounded-none text-textcolor transition-colors hover:bg-darkbutton focus-visible:outline-2 focus-visible:outline-selected"
                 title={language.titleBarMinimize}
                 aria-label={language.titleBarMinimize}
                 onclick={minimizeWindow}
             >
-                <MinusIcon size={16} />
+                <MinusIcon size={18} />
             </button>
             <button
                 type="button"
-                class="inline-flex h-10 min-h-10 w-11 min-w-11 items-center justify-center rounded-none text-textcolor transition-colors hover:bg-darkbutton focus-visible:outline-2 focus-visible:outline-selected"
+                class="inline-flex h-full w-12 min-w-12 items-center justify-center rounded-none text-textcolor transition-colors hover:bg-darkbutton focus-visible:outline-2 focus-visible:outline-selected"
                 title={maximized ? language.titleBarRestore : language.titleBarMaximize}
                 aria-label={maximized ? language.titleBarRestore : language.titleBarMaximize}
                 onclick={toggleMaximizeWindow}
             >
                 {#if maximized}
-                    <CopyIcon size={13} />
+                    <CopyIcon size={15} />
                 {:else}
-                    <SquareIcon size={13} />
+                    <SquareIcon size={15} />
                 {/if}
             </button>
             <button
                 type="button"
-                class="inline-flex h-10 min-h-10 w-11 min-w-11 items-center justify-center rounded-none text-textcolor transition-colors hover:bg-draculared hover:text-white focus-visible:outline-2 focus-visible:outline-selected"
+                class="inline-flex h-full w-12 min-w-12 items-center justify-center rounded-none text-textcolor transition-colors hover:bg-draculared hover:text-white focus-visible:outline-2 focus-visible:outline-selected"
                 title={language.titleBarClose}
                 aria-label={language.titleBarClose}
                 onclick={closeWindow}
             >
-                <XIcon size={16} />
+                <XIcon size={18} />
             </button>
         {/if}
     </div>
