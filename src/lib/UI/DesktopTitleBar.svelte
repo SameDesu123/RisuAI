@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount, type Snippet } from 'svelte'
+    import { onMount, tick, type Snippet } from 'svelte'
     import {
         PanelLeftIcon,
         HomeIcon,
@@ -49,6 +49,9 @@
 
     let maximized = $state(false)
     let lastCharacterIndex = $state(-1)
+    let segmentContainer: HTMLDivElement | undefined = $state()
+    let segmentIndicatorStyle = $state('')
+    let segmentMounted = $state(false)
 
     $effect(() => {
         const index = $selectedCharID
@@ -87,10 +90,6 @@
             disposed = true
             unlisten?.()
         }
-    })
-
-    onMount(() => {
-        ensureDesktopTitleBarApplied().catch(() => undefined)
     })
 
     const homeActive = $derived(
@@ -187,6 +186,48 @@
         { id: 'realm', icon: GlobeIcon, label: () => language.hub, active: () => !gridOpen && !$settingsOpen && $OpenRealmStore, open: openRealm },
         { id: 'playground', icon: ShellIcon, label: () => language.playground.playground, active: () => !gridOpen && !$settingsOpen && $PlaygroundStore !== 0, open: openPlayground },
     ]
+
+    const activeQuickNavigationIndex = $derived(
+        quickNavigation.findIndex((item) => item.active())
+    )
+
+    const updateSegmentIndicator = () => {
+        if (!segmentContainer || activeQuickNavigationIndex < 0) {
+            segmentIndicatorStyle = ''
+            return
+        }
+        const buttons = segmentContainer.querySelectorAll<HTMLButtonElement>('[data-segment-btn]')
+        const activeButton = buttons[activeQuickNavigationIndex]
+        if (!activeButton) {
+            segmentIndicatorStyle = ''
+            return
+        }
+        const containerRect = segmentContainer.getBoundingClientRect()
+        const buttonRect = activeButton.getBoundingClientRect()
+        segmentIndicatorStyle = `transform: translateX(${buttonRect.left - containerRect.left}px); width: ${buttonRect.width}px;`
+    }
+
+    $effect(() => {
+        void activeQuickNavigationIndex
+        void quickNavigation.map((item) => item.label()).join('\0')
+        tick().then(() => {
+            updateSegmentIndicator()
+            if (!segmentMounted) {
+                requestAnimationFrame(() => {
+                    segmentMounted = true
+                })
+            }
+        })
+    })
+
+    onMount(() => {
+        ensureDesktopTitleBarApplied().catch(() => undefined)
+        const resizeObserver = new ResizeObserver(updateSegmentIndicator)
+        if (segmentContainer) {
+            resizeObserver.observe(segmentContainer)
+        }
+        return () => resizeObserver.disconnect()
+    })
 </script>
 
 <div
@@ -221,14 +262,21 @@
             <HomeIcon size={18} />
         </button>
         <div
-            class="flex items-center gap-0.5 rounded-lg border border-darkborderc bg-darkbg p-1"
+            class="relative flex items-center gap-0.5 rounded-lg border border-darkborderc bg-darkbg p-1"
+            bind:this={segmentContainer}
         >
+            <div
+                class="segment-indicator"
+                class:no-transition={!segmentMounted}
+                style={segmentIndicatorStyle}
+            ></div>
             {#each quickNavigation as item (item.id)}
                 {@const Icon = item.icon}
                 <button
+                    data-segment-btn
                     type="button"
                     class="{segmentButtonClass} {item.active()
-                        ? 'bg-borderc text-white'
+                        ? 'text-white'
                         : 'text-textcolor2 hover:text-textcolor'}"
                     title={item.label()}
                     aria-label={item.label()}
@@ -308,3 +356,24 @@
         {/if}
     </div>
 </div>
+
+<style>
+    .segment-indicator {
+        position: absolute;
+        top: 4px;
+        bottom: 4px;
+        left: 0;
+        z-index: 0;
+        border-radius: 0.375rem;
+        background-color: var(--risu-theme-borderc);
+        pointer-events: none;
+        transition:
+            transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+            width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        will-change: transform, width;
+    }
+
+    .segment-indicator.no-transition {
+        transition: none;
+    }
+</style>
