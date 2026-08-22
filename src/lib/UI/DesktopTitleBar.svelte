@@ -179,6 +179,14 @@
         'inline-flex h-8 min-h-8 w-8 min-w-8 items-center justify-center rounded-md text-textcolor transition-colors hover:bg-darkbutton focus-visible:outline-2 focus-visible:outline-selected'
     const segmentButtonClass =
         'inline-flex h-7 min-h-7 items-center justify-center gap-1.5 px-2 text-xs text-textcolor transition-colors hover:bg-darkbutton focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-selected'
+
+    const quickNavigation = [
+        { id: 'normal', icon: MessageCircleIcon, label: () => language.normal, active: () => normalActive, open: openNormal },
+        { id: 'persona', icon: ContactIcon, label: () => language.persona, active: () => $settingsOpen && $SettingsMenuIndex === 12, open: openPersona },
+        { id: 'characters', icon: LayoutGridIcon, label: () => language.character, active: () => gridOpen, open: openCharacterGrid },
+        { id: 'realm', icon: GlobeIcon, label: () => language.hub, active: () => !gridOpen && !$settingsOpen && $OpenRealmStore, open: openRealm },
+        { id: 'playground', icon: ShellIcon, label: () => language.playground.playground, active: () => !gridOpen && !$settingsOpen && $PlaygroundStore !== 0, open: openPlayground },
+    ]
 </script>
 
 <div
@@ -212,61 +220,20 @@
     <div
         class="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center overflow-hidden rounded-md border border-borderc bg-darkbg max-[560px]:hidden"
     >
-        <button
-            type="button"
-            class={segmentButtonClass}
-            class:bg-selected={normalActive}
-            title={language.normal}
-            aria-label={language.normal}
-            onclick={openNormal}
-        >
-            <MessageCircleIcon size={14} />
-            <span class="max-[900px]:hidden">{language.normal}</span>
-        </button>
-        <button
-            type="button"
-            class={segmentButtonClass}
-            class:bg-selected={$settingsOpen && $SettingsMenuIndex === 12}
-            title={language.persona}
-            aria-label={language.persona}
-            onclick={openPersona}
-        >
-            <ContactIcon size={14} />
-            <span class="max-[900px]:hidden">{language.persona}</span>
-        </button>
-        <button
-            type="button"
-            class={segmentButtonClass}
-            class:bg-selected={gridOpen}
-            title={language.character}
-            aria-label={language.character}
-            onclick={openCharacterGrid}
-        >
-            <LayoutGridIcon size={14} />
-            <span class="max-[900px]:hidden">{language.character}</span>
-        </button>
-        <button
-            type="button"
-            class={segmentButtonClass}
-            class:bg-selected={!gridOpen && !$settingsOpen && $OpenRealmStore}
-            title={language.hub}
-            aria-label={language.hub}
-            onclick={openRealm}
-        >
-            <GlobeIcon size={14} />
-            <span class="max-[900px]:hidden">{language.hub}</span>
-        </button>
-        <button
-            type="button"
-            class={segmentButtonClass}
-            class:bg-selected={!gridOpen && !$settingsOpen && $PlaygroundStore !== 0}
-            title={language.playground.playground}
-            aria-label={language.playground.playground}
-            onclick={openPlayground}
-        >
-            <ShellIcon size={14} />
-            <span class="max-[900px]:hidden">{language.playground.playground}</span>
-        </button>
+        {#each quickNavigation as item (item.id)}
+            {@const Icon = item.icon}
+            <button
+                type="button"
+                class={segmentButtonClass}
+                class:bg-selected={item.active()}
+                title={item.label()}
+                aria-label={item.label()}
+                onclick={item.open}
+            >
+                <Icon size={14} />
+                <span class="max-[900px]:hidden">{item.label()}</span>
+            </button>
+        {/each}
         {#each additionalHamburgerMenu as menu (menu.id)}
             <button
                 type="button"
