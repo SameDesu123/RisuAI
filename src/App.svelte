@@ -37,10 +37,13 @@
     import Legal from './lib/Others/Legal.svelte';
     import CustomSidebarConfig from './lib/Others/CustomSidebarConfig.svelte';
     import { RISU_APP_INTERNAL_DRAG_TYPE, RISU_SIDEBAR_DRAG_TYPE } from './ts/dragTypes';
+    import DesktopTitleBar from './lib/UI/DesktopTitleBar.svelte';
+    import { desktopTitleBarState } from './ts/gui/windowChrome.svelte';
 
 
   
     let didFirstSetup: boolean  = $derived(DBState.db?.didFirstSetup)
+    let showDesktopTitleBar = $derived(desktopTitleBarState.enabled && desktopTitleBarState.available)
     let gridOpen = $state(false)
     let aprilFools = $state(new Date().getMonth() === 3 && new Date().getDate() === 1)
     let aprilFoolsPage = $state(0)
@@ -65,7 +68,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<main class="flex bg-bg w-full h-full max-w-100vw text-textcolor" ondragover={(e) => {
+<main class="flex flex-col bg-bg w-full h-full max-w-100vw text-textcolor" ondragover={(e) => {
     const dropEffect = getMainDropEffect(e)
     e.preventDefault()
     e.dataTransfer.dropEffect = dropEffect
@@ -122,6 +125,10 @@
     }
 
 }}>
+    {#if showDesktopTitleBar}
+        <DesktopTitleBar />
+    {/if}
+    <div class="flex min-h-0 w-full flex-1">
     {#if !import.meta.env.VITE_RISU_LEGAL_CONFIGURED}
         <Legal />
     {:else if aprilFools}
@@ -279,4 +286,5 @@
     {#if customSideBarConfigDialogStore.open}
         <CustomSidebarConfig />
     {/if}
+    </div>
 </main>

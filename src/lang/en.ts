@@ -318,7 +318,8 @@ export const languageEnglish = {
             "Higher values use more chat context to determine similarity.",
         hypaV3SummaryChunkSeparator:
             "Separator used to split summaries into chunks for similarity search.",
-        coldstorage: "Coldstorage is a feature that automatically moves old chats and character data to a seperate storage to reduce the size of the main storage and improve performance. This will reduce the transfer time, transfer traffic and improve the performance when loading chats."
+        coldstorage: "Coldstorage is a feature that automatically moves old chats and character data to a seperate storage to reduce the size of the main storage and improve performance. This will reduce the transfer time, transfer traffic and improve the performance when loading chats.",
+        modernDesktopTitleBar: "Uses a theme-integrated title bar instead of the operating system's default title bar. The preference is saved per device. Experimental: window buttons may behave differently depending on your platform."
     },
     setup: {
         chooseProvider: "Choose AI Provider",
@@ -724,6 +725,12 @@ export const languageEnglish = {
     presensePenalty: "Presense Penalty",
     advancedSettings: "Advanced Settings",
     advancedSettingsWarn: "Warn: If you don't know what the option does, don't change it!",
+    modernDesktopTitleBar: "Modern desktop title bar",
+    titleBarToggleSidebar: "Toggle Sidebar",
+    titleBarMinimize: "Minimize",
+    titleBarMaximize: "Maximize",
+    titleBarRestore: "Restore",
+    titleBarClose: "Close",
     formatingOrder: "Formatting Order",
     authorNote: "Author's Note",
     firstMessage: "First Message",

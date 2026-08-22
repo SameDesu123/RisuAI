@@ -1,6 +1,7 @@
 
 import type { SettingItem } from './types';
 import { isNodeServer, isTauri } from '../platform';
+import { desktopTitleBarState, setDesktopTitleBarEnabled } from '../gui/windowChrome.svelte';
 
 export const advancedSettingsItems: SettingItem[] = [
     { type: 'header', id: 'adv.header', labelKey: 'advancedSettings', options: { level: 'h2' }, classes: '!mb-0' },
@@ -188,6 +189,19 @@ export const advancedSettingsItems: SettingItem[] = [
     { id: 'adv.scrollToActive', type: 'check', labelKey: 'enableScrollToActiveChar', bindKey: 'enableScrollToActiveChar', helpKey: 'enableScrollToActiveChar', classes: 'mt-4' },
 
     // Node/Tauri Specific
+    {
+        id: 'adv.modernDesktopTitleBar',
+        type: 'check',
+        labelKey: 'modernDesktopTitleBar',
+        helpKey: 'modernDesktopTitleBar',
+        showExperimental: true,
+        condition: () => isTauri && desktopTitleBarState.available,
+        getValue: () => desktopTitleBarState.enabled,
+        setValue: (_db, val: any) => {
+            void setDesktopTitleBarEnabled(!!val)
+        },
+        classes: 'mt-4',
+    },
     {
         id: 'adv.promptInfo', type: 'check', labelKey: 'promptInfoInsideChat', bindKey: 'promptInfoInsideChat',
         condition: () => isNodeServer || isTauri, helpKey: 'promptInfoInsideChatDesc', classes: 'mt-4'
