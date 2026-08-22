@@ -58,6 +58,10 @@
         "height": 768,
         "minWidth": 300,
         "minHeight": 500,
+        "trafficLightPosition": {
+          "x": 9,
+          "y": 23
+        },
         "dragDropEnabled": false
       }
     ],

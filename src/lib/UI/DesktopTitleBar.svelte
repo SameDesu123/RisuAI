@@ -97,7 +97,7 @@
         !gridOpen && !$settingsOpen && !$OpenRealmStore && $PlaygroundStore === 0 && $selectedCharID < 0
     )
     const normalActive = $derived(
-        !gridOpen && !$settingsOpen && !$OpenRealmStore && $PlaygroundStore === 0 && $selectedCharID >= 0
+        !gridOpen && !$settingsOpen && !$OpenRealmStore && $PlaygroundStore === 0
     )
 
     const toggleSidebar = () => {
@@ -178,7 +178,7 @@
     const iconButtonClass =
         'inline-flex h-9 min-h-9 w-9 min-w-9 items-center justify-center rounded-lg text-textcolor transition-colors hover:bg-darkbutton focus-visible:outline-2 focus-visible:outline-selected'
     const segmentButtonClass =
-        'inline-flex h-9 min-h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium text-textcolor transition-colors focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-selected'
+        'relative z-10 inline-flex h-9 min-h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-borderc focus-visible:-outline-offset-2'
 
     const quickNavigation = [
         { id: 'normal', icon: MessageCircleIcon, label: () => language.normal, active: () => normalActive, open: openNormal },
@@ -190,7 +190,7 @@
 </script>
 
 <div
-    class="relative z-40 flex h-[52px] min-h-[52px] w-full shrink-0 select-none items-stretch border-b border-borderc bg-bgcolor text-textcolor"
+    class="relative z-40 flex h-[60px] min-h-[60px] w-full shrink-0 select-none items-stretch bg-bgcolor text-textcolor"
 >
     <div
         class="flex items-center gap-1 pr-1.5 {isMac ? 'pl-[84px]' : 'pl-2'}"
@@ -205,6 +205,11 @@
         >
             <PanelLeftIcon size={18} />
         </button>
+    </div>
+
+    <div
+        class="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 max-[560px]:hidden"
+    >
         <button
             type="button"
             class={iconButtonClass}
@@ -215,42 +220,41 @@
         >
             <HomeIcon size={18} />
         </button>
-    </div>
-
-    <div
-        class="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-0.5 rounded-xl border border-textcolor/10 bg-darkbg p-1 shadow-sm max-[560px]:hidden"
-    >
-        {#each quickNavigation as item (item.id)}
-            {@const Icon = item.icon}
-            <button
-                type="button"
-                class="{segmentButtonClass} {item.active()
-                    ? 'bg-selected shadow-sm ring-1 ring-textcolor/10'
-                    : 'text-textcolor/70 hover:bg-darkbutton hover:text-textcolor'}"
-                title={item.label()}
-                aria-label={item.label()}
-                aria-pressed={item.active()}
-                onclick={item.open}
-            >
-                <Icon size={16} />
-                <span class="max-[900px]:hidden">{item.label()}</span>
-            </button>
-        {/each}
-        {#each additionalHamburgerMenu as menu (menu.id)}
-            <button
-                type="button"
-                class="{segmentButtonClass} px-2.5 text-textcolor/70 hover:bg-darkbutton hover:text-textcolor"
-                title={menu.name}
-                aria-label={menu.name}
-                onclick={() => {
-                    gridOpen = false
-                    settingsOpen.set(false)
-                    menu.callback()
-                }}
-            >
-                <PluginDefinedIcon ico={menu} />
-            </button>
-        {/each}
+        <div
+            class="flex items-center gap-0.5 rounded-lg border border-darkborderc bg-darkbg p-1"
+        >
+            {#each quickNavigation as item (item.id)}
+                {@const Icon = item.icon}
+                <button
+                    type="button"
+                    class="{segmentButtonClass} {item.active()
+                        ? 'bg-borderc text-white'
+                        : 'text-textcolor2 hover:text-textcolor'}"
+                    title={item.label()}
+                    aria-label={item.label()}
+                    aria-pressed={item.active()}
+                    onclick={item.open}
+                >
+                    <Icon size={16} />
+                    <span class="max-[900px]:hidden">{item.label()}</span>
+                </button>
+            {/each}
+            {#each additionalHamburgerMenu as menu (menu.id)}
+                <button
+                    type="button"
+                    class="{segmentButtonClass} px-2.5 text-textcolor2 hover:text-textcolor"
+                    title={menu.name}
+                    aria-label={menu.name}
+                    onclick={() => {
+                        gridOpen = false
+                        settingsOpen.set(false)
+                        menu.callback()
+                    }}
+                >
+                    <PluginDefinedIcon ico={menu} />
+                </button>
+            {/each}
+        </div>
     </div>
 
     <div class="h-full min-w-1 flex-1" data-tauri-drag-region></div>
