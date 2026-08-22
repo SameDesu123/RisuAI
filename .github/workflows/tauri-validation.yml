@@ -6,6 +6,19 @@ name: 'tauri-validation'
 
 on:
   workflow_dispatch: {}
+  pull_request:
+    paths:
+      - '.github/workflows/tauri-validation.yml'
+      - 'src/App.svelte'
+      - 'src/lib/UI/DesktopTitleBar.svelte'
+      - 'src/lib/Setting/Wrappers/SettingCheck.svelte'
+      - 'src/lib/UI/GUI/CheckInput.svelte'
+      - 'src/ts/gui/windowChrome.svelte.ts'
+      - 'src/ts/gui/tests/windowChrome.test.ts'
+      - 'src/ts/setting/advancedSettingsData.ts'
+      - 'src/ts/setting/types.ts'
+      - 'src/ts/setting/utils.ts'
+      - 'src-tauri/capabilities/window-chrome.json'
 
 permissions:
   contents: read
