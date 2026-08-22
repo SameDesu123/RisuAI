@@ -2,7 +2,7 @@ name: 'tauri-validation'
 
 # Validation-only native builds. This workflow never creates tags, releases,
 # or signed release updates (contents: read, no updater artifacts) and uploads
-# everything as run artifacts instead.
+# only macOS disk images as run artifacts.
 
 on:
   workflow_dispatch: {}
@@ -79,23 +79,11 @@ jobs:
         run: >-
           pnpm tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
           ${{ matrix.settings.args }}
-      - name: package .app bundle (macos)
+      - name: upload validation artifact
         if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          ditto -c -k --sequesterRsrc --keepParent \
-            "src-tauri/target/${{ matrix.settings.target }}/release/bundle/macos/RisuAI.app" \
-            "RisuAI-${{ matrix.settings.target }}.zip"
-      - name: upload validation artifacts
         uses: actions/upload-artifact@v4
         with:
           name: RisuAI-validation-${{ matrix.settings.target }}
           retention-days: 14
           if-no-files-found: 'error'
-          path: |
-            RisuAI-*.zip
-            src-tauri/target/*/release/bundle/dmg/*.dmg
-            src-tauri/target/*/release/bundle/nsis/*.exe
-            src-tauri/target/*/release/bundle/deb/*.deb
-            src-tauri/target/*/release/bundle/rpm/*.rpm
-            src-tauri/target/*/release/bundle/appimage/*.AppImage
+          path: src-tauri/target/${{ matrix.settings.target }}/release/bundle/dmg/*.dmg
