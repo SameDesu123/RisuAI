@@ -16,7 +16,6 @@
     } from '@lucide/svelte'
     import { language } from 'src/lang'
     import {
-        DBState,
         DynamicGUI,
         additionalHamburgerMenu,
         OpenRealmStore,
@@ -50,17 +49,9 @@
     const appWindow = isTauri ? getCurrentWebviewWindow() : null
 
     let maximized = $state(false)
-    let lastCharacterIndex = $state(-1)
     let segmentContainer: HTMLDivElement | undefined = $state()
     let segmentIndicatorStyle = $state('')
     let segmentMounted = $state(false)
-
-    $effect(() => {
-        const index = $selectedCharID
-        if (index >= 0 && DBState.db.characters?.[index]?.chaId !== '§playground') {
-            lastCharacterIndex = index
-        }
-    })
 
     $effect(() => {
         if (!appWindow) {
@@ -94,9 +85,6 @@
         }
     })
 
-    const homeActive = $derived(
-        !gridOpen && !$settingsOpen && !$OpenRealmStore && $PlaygroundStore === 0 && $selectedCharID < 0
-    )
     const normalActive = $derived(
         !gridOpen && !$settingsOpen && !$OpenRealmStore && $PlaygroundStore === 0
     )
@@ -123,9 +111,6 @@
         settingsOpen.set(false)
         PlaygroundStore.set(0)
         OpenRealmStore.set(false)
-        if ($selectedCharID < 0 && DBState.db.characters?.[lastCharacterIndex]) {
-            selectedCharID.set(lastCharacterIndex)
-        }
     }
 
     const openPersona = () => {
@@ -270,7 +255,6 @@
         <button
             type="button"
             class={iconButtonClass}
-            class:bg-selected={homeActive}
             title={language.home}
             aria-label={language.home}
             onclick={openHome}
