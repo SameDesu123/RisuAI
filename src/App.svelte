@@ -133,7 +133,7 @@
         <Legal />
     {:else if aprilFools}
 
-        <div class="bg-[#212121] w-full h-screen min-h-screen text-black flex relative">
+        <div class="bg-[#212121] w-full h-full min-h-full text-black flex relative">
             <div class="w-full max-w-3xl mx-auto py-8 px-4 flex justify-center items-center">
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div class="flex flex-col w-full items-center text-[#bbbbbb]">
