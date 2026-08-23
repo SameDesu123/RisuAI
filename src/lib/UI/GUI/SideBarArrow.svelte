@@ -1,10 +1,11 @@
 <script lang="ts">
     import { ArrowLeft, ArrowRight } from "@lucide/svelte";
     import { DynamicGUI, MobileGUI, sideBarClosing, sideBarStore } from "src/ts/stores.svelte";
+    import { desktopTitleBarState } from "src/ts/gui/windowChrome.svelte";
 
 </script>
 
-{#if !$MobileGUI}
+{#if !$MobileGUI && !(desktopTitleBarState.enabled && desktopTitleBarState.available)}
     {#if $sideBarStore && !$DynamicGUI}
         <button onclick={() => {sideBarClosing.set(true)}} class="absolute top-3 left-0 h-12 w-12 border-r border-b border-t border-transparent  rounded-r-md bg-darkbg hover:border-neutral-200 transition-colors flex items-center justify-center text-textcolor z-20">
             <ArrowLeft />

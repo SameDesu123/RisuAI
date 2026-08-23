@@ -23,6 +23,7 @@
         selectedCharID,
         SettingsMenuIndex,
         settingsOpen,
+        sideBarClosing,
         sideBarStore,
     } from 'src/ts/stores.svelte'
     import PluginDefinedIcon from 'src/lib/Others/PluginDefinedIcon.svelte'
@@ -100,7 +101,12 @@
     )
 
     const toggleSidebar = () => {
-        sideBarStore.update((open) => !open)
+        if ($sideBarStore) {
+            sideBarClosing.set(true)
+            return
+        }
+        sideBarClosing.set(false)
+        sideBarStore.set(true)
     }
 
     const openHome = () => {
