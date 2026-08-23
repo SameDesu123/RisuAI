@@ -45,6 +45,8 @@
     const platform = getTauriDesktopPlatform()
     const isMac = platform === 'macos'
     const isWindowControlsPlatform = platform === 'windows' || platform === 'linux'
+    const windowsDragRegionStyle = platform === 'windows' ? 'app-region: drag' : undefined
+    const windowsNoDragRegionStyle = platform === 'windows' ? 'app-region: no-drag' : undefined
 
     const appWindow = isTauri ? getCurrentWebviewWindow() : null
 
@@ -237,10 +239,12 @@
     <div
         class="relative z-10 flex items-center gap-1 pr-1.5 {isMac ? 'pl-[84px]' : 'pl-2'}"
         data-tauri-drag-region
+        style={windowsDragRegionStyle}
     >
         <button
             type="button"
             class={iconButtonClass}
+            style={windowsNoDragRegionStyle}
             title={language.titleBarToggleSidebar}
             aria-label={language.titleBarToggleSidebar}
             onclick={toggleSidebar}
@@ -249,9 +253,14 @@
         </button>
     </div>
 
-    <div class="relative z-10 flex min-w-0 items-center justify-center overflow-hidden" data-tauri-drag-region>
+    <div
+        class="relative z-10 flex min-w-0 items-center justify-center overflow-hidden"
+        data-tauri-drag-region
+        style={windowsDragRegionStyle}
+    >
         <div
             class="quick-navigation-scroll flex max-w-full items-center gap-1 max-[560px]:hidden"
+            style={windowsNoDragRegionStyle}
         >
             <button
                 type="button"
@@ -307,7 +316,10 @@
         </div>
     </div>
 
-    <div class="relative z-10 flex h-full items-center gap-1 pl-1.5 {isMac ? 'pr-2' : 'pr-0'}">
+    <div
+        class="relative z-10 flex h-full items-center gap-1 pl-1.5 {isMac ? 'pr-2' : 'pr-0'}"
+        style={windowsNoDragRegionStyle}
+    >
         {#if statusSnippet}
             {@render statusSnippet()}
         {/if}
