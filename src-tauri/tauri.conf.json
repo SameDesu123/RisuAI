@@ -60,7 +60,7 @@
         "minHeight": 500,
         "trafficLightPosition": {
           "x": 9,
-          "y": 23
+          "y": 33
         },
         "dragDropEnabled": false
       }
