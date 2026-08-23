@@ -4,6 +4,7 @@ import "./ts/storage/database.svelte"
 import App from "./App.svelte";
 import { loadData } from "./ts/bootstrap";
 import { initHotkey } from "./ts/hotkey";
+import { initDesktopTitleBar } from "./ts/gui/windowChrome.svelte";
 import { preLoadCheck } from "./preload";
 import { mount } from "svelte";
 
@@ -13,6 +14,7 @@ window.addEventListener('vite:preloadError', (event) => {
 });
 
 preLoadCheck()
+initDesktopTitleBar()
 let app = mount(App, {
     target: document.getElementById("app"),
 });

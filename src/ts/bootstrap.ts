@@ -43,7 +43,6 @@ import {
     checkCharOrder
 } from "./globalApi.svelte";
 import { isTauri } from "./platform";
-import { initDesktopTitleBar } from "./gui/windowChrome.svelte";
 import { registerModelDynamic } from "./model/modellist";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
@@ -57,7 +56,6 @@ export async function loadData() {
     const loaded = get(loadedStore)
     if (!loaded) {
         try {
-            initDesktopTitleBar()
             if (isTauri) {
                 LoadingStatusState.text = "Checking Files..."
                 appWindow.maximize()
