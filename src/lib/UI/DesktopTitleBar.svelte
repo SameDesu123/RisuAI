@@ -17,6 +17,7 @@
     import { language } from 'src/lang'
     import {
         DBState,
+        DynamicGUI,
         additionalHamburgerMenu,
         OpenRealmStore,
         PlaygroundStore,
@@ -239,8 +240,17 @@
 <div
     class="relative z-40 flex h-[60px] min-h-[60px] w-full shrink-0 select-none items-stretch bg-bgcolor text-textcolor"
 >
+    {#if $sideBarStore}
+        <div
+            aria-hidden="true"
+            class="sidebar-title-tint"
+            class:sidebar-title-tint-open={!$sideBarClosing}
+            class:sidebar-title-tint-close={$sideBarClosing && !$DynamicGUI}
+            class:sidebar-title-tint-close-dynamic={$sideBarClosing && $DynamicGUI}
+        ></div>
+    {/if}
     <div
-        class="flex items-center gap-1 pr-1.5 {isMac ? 'pl-[84px]' : 'pl-2'}"
+        class="relative z-10 flex items-center gap-1 pr-1.5 {isMac ? 'pl-[84px]' : 'pl-2'}"
         data-tauri-drag-region
     >
         <button
@@ -255,7 +265,7 @@
     </div>
 
     <div
-        class="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 max-[560px]:hidden"
+        class="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 max-[560px]:hidden"
     >
         <button
             type="button"
@@ -313,7 +323,7 @@
 
     <div class="h-full min-w-1 flex-1" data-tauri-drag-region></div>
 
-    <div class="flex h-full items-center gap-1 pl-1.5 {isMac ? 'pr-2' : 'pr-0'}">
+    <div class="relative z-10 flex h-full items-center gap-1 pl-1.5 {isMac ? 'pr-2' : 'pr-0'}">
         {#if statusSnippet}
             {@render statusSnippet()}
         {/if}
@@ -364,6 +374,48 @@
 </div>
 
 <style>
+    .sidebar-title-tint {
+        position: absolute;
+        inset-block: 0;
+        left: 5rem;
+        width: var(--sidebar-size);
+        background-color: var(--risu-theme-darkbg);
+        pointer-events: none;
+        transform-origin: left center;
+    }
+
+    .sidebar-title-tint-open {
+        animation: title-tint-open var(--risu-animation-speed) ease both;
+    }
+
+    .sidebar-title-tint-close {
+        --title-tint-close-offset: -8rem;
+        animation: title-tint-close var(--risu-animation-speed) ease both;
+    }
+
+    .sidebar-title-tint-close-dynamic {
+        --title-tint-close-offset: -15rem;
+        animation: title-tint-close var(--risu-animation-speed) ease both;
+    }
+
+    @keyframes title-tint-open {
+        from {
+            transform: translateX(-5rem) scaleX(0);
+        }
+        to {
+            transform: translateX(0) scaleX(1);
+        }
+    }
+
+    @keyframes title-tint-close {
+        from {
+            transform: translateX(0) scaleX(1);
+        }
+        to {
+            transform: translateX(var(--title-tint-close-offset)) scaleX(0);
+        }
+    }
+
     .segment-indicator {
         position: absolute;
         top: 4px;
