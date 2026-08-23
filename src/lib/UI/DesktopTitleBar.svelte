@@ -17,6 +17,7 @@
     import { language } from 'src/lang'
     import {
         DynamicGUI,
+        MobileGUI,
         additionalHamburgerMenu,
         OpenRealmStore,
         PlaygroundStore,
@@ -52,6 +53,7 @@
 
     let maximized = $state(false)
     let personaNavigationOpen = $state(false)
+    let settingsSidebarEnd = $state<number | null>(null)
     let segmentContainer: HTMLDivElement | undefined = $state()
     let segmentIndicatorStyle = $state('')
     let segmentMounted = $state(false)
@@ -100,6 +102,39 @@
     $effect(() => {
         if (!$settingsOpen) {
             personaNavigationOpen = false
+        }
+    })
+
+    $effect(() => {
+        if (!$settingsOpen || $MobileGUI) {
+            settingsSidebarEnd = null
+            return
+        }
+
+        let disposed = false
+        let resizeObserver: ResizeObserver | undefined
+        const updateSettingsSidebarEnd = () => {
+            const sidebar = document.querySelector<HTMLElement>('.rs-setting-cont-3')
+            settingsSidebarEnd = sidebar?.getBoundingClientRect().right ?? null
+        }
+
+        tick().then(() => {
+            if (disposed) {
+                return
+            }
+            const sidebar = document.querySelector<HTMLElement>('.rs-setting-cont-3')
+            updateSettingsSidebarEnd()
+            if (sidebar) {
+                resizeObserver = new ResizeObserver(updateSettingsSidebarEnd)
+                resizeObserver.observe(sidebar)
+            }
+            window.addEventListener('resize', updateSettingsSidebarEnd)
+        })
+
+        return () => {
+            disposed = true
+            resizeObserver?.disconnect()
+            window.removeEventListener('resize', updateSettingsSidebarEnd)
         }
     })
 
@@ -242,7 +277,8 @@
 
 <div
     class="relative z-40 grid h-[60px] min-h-[60px] w-full shrink-0 select-none grid-cols-[auto_minmax(0,1fr)_auto] items-stretch bg-bgcolor text-textcolor"
-    class:settings-title-bg={$settingsOpen}
+    class:settings-title-bg={$settingsOpen && !$MobileGUI && settingsSidebarEnd !== null}
+    style:--settings-sidebar-end={settingsSidebarEnd === null ? undefined : `${settingsSidebarEnd}px`}
 >
     {#if $sideBarStore}
         <div
@@ -390,8 +426,8 @@
     .settings-title-bg {
         background: linear-gradient(
             to right,
-            var(--risu-theme-darkbg) 50%,
-            var(--risu-theme-bgcolor) 50%
+            var(--risu-theme-darkbg) var(--settings-sidebar-end),
+            var(--risu-theme-bgcolor) var(--settings-sidebar-end)
         );
     }
 
