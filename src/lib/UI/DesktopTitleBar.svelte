@@ -4,7 +4,6 @@
         PanelLeftIcon,
         HomeIcon,
         MessageCircleIcon,
-        ContactIcon,
         LayoutGridIcon,
         GlobeIcon,
         ShellIcon,
@@ -22,7 +21,6 @@
         OpenRealmStore,
         PlaygroundStore,
         selectedCharID,
-        SettingsMenuIndex,
         settingsOpen,
         sideBarClosing,
         sideBarStore,
@@ -52,7 +50,6 @@
     const appWindow = isTauri ? getCurrentWebviewWindow() : null
 
     let maximized = $state(false)
-    let personaNavigationOpen = $state(false)
     let settingsSidebarEnd = $state<number | null>(null)
     let segmentContainer: HTMLDivElement | undefined = $state()
     let segmentIndicatorStyle = $state('')
@@ -90,20 +87,9 @@
         }
     })
 
-    const personaActive = $derived(
-        $settingsOpen && personaNavigationOpen && $SettingsMenuIndex === 12
-    )
     const normalActive = $derived(
-        $settingsOpen
-            ? !personaActive
-            : !gridOpen && !$OpenRealmStore && $PlaygroundStore === 0
+        $settingsOpen || (!gridOpen && !$OpenRealmStore && $PlaygroundStore === 0)
     )
-
-    $effect(() => {
-        if (!$settingsOpen) {
-            personaNavigationOpen = false
-        }
-    })
 
     $effect(() => {
         if (!$settingsOpen || $MobileGUI) {
@@ -162,13 +148,6 @@
         OpenRealmStore.set(false)
     }
 
-    const openPersona = () => {
-        gridOpen = false
-        personaNavigationOpen = true
-        SettingsMenuIndex.set(12)
-        settingsOpen.set(true)
-    }
-
     const openCharacterGrid = () => {
         settingsOpen.set(false)
         PlaygroundStore.set(0)
@@ -193,9 +172,6 @@
     }
 
     const toggleSettings = () => {
-        if (!$settingsOpen) {
-            personaNavigationOpen = false
-        }
         settingsOpen.update((open) => !open)
     }
 
@@ -226,7 +202,6 @@
 
     const quickNavigation = [
         { id: 'normal', icon: MessageCircleIcon, label: () => language.normal, active: () => normalActive, open: openNormal },
-        { id: 'persona', icon: ContactIcon, label: () => language.persona, active: () => personaActive, open: openPersona },
         { id: 'characters', icon: LayoutGridIcon, label: () => language.character, active: () => gridOpen, open: openCharacterGrid },
         { id: 'realm', icon: GlobeIcon, label: () => language.hub, active: () => !gridOpen && !$settingsOpen && $OpenRealmStore, open: openRealm },
         { id: 'playground', icon: ShellIcon, label: () => language.playground.playground, active: () => !gridOpen && !$settingsOpen && $PlaygroundStore !== 0, open: openPlayground },
@@ -276,7 +251,7 @@
 </script>
 
 <div
-    class="relative z-40 grid h-[60px] min-h-[60px] w-full shrink-0 select-none grid-cols-[auto_minmax(0,1fr)_auto] items-stretch bg-bgcolor text-textcolor"
+    class="relative z-40 flex h-[60px] min-h-[60px] w-full shrink-0 select-none items-stretch bg-bgcolor text-textcolor"
     class:settings-title-bg={$settingsOpen && !$MobileGUI && settingsSidebarEnd !== null}
     style:--settings-sidebar-end={settingsSidebarEnd === null ? undefined : `${settingsSidebarEnd}px`}
 >
@@ -306,26 +281,26 @@
         </button>
     </div>
 
+    <div class="min-w-0 flex-1" data-tauri-drag-region style={windowsDragRegionStyle}></div>
+
     <div
-        class="relative z-10 flex min-w-0 items-center justify-center overflow-hidden"
-        data-tauri-drag-region
-        style={windowsDragRegionStyle}
+        class="absolute left-1/2 top-1/2 z-20 max-w-[calc(100vw-24rem)] -translate-x-1/2 -translate-y-1/2 max-[560px]:hidden"
+        style={windowsNoDragRegionStyle}
     >
-        <div
-            class="quick-navigation-scroll flex max-w-full items-center gap-1 max-[560px]:hidden"
-            style={windowsNoDragRegionStyle}
+        <button
+            type="button"
+            class="absolute right-full top-1/2 mr-1 -translate-y-1/2 {iconButtonClass}"
+            title={language.home}
+            aria-label={language.home}
+            onclick={openHome}
         >
-            <button
-                type="button"
-                class={iconButtonClass}
-                title={language.home}
-                aria-label={language.home}
-                onclick={openHome}
-            >
-                <HomeIcon size={18} />
-            </button>
+            <HomeIcon size={18} />
+        </button>
+        <div
+            class="quick-navigation-scroll max-w-full"
+        >
             <div
-                class="relative flex shrink-0 items-center gap-0.5 rounded-lg border border-darkborderc bg-darkbg p-1"
+                class="relative flex w-max items-center gap-0.5 rounded-lg border border-darkborderc bg-darkbg p-1"
                 bind:this={segmentContainer}
             >
                 <div
