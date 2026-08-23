@@ -223,7 +223,7 @@
 </script>
 
 <div
-    class="relative z-40 flex h-[60px] min-h-[60px] w-full shrink-0 select-none items-stretch bg-bgcolor text-textcolor"
+    class="relative z-40 grid h-[60px] min-h-[60px] w-full shrink-0 select-none grid-cols-[auto_minmax(0,1fr)_auto] items-stretch bg-bgcolor text-textcolor"
 >
     {#if $sideBarStore}
         <div
@@ -249,63 +249,63 @@
         </button>
     </div>
 
-    <div
-        class="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 max-[560px]:hidden"
-    >
-        <button
-            type="button"
-            class={iconButtonClass}
-            title={language.home}
-            aria-label={language.home}
-            onclick={openHome}
-        >
-            <HomeIcon size={18} />
-        </button>
+    <div class="relative z-10 flex min-w-0 items-center justify-center overflow-hidden" data-tauri-drag-region>
         <div
-            class="relative flex items-center gap-0.5 rounded-lg border border-darkborderc bg-darkbg p-1"
-            bind:this={segmentContainer}
+            class="quick-navigation-scroll flex max-w-full items-center gap-1 max-[560px]:hidden"
         >
+            <button
+                type="button"
+                class={iconButtonClass}
+                title={language.home}
+                aria-label={language.home}
+                onclick={openHome}
+            >
+                <HomeIcon size={18} />
+            </button>
             <div
-                class="segment-indicator"
-                class:no-transition={!segmentMounted}
-                style={segmentIndicatorStyle}
-            ></div>
-            {#each quickNavigation as item (item.id)}
-                {@const Icon = item.icon}
-                <button
-                    data-segment-btn
-                    type="button"
-                    class="{segmentButtonClass} {item.active()
-                        ? 'text-white'
-                        : 'text-textcolor2 hover:text-textcolor'}"
-                    title={item.label()}
-                    aria-label={item.label()}
-                    aria-pressed={item.active()}
-                    onclick={item.open}
-                >
-                    <Icon size={16} />
-                    <span class="max-[900px]:hidden">{item.label()}</span>
-                </button>
-            {/each}
-            {#each additionalHamburgerMenu as menu (menu.id)}
-                <button
-                    type="button"
-                    class="{segmentButtonClass} px-2.5 text-textcolor2 hover:text-textcolor"
-                    title={menu.name}
-                    aria-label={menu.name}
-                    onclick={() => {
-                        gridOpen = false
-                        settingsOpen.set(false)
-                        menu.callback()
-                    }}
-                >
-                    <PluginDefinedIcon ico={menu} />
-                </button>
-            {/each}
+                class="relative flex shrink-0 items-center gap-0.5 rounded-lg border border-darkborderc bg-darkbg p-1"
+                bind:this={segmentContainer}
+            >
+                <div
+                    class="segment-indicator"
+                    class:no-transition={!segmentMounted}
+                    style={segmentIndicatorStyle}
+                ></div>
+                {#each quickNavigation as item (item.id)}
+                    {@const Icon = item.icon}
+                    <button
+                        data-segment-btn
+                        type="button"
+                        class="{segmentButtonClass} {item.active()
+                            ? 'text-white'
+                            : 'text-textcolor2 hover:text-textcolor'}"
+                        title={item.label()}
+                        aria-label={item.label()}
+                        aria-pressed={item.active()}
+                        onclick={item.open}
+                    >
+                        <Icon size={16} />
+                        <span class="max-[900px]:hidden">{item.label()}</span>
+                    </button>
+                {/each}
+                {#each additionalHamburgerMenu as menu (menu.id)}
+                    <button
+                        type="button"
+                        class="{segmentButtonClass} px-2.5 text-textcolor2 hover:text-textcolor"
+                        title={menu.name}
+                        aria-label={menu.name}
+                        onclick={() => {
+                            gridOpen = false
+                            settingsOpen.set(false)
+                            menu.callback()
+                        }}
+                    >
+                        <PluginDefinedIcon ico={menu} />
+                    </button>
+                {/each}
+            </div>
         </div>
     </div>
-
-    <div class="h-full min-w-1 flex-1" data-tauri-drag-region></div>
 
     <div class="relative z-10 flex h-full items-center gap-1 pl-1.5 {isMac ? 'pr-2' : 'pr-0'}">
         {#if statusSnippet}
@@ -417,5 +417,16 @@
 
     .segment-indicator.no-transition {
         transition: none;
+    }
+
+    .quick-navigation-scroll {
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: none;
+    }
+
+    .quick-navigation-scroll::-webkit-scrollbar {
+        display: none;
     }
 </style>
