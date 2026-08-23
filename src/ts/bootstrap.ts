@@ -43,6 +43,7 @@ import {
     checkCharOrder
 } from "./globalApi.svelte";
 import { isTauri } from "./platform";
+import { ensureDesktopTitleBarApplied } from "./gui/windowChrome.svelte";
 import { registerModelDynamic } from "./model/modellist";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
@@ -58,7 +59,9 @@ export async function loadData() {
         try {
             if (isTauri) {
                 LoadingStatusState.text = "Checking Files..."
-                appWindow.maximize()
+                // Let macOS settle the overlay before the first resize so its traffic-light inset survives.
+                await ensureDesktopTitleBarApplied()
+                await appWindow.maximize()
                 if (!await exists('', { baseDir: BaseDirectory.AppData })) {
                     await mkdir('', { baseDir: BaseDirectory.AppData })
                 }
