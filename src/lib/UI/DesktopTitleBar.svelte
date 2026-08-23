@@ -51,6 +51,7 @@
     const appWindow = isTauri ? getCurrentWebviewWindow() : null
 
     let maximized = $state(false)
+    let personaNavigationOpen = $state(false)
     let segmentContainer: HTMLDivElement | undefined = $state()
     let segmentIndicatorStyle = $state('')
     let segmentMounted = $state(false)
@@ -87,9 +88,20 @@
         }
     })
 
-    const normalActive = $derived(
-        !gridOpen && !$settingsOpen && !$OpenRealmStore && $PlaygroundStore === 0
+    const personaActive = $derived(
+        $settingsOpen && personaNavigationOpen && $SettingsMenuIndex === 12
     )
+    const normalActive = $derived(
+        $settingsOpen
+            ? !personaActive
+            : !gridOpen && !$OpenRealmStore && $PlaygroundStore === 0
+    )
+
+    $effect(() => {
+        if (!$settingsOpen) {
+            personaNavigationOpen = false
+        }
+    })
 
     const toggleSidebar = () => {
         if ($sideBarStore) {
@@ -117,6 +129,7 @@
 
     const openPersona = () => {
         gridOpen = false
+        personaNavigationOpen = true
         SettingsMenuIndex.set(12)
         settingsOpen.set(true)
     }
@@ -145,6 +158,9 @@
     }
 
     const toggleSettings = () => {
+        if (!$settingsOpen) {
+            personaNavigationOpen = false
+        }
         settingsOpen.update((open) => !open)
     }
 
@@ -175,7 +191,7 @@
 
     const quickNavigation = [
         { id: 'normal', icon: MessageCircleIcon, label: () => language.normal, active: () => normalActive, open: openNormal },
-        { id: 'persona', icon: ContactIcon, label: () => language.persona, active: () => $settingsOpen && $SettingsMenuIndex === 12, open: openPersona },
+        { id: 'persona', icon: ContactIcon, label: () => language.persona, active: () => personaActive, open: openPersona },
         { id: 'characters', icon: LayoutGridIcon, label: () => language.character, active: () => gridOpen, open: openCharacterGrid },
         { id: 'realm', icon: GlobeIcon, label: () => language.hub, active: () => !gridOpen && !$settingsOpen && $OpenRealmStore, open: openRealm },
         { id: 'playground', icon: ShellIcon, label: () => language.playground.playground, active: () => !gridOpen && !$settingsOpen && $PlaygroundStore !== 0, open: openPlayground },
@@ -226,6 +242,7 @@
 
 <div
     class="relative z-40 grid h-[60px] min-h-[60px] w-full shrink-0 select-none grid-cols-[auto_minmax(0,1fr)_auto] items-stretch bg-bgcolor text-textcolor"
+    class:settings-title-bg={$settingsOpen}
 >
     {#if $sideBarStore}
         <div
@@ -370,6 +387,14 @@
 </div>
 
 <style>
+    .settings-title-bg {
+        background: linear-gradient(
+            to right,
+            var(--risu-theme-darkbg) 50%,
+            var(--risu-theme-bgcolor) 50%
+        );
+    }
+
     .sidebar-title-tint {
         position: absolute;
         inset-block: 0;
