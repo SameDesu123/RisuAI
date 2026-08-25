@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+    applyNovelAiImg2Img,
     buildNovelAiRequestBody,
     fitNaiGenerationResolution,
     formatNovelAiPrompt,
@@ -182,5 +183,29 @@ describe('NovelAI payload building', () => {
 
         expect(body.parameters.characterPrompts).toHaveLength(32)
         expect(body.parameters.characterPrompts[0].center).toEqual({ x: 0, y: 1 })
+    })
+
+    it('adds the V5 img2img fields without changing the legacy text-to-image contract', () => {
+        const body = applyNovelAiImg2Img(
+            buildNovelAiRequestBody({
+                ...baseConfig,
+                model: 'nai-diffusion-5-curated',
+            }),
+            {
+                imageBase64: 'source-image',
+                strength: 0.7,
+                noise: 0.1,
+                extraNoiseSeed: 789,
+            }
+        )
+
+        expect(body.action).toBe('img2img')
+        expect(body.parameters).toMatchObject({
+            image: 'source-image',
+            strength: 0.7,
+            noise: 0.1,
+            extra_noise_seed: 789,
+            color_correct: false,
+        })
     })
 })

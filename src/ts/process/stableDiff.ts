@@ -9,6 +9,7 @@ import { processZip } from "./processzip"
 import { keiServerURL } from "../kei/kei"
 import random from "lodash/random"
 import {
+    applyNovelAiImg2Img,
     buildNovelAiRequestBody,
     novelAiModelCapabilities,
 } from "./novelaiImage"
@@ -278,10 +279,12 @@ export async function generateAIImage(genPrompt:string, currentChar:character, n
             
             if(base64img) {
                 reqlist = commonReq;
-                reqlist.body.action = "img2img";
-                reqlist.body.parameters.image = base64img;
-                reqlist.body.parameters.strength = db.NAIImgConfig.strength || 0.7;
-                reqlist.body.parameters.noise = db.NAIImgConfig.noise || 0;
+                applyNovelAiImg2Img(reqlist.body, {
+                    imageBase64: base64img,
+                    strength: db.NAIImgConfig.strength || 0.7,
+                    noise: db.NAIImgConfig.noise || 0,
+                    extraNoiseSeed: random(0, 2**32-1),
+                })
             }
             
             console.log({img2img:reqlist});

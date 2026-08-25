@@ -50,6 +50,13 @@ export interface NovelAiRequestBody {
     parameters: Record<string, any>
 }
 
+export interface NovelAiImg2ImgOptions {
+    imageBase64: string
+    strength: number
+    noise: number
+    extraNoiseSeed: number
+}
+
 export interface NaiModelCapabilities {
     vibes: boolean
     characterReferences: boolean
@@ -365,4 +372,21 @@ export function buildNovelAiRequestBody(config: NovelAiGenerationConfig): NovelA
         model: config.model,
         parameters,
     }
+}
+
+export function applyNovelAiImg2Img(
+    body: NovelAiRequestBody,
+    options: NovelAiImg2ImgOptions
+): NovelAiRequestBody {
+    body.action = 'img2img'
+    body.parameters.image = options.imageBase64
+    body.parameters.strength = options.strength
+    body.parameters.noise = options.noise
+
+    if (isNovelAiV5Model(body.model)) {
+        body.parameters.extra_noise_seed = options.extraNoiseSeed
+        body.parameters.color_correct = false
+    }
+
+    return body
 }
